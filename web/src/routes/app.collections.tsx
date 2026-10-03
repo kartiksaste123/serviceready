@@ -14,7 +14,7 @@ function Collections() {
   const { data, isLoading } = useQuery({ queryKey: ["stats"], queryFn: api.getStats });
   return (
     <>
-      <PageHeader title="Collections" sub="Open balances, kindest first. Click a client to follow up." />
+      <PageHeader title="Who still owes what" sub="A friendly view of open balances, deposits, and bookings." />
       {isLoading || !data ? <Skeleton className="h-80 rounded-2xl" /> : <CollectionsStudio stats={data} />}
     </>
   );

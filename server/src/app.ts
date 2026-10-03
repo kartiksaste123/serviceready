@@ -9,6 +9,11 @@ import { createEvent, createId, Store, timestamp } from './db.js';
 import { createMcpServer } from './mcp.js';
 import { centsFromAmount, invoiceIdFrom, PayPalService, payerLink } from './paypal.js';
 import type {
+  ChatCompletionMessageParam,
+  ChatCompletionTool,
+  ChatCompletionToolChoiceOption
+} from 'openai/resources';
+import type {
   AgentEvent,
   AgentRun,
   ChatMsg,
@@ -25,13 +30,12 @@ import type {
   ToolTrace
 } from './types.js';
 
-const sourceSchema = z.enum(['web', 'mcp', 'webmcp', 'agent_sim']);
 const quoteInput = z.object({
   service_id: z.string().min(1),
   client_name: z.string().trim().min(1).max(120),
   client_email: z.string().email().max(254),
   brief: z.string().trim().min(1).max(4000),
-  source: sourceSchema
+  source: z.enum(['web', 'webmcp']).default('web')
 }).strict();
 const publishDraftSchema = z.object({
   tmp_id: z.string().min(1).max(100),
@@ -61,6 +65,52 @@ const agentSimSchema = z.object({
     content: z.string().max(4000)
   }).strict()).min(1).max(40)
 }).strict();
+const studioLlmContentPartSchema = z.union([
+  z.object({ type: z.literal('text'), text: z.string() }).strict(),
+  z.object({
+    type: z.literal('image_url'),
+    image_url: z.object({
+      url: z.string().min(1),
+      detail: z.enum(['auto', 'low', 'high']).optional()
+    }).strict()
+  }).strict()
+]);
+const studioLlmMessageSchema = z.object({
+  role: z.enum(['system', 'developer', 'user', 'assistant', 'tool']),
+  content: z.union([z.string(), z.array(studioLlmContentPartSchema), z.null()]).optional(),
+  name: z.string().optional(),
+  tool_call_id: z.string().optional(),
+  tool_calls: z.array(z.object({
+    id: z.string(),
+    type: z.literal('function'),
+    function: z.object({ name: z.string(), arguments: z.string() }).strict()
+  }).strict()).optional()
+}).strict()
+  .refine((message) => (message.content !== undefined && message.content !== null)
+    || (message.role === 'assistant' && (message.tool_calls?.length ?? 0) > 0))
+  .refine((message) => message.role === 'tool' ? Boolean(message.tool_call_id) : message.tool_call_id === undefined)
+  .refine((message) => message.role === 'assistant' || message.tool_calls === undefined);
+const studioLlmToolSchema = z.object({
+  type: z.literal('function'),
+  function: z.object({
+    name: z.string().min(1).max(64),
+    description: z.string().optional(),
+    parameters: z.record(z.string(), z.unknown()),
+    strict: z.boolean().optional()
+  }).strict()
+}).strict();
+const studioLlmSchema = z.object({
+  messages: z.array(studioLlmMessageSchema).min(1).max(100),
+  tools: z.array(studioLlmToolSchema).max(40).optional(),
+  tool_choice: z.union([
+    z.enum(['none', 'auto', 'required']),
+    z.object({
+      type: z.literal('function'),
+      function: z.object({ name: z.string().min(1).max(64) }).strict()
+    }).strict()
+  ]).optional()
+}).strict();
+const STUDIO_LLM_MAX_BODY_BYTES = 200 * 1024;
 const proposalActionSchema = z.object({
   action: z.enum(['wait', 'send_reminder', 'thank_and_close', 'escalate']),
   reason: z.string().trim().min(1).max(1000),
@@ -79,6 +129,41 @@ function parseBody<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) throw new HttpError(400, result.error.issues[0]?.message ?? 'Invalid request body.');
   return result.data;
+}
+
+async function readLimitedJson(request: Request, maxBytes: number): Promise<unknown> {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength !== null) {
+    const length = Number(contentLength);
+    if (!Number.isSafeInteger(length) || length < 0) throw new HttpError(400, 'Invalid content length.');
+    if (length > maxBytes) throw new HttpError(413, 'Request body is too large.');
+  }
+  const reader = request.body?.getReader();
+  if (!reader) throw new HttpError(400, 'Request body is required.');
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new HttpError(413, 'Request body is too large.');
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as unknown;
+  } catch {
+    throw new HttpError(400, 'Malformed JSON request body.');
+  }
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -174,7 +259,7 @@ export function createApp(options: AppOptions = {}): Hono {
   const rateLimit = new Map<string, number[]>();
 
   app.use('/api/*', async (c, next) => {
-    const aiPath = /^\/api\/(catalog\/parse|public\/[^/]+\/quotes|quotes\/[^/]+\/replies|quotes\/[^/]+\/collections\/run|agent-sim\/chat)$/.test(c.req.path);
+    const aiPath = /^\/api\/(catalog\/parse|public\/[^/]+\/quotes|quotes\/[^/]+\/replies|quotes\/[^/]+\/collections\/run|agent-sim\/chat|studio\/llm)$/.test(c.req.path);
     if (!aiPath) return next();
     const now = Date.now();
     const ip = c.req.header('fly-client-ip')?.trim()
@@ -237,6 +322,16 @@ export function createApp(options: AppOptions = {}): Hono {
   });
 
   app.get('/api/health', (c) => c.json({ ok: true }));
+
+  app.post('/api/studio/llm', async (c) => {
+    const input = parseBody(studioLlmSchema, await readLimitedJson(c.req.raw, STUDIO_LLM_MAX_BODY_BYTES));
+    const completion = await ai.chatCompletion(
+      input.messages as ChatCompletionMessageParam[],
+      (input.tools ?? []) as ChatCompletionTool[],
+      (input.tool_choice ?? 'auto') as ChatCompletionToolChoiceOption
+    );
+    return c.json(completion);
+  });
 
   app.get('/api/seller', (c) => {
     const seller = store.getSeller();
@@ -307,7 +402,7 @@ export function createApp(options: AppOptions = {}): Hono {
     if (!seller || seller.slug !== c.req.param('slug')) throw new HttpError(404, 'Store not found.');
     const service = store.getService(input.service_id);
     if (!service || service.status !== 'published') throw new HttpError(404, 'Service not found.');
-    const quote = await createQuote({ ...input, service });
+    const quote = await createQuote({ ...input, service, source: input.source ?? 'web' });
     saveEvent(store, createEvent('client', 'message', quote.id, { text: `Quote requested by ${quote.client_name}.` }));
     return c.json(quote, 201);
   });
@@ -945,7 +1040,7 @@ export function createApp(options: AppOptions = {}): Hono {
     ];
     const messages: import('openai/resources').ChatCompletionMessageParam[] = [{
       role: 'system',
-      content: `You are a client's personal assistant helping explore ${seller.name}. Use only the listed client tools for service details or quotes. Ask for any missing client name, email, or project brief before calling request_quote. Do not pay or claim to pay. A human must approve the quote and deposit.`
+      content: `You are a client's personal assistant helping explore ${seller.name}. Use only the listed client tools for service details or quotes. Ask for any missing client name, email, or project brief before calling request_quote. Do not pay or claim to pay. A human must approve the quote and deposit. Reply in short plain sentences or simple bullet lists, never markdown tables or HTML.`
     }, ...input.messages.map((message) => ({ role: message.role, content: message.content }))];
     const transcript: ChatMsg[] = [...input.messages];
     const toolCalls: ToolTrace[] = [];

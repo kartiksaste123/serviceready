@@ -293,7 +293,6 @@ function Footer() {
       <div className="border-t border-cream/10">
         <div className="mx-auto flex max-w-7xl flex-wrap justify-between gap-3 px-6 py-5 text-[12px] text-cream/55 lg:px-8">
           <span>© 2026 ServiceReady · <Sparkle className="inline size-3" /> PayPal sandbox demo</span>
-          <span className="flex gap-4"><span>Privacy</span><span>Terms</span></span>
         </div>
       </div>
     </footer>

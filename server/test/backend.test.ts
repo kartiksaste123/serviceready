@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type OpenAI from 'openai';
 import type { ChatCompletion, ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources';
 import { AIService } from '../src/ai.js';
 import { createApp } from '../src/app.js';
@@ -194,6 +195,33 @@ describe('PayPal invoice links', () => {
 });
 
 describe('quotes and deposit state machine', () => {
+  it('defaults public quote source to web and only accepts public sources', async () => {
+    const store = new Store(':memory:');
+    const { app } = appWith(store);
+    const input = {
+      service_id: 'svc_logo_design',
+      client_name: 'Casey Client',
+      client_email: 'casey@example.com',
+      brief: 'A modern logo for my bakery.'
+    };
+    const postQuote = (body: Record<string, unknown>) => app.request('/api/public/maya-rao-studio/quotes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const defaulted = await postQuote(input);
+    expect(defaulted.status).toBe(201);
+    expect((await defaulted.json() as { source: string }).source).toBe('web');
+
+    const webmcp = await postQuote({ ...input, source: 'webmcp' });
+    expect(webmcp.status).toBe(201);
+    expect((await webmcp.json() as { source: string }).source).toBe('webmcp');
+
+    expect((await postQuote({ ...input, source: 'mcp' })).status).toBe(400);
+    expect((await postQuote({ ...input, source: 'agent_sim' })).status).toBe(400);
+  });
+
   it('rejects delivery before deposit, rejects mismatched capture, and is idempotent after confirmation', async () => {
     const store = new Store(':memory:');
     const { app, paypal } = appWith(store);
@@ -261,6 +289,92 @@ describe('quotes and deposit state machine', () => {
     });
     expect(captured.status).toBe(200);
     expect((paypal as StubPayPal).captureCount).toBe(captureCount);
+    store.close();
+  });
+});
+
+describe('Studio LLM proxy', () => {
+  const request = (app: ReturnType<typeof createApp>, body: string | Record<string, unknown>) => app.request('/api/studio/llm', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: typeof body === 'string' ? body : JSON.stringify(body)
+  });
+  const validBody = { messages: [{ role: 'user', content: 'Say hello.' }] };
+
+  it('proxies a valid chat-completions request through the server AI service', async () => {
+    const store = new Store(':memory:');
+    const ai = new StubAI();
+    ai.completionQueue.push({
+      id: 'studio-completion',
+      created: 1_720_000_000,
+      model: 'workers-ai/server-selected-model',
+      object: 'chat.completion',
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'Hello from the server.' } }]
+    } as unknown as ChatCompletion);
+    const { app } = appWith(store, ai);
+    const response = await request(app, validBody);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: 'studio-completion',
+      model: 'workers-ai/server-selected-model',
+      choices: [{ message: { content: 'Hello from the server.' } }]
+    });
+    store.close();
+  });
+
+  it('omits empty tool configuration for text-only Studio prompts', async () => {
+    const calls: unknown[] = [];
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: unknown) => {
+            calls.push(params);
+            return {
+              id: 'text-only',
+              created: 1,
+              model: 'workers-ai/primary-test',
+              object: 'chat.completion',
+              choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'Ready.' } }]
+            };
+          }
+        }
+      }
+    } as unknown as OpenAI;
+    const ai = new AIService(client, 'workers-ai/primary-test', 'workers-ai/fallback-test');
+    await ai.chatCompletion([{ role: 'user', content: 'Reply ready.' }], []);
+    expect(calls[0]).not.toHaveProperty('tools');
+    expect(calls[0]).not.toHaveProperty('tool_choice');
+  });
+
+  it('rejects malformed, oversized, over-tooled, and model-selecting bodies', async () => {
+    const store = new Store(':memory:');
+    const { app } = appWith(store);
+    expect((await request(app, '{')).status).toBe(400);
+    expect((await request(app, 'x'.repeat(200 * 1024 + 1))).status).toBe(413);
+    expect((await request(app, {
+      ...validBody,
+      tools: Array.from({ length: 41 }, (_, index) => ({
+        type: 'function',
+        function: { name: `tool_${index}`, parameters: { type: 'object' } }
+      }))
+    })).status).toBe(400);
+    expect((await request(app, { ...validBody, model: 'client-selected-model' })).status).toBe(400);
+    store.close();
+  });
+
+  it('limits requests to 20 per minute and client IP', async () => {
+    const store = new Store(':memory:');
+    const { app } = appWith(store);
+    const responses: Response[] = [];
+    for (let index = 0; index < 21; index += 1) {
+      responses.push(await app.request('/api/studio/llm', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.18' },
+        body: JSON.stringify(validBody)
+      }));
+    }
+    expect(responses.slice(0, 20).every((response) => response.status === 200)).toBe(true);
+    expect(responses[20]?.status).toBe(429);
     store.close();
   });
 });

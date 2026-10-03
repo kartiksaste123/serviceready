@@ -1,5 +1,10 @@
 import OpenAI from 'openai';
-import type { ChatCompletion, ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources';
+import type {
+  ChatCompletion,
+  ChatCompletionMessageParam,
+  ChatCompletionTool,
+  ChatCompletionToolChoiceOption
+} from 'openai/resources';
 import { z } from 'zod';
 import { computeServiceDrafts, serviceDraftInput } from './core.js';
 import type { ServiceDraft } from './types.js';
@@ -131,7 +136,7 @@ export class AIService {
   async chatCompletion(
     messages: ChatCompletionMessageParam[],
     tools: ChatCompletionTool[],
-    toolChoice: 'auto' | 'required' = 'auto'
+    toolChoice: ChatCompletionToolChoiceOption = 'auto'
   ): Promise<ChatCompletion> {
     const requestMessages = messages.map((message): ChatCompletionMessageParam => {
       if (message.role !== 'assistant') return message;
@@ -144,8 +149,7 @@ export class AIService {
     const attempt = (model: string): Promise<ChatCompletion> => this.client.chat.completions.create({
       model,
       messages: requestMessages,
-      tools,
-      tool_choice: toolChoice
+      ...(tools.length > 0 ? { tools, tool_choice: toolChoice } : {})
     });
     try {
       return await attempt(this.primaryModel);

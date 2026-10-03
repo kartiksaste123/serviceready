@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { ArrowRight, Bot, Clock, Loader2, Send, Wrench, Zap } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatMsg, Quote, Service, ToolTrace } from "@/lib/types";
@@ -172,7 +173,16 @@ function AgentChat({ slug }: { slug: string }) {
             it.msg.role === "user" ? (
               <div key={i} className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-mint px-3.5 py-2 text-sm text-deep-950">{it.msg.content}</div>
             ) : (
-              <div key={i} className="max-w-[95%] whitespace-pre-wrap text-sm leading-relaxed text-cream/90" dangerouslySetInnerHTML={{ __html: md(it.msg.content) }} />
+              <div key={i} className="max-w-[95%] text-sm leading-relaxed text-cream/90">
+                <ReactMarkdown components={{
+                  p: ({ children }) => <p className="my-1.5">{children}</p>,
+                  ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+                  ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+                  li: ({ children }) => <li>{children}</li>
+                }}>
+                  {it.msg.content}
+                </ReactMarkdown>
+              </div>
             )
           ) : it.kind === "tool" ? (
             <div key={i} className="glass-row space-y-1.5 p-2.5">
@@ -193,8 +203,4 @@ function AgentChat({ slug }: { slug: string }) {
       </form>
     </aside>
   );
-}
-
-function md(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }

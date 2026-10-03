@@ -58,9 +58,10 @@ export function PayPalDepositButton({ quoteId, onPaid }: { quoteId: string; onPa
   }
 
   return (
-    <PayPalScriptProvider options={{ clientId: config.data.client_id, currency: 'USD', intent: 'capture' }}>
+    <PayPalScriptProvider options={{ clientId: config.data.client_id, currency: 'USD', intent: 'capture', disableFunding: 'paylater' }}>
       <PayPalButtons
-        style={{ layout: 'vertical', shape: 'pill', label: 'paypal' }}
+        className="bg-transparent"
+        style={{ layout: 'vertical', shape: 'pill', color: 'gold', label: 'paypal' }}
         disabled={busy}
         createOrder={async () => {
           setBusy(true);

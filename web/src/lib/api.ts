@@ -6,12 +6,42 @@ import type {
 
 export const USE_MOCKS = import.meta.env['VITE_USE_MOCKS'] !== 'false';
 
-async function http<T>(method: string, path: string, body?: unknown): Promise<T> {
+export interface StudioLlmMessage {
+  role: 'system' | 'developer' | 'user' | 'assistant' | 'tool';
+  content?: string | null;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[];
+}
+export interface StudioLlmTool {
+  type: 'function';
+  function: { name: string; description?: string; parameters: Record<string, unknown>; strict?: boolean };
+}
+export interface StudioLlmRequest {
+  messages: StudioLlmMessage[];
+  tools?: StudioLlmTool[];
+  tool_choice?: 'none' | 'auto' | 'required' | { type: 'function'; function: { name: string } };
+}
+export interface StudioLlmResponse {
+  id: string;
+  created: number;
+  model: string;
+  choices: {
+    message: {
+      content: string | null;
+      refusal?: string | null;
+      tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[];
+    };
+  }[];
+}
+
+async function http<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
     body: body !== undefined ? JSON.stringify(body) : null,
     credentials: 'include',
+    ...(signal ? { signal } : {}),
   });
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
@@ -48,6 +78,8 @@ export const api = {
   getStats: () => m<Stats>(() => mock.getStats(), 'GET', '/api/stats'),
   agentChat: (slug: string, messages: ChatMsg[]) =>
     m<{ messages: ChatMsg[]; tool_calls: ToolTrace[]; quote: Quote | null }>(() => mock.agentChat(slug, messages), 'POST', '/api/agent-sim/chat', { slug, messages }),
+  studioLlm: (request: StudioLlmRequest, signal?: AbortSignal) =>
+    http<StudioLlmResponse>('POST', '/api/studio/llm', request, signal),
   paypalConfig: () => m<{ client_id: string; env: 'sandbox' }>(() => mock.paypalConfig(), 'GET', '/api/paypal/config'),
   resetDemo: () => m<{ ok: true }>(() => mock.reset(), 'POST', '/api/demo/reset'),
 };
