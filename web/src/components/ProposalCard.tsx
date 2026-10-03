@@ -12,7 +12,14 @@ export function ProposalCard({ p, showClient = true }: { p: Proposal; showClient
   const qc = useQueryClient();
   const [draft, setDraft] = useState(p.draft_message);
   const done = () => { ["proposals", "quote", "events", "stats", "quotes"].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); };
-  const approve = useMutation({ mutationFn: () => api.approveProposal(p.id, draft), onSuccess: () => { toast.success("Approved and sent"); done(); } });
+  const approve = useMutation({
+    mutationFn: () => api.approveProposal(p.id, draft),
+    onSuccess: () => { toast.success("Approved and sent"); done(); },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Unable to approve proposal");
+      done();
+    },
+  });
   const reject = useMutation({ mutationFn: () => api.rejectProposal(p.id), onSuccess: () => { toast("Proposal rejected"); done(); } });
   const pending = p.status === "pending";
   return (

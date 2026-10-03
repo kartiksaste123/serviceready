@@ -554,8 +554,28 @@ export function createApp(options: AppOptions = {}): Hono {
     return true;
   };
 
-  const reconcileInvoice = async (quote: Quote, invoiceId: string): Promise<string> => {
-    const invoice = await paypal.getInvoice(invoiceId);
+  const rejectPendingProposals = (quoteId: string, text: string, exceptProposalId?: string): void => {
+    for (const proposal of store.listProposals(quoteId)) {
+      if (proposal.status !== 'pending' || proposal.id === exceptProposalId) continue;
+      proposal.status = 'rejected';
+      store.saveProposal(proposal);
+      saveEvent(store, createEvent('collections_agent', 'decision', quoteId, {
+        output: proposal,
+        text
+      }));
+    }
+  };
+
+  const markQuotePaid = (quote: Quote): void => {
+    if (quote.status !== 'paid') {
+      quote.status = 'paid';
+      quote.updated_at = timestamp();
+      store.saveQuote(quote);
+    }
+    rejectPendingProposals(quote.id, 'Closed: PayPal confirms the balance invoice is paid.');
+  };
+
+  const applyInvoiceState = (quote: Quote, invoice: Record<string, unknown>): string => {
     const status = invoiceStatus(invoice);
     const payment = store.getPayment(quote.id, 'balance');
     if (payment) {
@@ -564,13 +584,12 @@ export function createApp(options: AppOptions = {}): Hono {
       payment.invoice_url = payerLink([invoice]) ?? payment.invoice_url;
       store.savePayment(quote.id, payment);
     }
-    if (status === 'PAID' && quote.status !== 'paid') {
-      quote.status = 'paid';
-      quote.updated_at = timestamp();
-      store.saveQuote(quote);
-    }
+    if (status === 'PAID') markQuotePaid(quote);
     return status;
   };
+
+  const reconcileInvoice = async (quote: Quote, invoiceId: string): Promise<string> =>
+    applyInvoiceState(quote, await paypal.getInvoice(invoiceId));
 
   app.get('/api/quotes/:id', async (c) => {
     const quote = store.getQuote(c.req.param('id'));
@@ -991,6 +1010,7 @@ export function createApp(options: AppOptions = {}): Hono {
       created_at: timestamp()
     };
     if (!summary.trim() || isDegenerateText(summary)) summary = proposal.reason;
+    rejectPendingProposals(quote.id, 'Superseded by a newer proposal after re-checking PayPal.', proposal.id);
     store.saveProposal(proposal);
     const decisionEvent = saveEvent(store, createEvent('collections_agent', 'decision', quote.id, {
       output: proposal,
@@ -1044,6 +1064,28 @@ export function createApp(options: AppOptions = {}): Hono {
     if (!payment?.paypal_invoice_id && proposal.action !== 'wait' && proposal.action !== 'escalate') {
       throw new HttpError(409, 'Quote has no balance invoice.');
     }
+    if (proposal.action === 'send_reminder') {
+      const invoiceId = payment!.paypal_invoice_id!;
+      saveEvent(store, createEvent('paypal', 'tool_call', quote.id, {
+        tool: 'get_invoice',
+        input: { invoice_id: invoiceId }
+      }));
+      const invoice = await paypal.getInvoice(invoiceId);
+      const status = invoiceStatus(invoice);
+      saveEvent(store, createEvent('paypal', 'tool_call', quote.id, {
+        tool: 'get_invoice',
+        output: { status }
+      }));
+      applyInvoiceState(quote, invoice);
+      if (status === 'PAID' || quote.status === 'paid') {
+        if (status !== 'PAID') {
+          rejectPendingProposals(quote.id, 'Closed: the quote is already marked paid.');
+        }
+        return c.json({
+          error: 'PayPal shows this invoice is already paid, so no reminder was sent.'
+        }, 409);
+      }
+    }
     proposal.draft_message = input.draft_message;
     proposal.status = 'approved';
     store.saveProposal(proposal);
@@ -1089,10 +1131,9 @@ export function createApp(options: AppOptions = {}): Hono {
           tool: 'get_invoice',
           output: { status: invoiceStatus(invoice) }
         }));
-        if (invoiceStatus(invoice) !== 'PAID') throw new Error('PayPal does not confirm that the invoice is paid.');
-        quote.status = 'paid';
-        quote.updated_at = timestamp();
-        store.saveQuote(quote);
+        if (applyInvoiceState(quote, invoice) !== 'PAID') {
+          throw new Error('PayPal does not confirm that the invoice is paid.');
+        }
       }
       proposal.status = 'executed';
     } catch (error) {

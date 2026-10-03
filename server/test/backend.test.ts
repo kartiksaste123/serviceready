@@ -155,6 +155,14 @@ function makeReminderProposal(quote: Quote): Proposal {
   };
 }
 
+function makePendingProposal(quote: Quote, overrides: Partial<Proposal> = {}): Proposal {
+  return {
+    ...makeReminderProposal(quote),
+    status: 'pending',
+    ...overrides
+  };
+}
+
 function saveBalanceInvoice(store: Store, quote: Quote, invoiceId = 'INV-TEST'): void {
   quote.status = 'balance_invoiced';
   quote.updated_at = timestamp();
@@ -695,6 +703,97 @@ describe('collections safeguards', () => {
     expect(response.status).toBe(200);
     const run = await response.json() as { proposal: Proposal };
     expect(run.proposal.action).toBe('send_reminder');
+    store.close();
+  });
+
+  it('supersedes older pending proposals when collections runs again', async () => {
+    const store = new Store(':memory:');
+    const ai = new StubAI();
+    const toolkit = new StubToolkit();
+    for (const reason of ['First proposal.', 'Newer proposal.']) {
+      ai.completionQueue.push(toolCall('get_invoice', { invoice_id: 'INV-TEST' }));
+      ai.completionQueue.push(toolCall('propose_action', {
+        action: 'send_reminder',
+        reason,
+        draft_message: 'A friendly reminder.'
+      }));
+    }
+    const { app } = appWith(store, ai, new StubPayPal(), toolkit);
+    const quote = makeQuote();
+    saveBalanceInvoice(store, quote);
+
+    for (let index = 0; index < 2; index += 1) {
+      const response = await app.request(`/api/quotes/${quote.id}/collections/run`, { method: 'POST' });
+      expect(response.status).toBe(200);
+    }
+
+    const proposals = store.listProposals(quote.id);
+    expect(proposals.filter((proposal) => proposal.status === 'pending')).toHaveLength(1);
+    expect(proposals.filter((proposal) => proposal.status === 'rejected')).toHaveLength(1);
+    expect(store.listEvents().filter((event) => (
+      event.actor === 'collections_agent' &&
+      event.kind === 'decision' &&
+      event.text === 'Superseded by a newer proposal after re-checking PayPal.'
+    ))).toHaveLength(1);
+    store.close();
+  });
+
+  it('rejects pending proposals when refresh confirms the balance invoice is paid', async () => {
+    const store = new Store(':memory:');
+    const paypal = new StubPayPal();
+    paypal.invoice = { id: 'INV-TEST', status: 'PAID' };
+    const quote = makeQuote();
+    saveBalanceInvoice(store, quote);
+    store.saveProposal(makePendingProposal(quote));
+    store.saveProposal(makePendingProposal(quote));
+    const { app } = appWith(store, new StubAI(), paypal);
+
+    const response = await app.request(`/api/quotes/${quote.id}?refresh=1`);
+
+    expect(response.status).toBe(200);
+    expect(store.getQuote(quote.id)?.status).toBe('paid');
+    expect(store.listProposals(quote.id).every((proposal) => proposal.status === 'rejected')).toBe(true);
+    expect(store.listEvents().filter((event) => (
+      event.actor === 'collections_agent' &&
+      event.kind === 'decision' &&
+      event.text === 'Closed: PayPal confirms the balance invoice is paid.'
+    ))).toHaveLength(2);
+    store.close();
+  });
+
+  it('rejects a reminder approval when PayPal now reports the invoice as paid', async () => {
+    const store = new Store(':memory:');
+    const paypal = new StubPayPal();
+    paypal.invoice = { id: 'INV-TEST', status: 'PAID' };
+    const toolkit = new StubToolkit();
+    const quote = makeQuote();
+    saveBalanceInvoice(store, quote);
+    const proposal = makePendingProposal(quote);
+    store.saveProposal(proposal);
+    const { app } = appWith(store, new StubAI(), paypal, toolkit);
+
+    const response = await app.request(`/api/proposals/${proposal.id}/approve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ draft_message: proposal.draft_message })
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'PayPal shows this invoice is already paid, so no reminder was sent.'
+    });
+    expect(paypal.invoiceReadCount).toBe(1);
+    expect(toolkit.calls).not.toContain('send_invoice_reminder');
+    expect(store.getProposal(proposal.id)?.status).toBe('rejected');
+    expect(store.getQuote(quote.id)?.status).toBe('paid');
+    expect(store.listEvents().filter((event) => (
+      event.actor === 'paypal' && event.kind === 'tool_call' && event.tool === 'get_invoice'
+    ))).toHaveLength(2);
+    expect(store.listEvents().some((event) => (
+      event.actor === 'collections_agent' &&
+      event.kind === 'decision' &&
+      event.text === 'Closed: PayPal confirms the balance invoice is paid.'
+    ))).toBe(true);
     store.close();
   });
 
