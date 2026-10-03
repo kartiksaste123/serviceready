@@ -3,7 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type OpenAI from 'openai';
 import type { ChatCompletion, ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources';
-import { AIService } from '../src/ai.js';
+import { AIService, isDegenerateText } from '../src/ai.js';
 import { createApp } from '../src/app.js';
 import { ClientTools } from '../src/client-tools.js';
 import { calculateQuoteAmounts, computeServiceDrafts } from '../src/core.js';
@@ -14,13 +14,27 @@ import type { Payment, Proposal, Quote, Source } from '../src/types.js';
 
 class StubAI extends AIService {
   readonly completionQueue: ChatCompletion[] = [];
+  readonly messageHistory: ChatCompletionMessageParam[][] = [];
+  readonly toolResultCalls: Array<{ system: string; user: string; tool: ChatCompletionTool }> = [];
+  forcedToolResult: unknown;
   async quoteScope(): Promise<string> {
     return 'A concise scope summary. Fit check: Good fit.';
   }
-  async chatCompletion(_messages: ChatCompletionMessageParam[], _tools: ChatCompletionTool[]): Promise<ChatCompletion> {
+  async chatCompletion(messages: ChatCompletionMessageParam[], _tools: ChatCompletionTool[]): Promise<ChatCompletion> {
+    this.messageHistory.push([...messages]);
     return this.completionQueue.shift() ?? {
       choices: [{ message: { role: 'assistant', content: 'Please share your project details.' } }]
     } as unknown as ChatCompletion;
+  }
+  async toolResult<T>(
+    system: string,
+    user: string,
+    tool: ChatCompletionTool,
+    validate: (value: unknown) => T = (value) => value as T
+  ): Promise<T> {
+    this.toolResultCalls.push({ system, user, tool });
+    if (this.forcedToolResult === undefined) throw new Error('No forced-tool result configured.');
+    return validate(this.forcedToolResult);
   }
 }
 
@@ -28,15 +42,25 @@ class StubPayPal extends PayPalService {
   verification = true;
   invoice: Record<string, unknown> = { id: 'INV-TEST', status: 'UNPAID' };
   order: Record<string, unknown> = {};
+  orderBrandName = '';
   createOrderCount = 0;
   captureCount = 0;
   orderReadCount = 0;
   invoiceCreateCount = 0;
   invoiceSendCount = 0;
   invoiceReadCount = 0;
+  invoiceCreatePayload: unknown;
 
-  async createOrder(): Promise<{ id: string }> {
+  async createOrder(
+    _quoteId: string,
+    _amountCents: number,
+    _description: string,
+    _returnUrl: string,
+    _requestId: string,
+    brandName: string
+  ): Promise<{ id: string }> {
     this.createOrderCount += 1;
+    this.orderBrandName = brandName;
     return { id: 'ORDER12345678901234' };
   }
   async captureOrder(): Promise<Record<string, unknown>> {
@@ -47,8 +71,9 @@ class StubPayPal extends PayPalService {
     this.orderReadCount += 1;
     return this.order;
   }
-  async createInvoice(_payload: unknown): Promise<Record<string, unknown>> {
+  async createInvoice(payload: unknown): Promise<Record<string, unknown>> {
     this.invoiceCreateCount += 1;
+    this.invoiceCreatePayload = payload;
     return { id: 'INV-CREATED', status: 'DRAFT' };
   }
   async sendInvoice(_invoiceId: string, _note: string): Promise<Record<string, unknown>> {
@@ -208,6 +233,36 @@ describe('PayPal invoice links', () => {
   });
 });
 
+describe('PayPal order branding', () => {
+  it('sets the seller brand and no-shipping preference in the approval experience', async () => {
+    vi.stubEnv('PAYPAL_CLIENT_ID', 'unit-test-client');
+    vi.stubEnv('PAYPAL_CLIENT_SECRET', 'unit-test-secret');
+    const requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      const url = String(input);
+      requests.push({ url, init });
+      if (url.endsWith('/v1/oauth2/token')) {
+        return new Response(JSON.stringify({ access_token: 'unit-test-token', expires_in: 3600 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ id: 'ORDER-TEST' }), { status: 201 });
+    };
+    const paypal = new PayPalService(fetcher);
+
+    await paypal.createOrder('quote-test', 22500, 'Logo deposit', 'http://localhost:8080/q/quote-test', 'request-test', 'Maya Rao Studio');
+
+    const orderRequest = requests.find((request) => request.url.endsWith('/v2/checkout/orders'));
+    const body = JSON.parse(String(orderRequest?.init?.body)) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      application_context: {
+        brand_name: 'Maya Rao Studio',
+        user_action: 'PAY_NOW',
+        shipping_preference: 'NO_SHIPPING'
+      }
+    });
+    expect(body).not.toHaveProperty('payment_source');
+  });
+});
+
 describe('quotes and deposit state machine', () => {
   it('defaults public quote source to web and only accepts public sources', async () => {
     const store = new Store(':memory:');
@@ -236,6 +291,21 @@ describe('quotes and deposit state machine', () => {
     expect((await postQuote({ ...input, source: 'agent_sim' })).status).toBe(400);
   });
 
+  it('uses the seller business name on balance invoices without adding an invoicer email', async () => {
+    const store = new Store(':memory:');
+    const { app, paypal } = appWith(store);
+    const quote = makeQuote({ status: 'deposit_paid' });
+    store.saveQuote(quote);
+
+    const response = await app.request(`/api/quotes/${quote.id}/deliver`, { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    const payload = paypal.invoiceCreatePayload as { invoicer?: Record<string, unknown> };
+    expect(payload.invoicer).toEqual({ business_name: store.getSeller()?.name });
+    expect(payload.invoicer).not.toHaveProperty('email_address');
+    store.close();
+  });
+
   it('rejects delivery before deposit, rejects mismatched capture, and is idempotent after confirmation', async () => {
     const store = new Store(':memory:');
     const { app, paypal } = appWith(store);
@@ -262,6 +332,7 @@ describe('quotes and deposit state machine', () => {
     const orderResponse = await app.request(`/api/quotes/${quote.id}/deposit/order`, { method: 'POST' });
     expect(orderResponse.status).toBe(200);
     expect(await orderResponse.json()).toEqual({ order_id: 'ORDER12345678901234' });
+    expect(paypal.orderBrandName).toBe(store.getSeller()?.name);
 
     const capture = {
       id: 'CAPTURE12345678901',
@@ -494,6 +565,77 @@ describe('Studio LLM proxy', () => {
   });
 });
 
+describe('AI response safeguards', () => {
+  it('classifies repetitive and low-letter outputs without rejecting short replies', () => {
+    expect(isDegenerateText('!!!!!!!!!!!!!!!!!!!!')).toBe(true);
+    expect(isDegenerateText('ok')).toBe(false);
+    expect(isDegenerateText('!!!!!!!!!!!!')).toBe(true);
+    expect(isDegenerateText('Invoice is SENT.')).toBe(false);
+    expect(isDegenerateText('   ')).toBe(false);
+  });
+
+  it('retries degenerate primary replies before returning the fallback model response', async () => {
+    const contents = ['!!!!!!!!!!!!!!!!!!!!', '!!!!!!!!!!!!!!!!!!!!', 'A useful fallback reply.'];
+    const models: string[] = [];
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: unknown) => {
+            models.push((params as { model: string }).model);
+            return {
+              id: `completion-${models.length}`,
+              created: 1,
+              model: models.at(-1),
+              object: 'chat.completion',
+              choices: [{
+                index: 0,
+                finish_reason: 'stop',
+                message: { role: 'assistant', content: contents.shift() }
+              }]
+            };
+          }
+        }
+      }
+    } as unknown as OpenAI;
+    const ai = new AIService(client, 'workers-ai/primary-test', 'workers-ai/fallback-test');
+
+    const response = await ai.chatCompletion([{ role: 'user', content: 'Respond briefly.' }], []);
+
+    expect(models).toEqual([
+      'workers-ai/primary-test',
+      'workers-ai/primary-test',
+      'workers-ai/fallback-test'
+    ]);
+    expect(response.choices[0]?.message.content).toBe('A useful fallback reply.');
+  });
+
+  it('returns a degenerate fallback response after both primary attempts fail', async () => {
+    const contents = ['!!!!!!!!!!!!!!!!!!!!', '!!!!!!!!!!!!!!!!!!!!', '!!!!!!!!!!!!'];
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: unknown) => ({
+            id: 'completion',
+            created: 1,
+            model: (params as { model: string }).model,
+            object: 'chat.completion',
+            choices: [{
+              index: 0,
+              finish_reason: 'stop',
+              message: { role: 'assistant', content: contents.shift() }
+            }]
+          })
+        }
+      }
+    } as unknown as OpenAI;
+    const ai = new AIService(client, 'workers-ai/primary-test', 'workers-ai/fallback-test');
+
+    const response = await ai.chatCompletion([{ role: 'user', content: 'Respond briefly.' }], []);
+
+    expect(response.choices[0]?.message.content).toBe('!!!!!!!!!!!!');
+  });
+});
+
 describe('collections safeguards', () => {
   it('forces thank_and_close when real PayPal invoice status is PAID', async () => {
     const store = new Store(':memory:');
@@ -553,6 +695,85 @@ describe('collections safeguards', () => {
     expect(response.status).toBe(200);
     const run = await response.json() as { proposal: Proposal };
     expect(run.proposal.action).toBe('send_reminder');
+    store.close();
+  });
+
+  it('recovers with a forced proposal after text-only degeneracy and gives the model compact invoice state', async () => {
+    const store = new Store(':memory:');
+    const ai = new StubAI();
+    const toolkit = new StubToolkit();
+    toolkit.invoice = {
+      id: 'INV-TEST',
+      status: 'SENT',
+      detail: {
+        invoice_number: 'INV-NUMBER',
+        currency_code: 'USD',
+        viewed_by_recipient: true
+      },
+      amount: { value: '225.00' },
+      due_amount: { value: '225.00' },
+      payments: {
+        paid_amount: { value: '0.00' },
+        transactions: [
+          { payment_date: '2025-02-01T12:00:00Z' },
+          { payment_date: '2025-02-03T12:00:00Z' }
+        ]
+      }
+    };
+    const forcedProposal = {
+      action: 'send_reminder',
+      reason: 'Client says paid; PayPal shows SENT.',
+      draft_message: 'Thanks Casey — PayPal does not show the payment yet. You can check or pay through the invoice link.'
+    };
+    ai.forcedToolResult = forcedProposal;
+    ai.completionQueue.push(toolCall('get_invoice', { invoice_id: 'INV-TEST' }));
+    ai.completionQueue.push({
+      choices: [{ message: { role: 'assistant', content: '!!!!!!!!!!!!!!!!!!!!' } }]
+    } as unknown as ChatCompletion);
+    const { app } = appWith(store, ai, new StubPayPal(), toolkit);
+    const quote = makeQuote({ client_name: 'Casey' });
+    saveBalanceInvoice(store, quote);
+
+    const response = await app.request(`/api/quotes/${quote.id}/collections/run`, { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    const run = await response.json() as { proposal: Proposal; summary: string };
+    expect(run.proposal.action).toBe('send_reminder');
+    expect(run.proposal.draft_message).not.toBe('');
+    expect(run.summary).toBe(forcedProposal.reason);
+    expect(ai.toolResultCalls).toHaveLength(1);
+    expect(ai.toolResultCalls[0]?.system).toContain('PayPal invoice state (verified just now):');
+    expect(ai.toolResultCalls[0]?.user).toBe('Propose the next action now.');
+
+    const invoiceToolMessage = ai.messageHistory[1]?.find((message) => message.role === 'tool');
+    expect(invoiceToolMessage?.role).toBe('tool');
+    if (invoiceToolMessage?.role !== 'tool' || typeof invoiceToolMessage.content !== 'string') {
+      throw new Error('Compact invoice tool message was not recorded.');
+    }
+    const compactState = JSON.parse(invoiceToolMessage.content) as Record<string, unknown>;
+    expect(compactState).toEqual({
+      invoice_id: 'INV-TEST',
+      status: 'SENT',
+      invoice_number: 'INV-NUMBER',
+      currency_code: 'USD',
+      total_value: '225.00',
+      amount_due_value: '225.00',
+      paid_value: '0.00',
+      viewed_by_recipient: true,
+      last_payment_date: '2025-02-03T12:00:00Z'
+    });
+    expect(compactState).not.toHaveProperty('detail');
+
+    const fullInvoiceEvent = store.listEvents(quote.id).find((event) => event.actor === 'paypal' && event.tool === 'get_invoice');
+    expect(fullInvoiceEvent?.output).toHaveProperty('detail');
+    expect(store.listEvents(quote.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        actor: 'collections_agent',
+        kind: 'tool_call',
+        tool: 'propose_action',
+        input: forcedProposal
+      })
+    ]));
     store.close();
   });
 });

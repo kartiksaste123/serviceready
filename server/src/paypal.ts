@@ -68,7 +68,14 @@ export class PayPalService {
     return payload as T;
   }
 
-  async createOrder(quoteId: string, amountCents: number, description: string, returnUrl: string, requestId: string): Promise<{ id: string }> {
+  async createOrder(
+    quoteId: string,
+    amountCents: number,
+    description: string,
+    returnUrl: string,
+    requestId: string,
+    brandName: string
+  ): Promise<{ id: string }> {
     return this.request('/v2/checkout/orders', {
       method: 'POST',
       requestId,
@@ -81,9 +88,11 @@ export class PayPalService {
           amount: { currency_code: 'USD', value: (amountCents / 100).toFixed(2) }
         }],
         application_context: {
+          brand_name: brandName,
           return_url: returnUrl,
           cancel_url: returnUrl,
-          user_action: 'PAY_NOW'
+          user_action: 'PAY_NOW',
+          shipping_preference: 'NO_SHIPPING'
         }
       }
     });

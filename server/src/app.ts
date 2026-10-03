@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { AIService, jsonSchemaTool } from './ai.js';
+import { AIService, isDegenerateText, jsonSchemaTool } from './ai.js';
 import { ClientTools, toolSchemas } from './client-tools.js';
 import { calculateQuoteAmounts, computeServiceDrafts, isCompletedCapture } from './core.js';
 import { createEvent, createId, Store, timestamp } from './db.js';
@@ -307,6 +307,36 @@ function invoiceToolPayload(content: unknown): Record<string, unknown> {
   return asObject(content);
 }
 
+function compactInvoiceState(payload: Record<string, unknown>): Record<string, unknown> {
+  const detail = asObject(payload.detail);
+  const amount = asObject(payload.amount);
+  const dueAmount = asObject(payload.due_amount);
+  const payments = asObject(payload.payments);
+  const paidAmount = asObject(payments.paid_amount);
+  const transactions = Array.isArray(payments.transactions) ? payments.transactions : [];
+  let lastPaymentDate: string | null = null;
+  let lastPaymentTimestamp = Number.NEGATIVE_INFINITY;
+  for (const transaction of transactions) {
+    const paymentDate = asObject(transaction).payment_date;
+    if (typeof paymentDate !== 'string') continue;
+    const paymentTimestamp = Date.parse(paymentDate);
+    if (!Number.isFinite(paymentTimestamp) || paymentTimestamp < lastPaymentTimestamp) continue;
+    lastPaymentDate = paymentDate;
+    lastPaymentTimestamp = paymentTimestamp;
+  }
+  return {
+    invoice_id: payload.id ?? null,
+    status: payload.status ?? null,
+    invoice_number: detail.invoice_number ?? null,
+    currency_code: detail.currency_code ?? null,
+    total_value: amount.value ?? null,
+    amount_due_value: dueAmount.value ?? null,
+    paid_value: paidAmount.value ?? null,
+    viewed_by_recipient: detail.viewed_by_recipient ?? null,
+    last_payment_date: lastPaymentDate
+  };
+}
+
 function userSuppliedDetails(messages: ChatMsg[], args: {
   client_name: string;
   client_email: string;
@@ -574,6 +604,8 @@ export function createApp(options: AppOptions = {}): Hono {
     if (quote.status !== 'quoted') throw new HttpError(409, 'A deposit order can only be created for a quoted request.');
     const existing = store.getPayment(quote.id, 'deposit');
     if (existing?.paypal_order_id) return c.json({ order_id: existing.paypal_order_id });
+    const seller = store.getSeller();
+    if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
     saveEvent(store, createEvent('paypal', 'tool_call', quote.id, {
       tool: 'create_order',
       input: { quote_id: quote.id, amount_cents: quote.deposit_cents }
@@ -583,7 +615,8 @@ export function createApp(options: AppOptions = {}): Hono {
       quote.deposit_cents,
       `${quote.service_title} deposit`,
       quote.approval_url,
-      `deposit-${quote.id}`
+      `deposit-${quote.id}`,
+      seller.name
     );
     if (!order.id) throw new HttpError(502, 'PayPal did not return an order id.');
     const payment: Payment = {
@@ -642,6 +675,7 @@ export function createApp(options: AppOptions = {}): Hono {
     if (!payment?.paypal_invoice_id) {
       const [givenName, ...surnameParts] = quote.client_name.split(/\s+/);
       const payload = {
+        invoicer: { business_name: seller.name },
         detail: {
           currency_code: 'USD',
           note: `Balance for ${quote.service_title}. ${quote.scope_summary}`,
@@ -812,11 +846,9 @@ export function createApp(options: AppOptions = {}): Hono {
       required: ['action', 'reason', 'draft_message'],
       additionalProperties: false
     });
+    const systemPrompt = `You are the collections agent for ${seller.name}. Seller tone: ${seller.rules.reminder_tone}. Quote: ${quote.service_title}; total $${(quote.total_cents / 100).toFixed(2)}; balance $${(quote.balance_cents / 100).toFixed(2)}; client ${quote.client_name}; invoice ${payment.paypal_invoice_id}. Reply history: ${JSON.stringify(replies)}. You must call get_invoice before proposing any action and never state payment status without calling get_invoice. Use propose_action once you have checked the invoice. Send nothing; your draft requires seller approval.`;
     const messages: import('openai/resources').ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: `You are the collections agent for ${seller.name}. Seller tone: ${seller.rules.reminder_tone}. Quote: ${quote.service_title}; total $${(quote.total_cents / 100).toFixed(2)}; balance $${(quote.balance_cents / 100).toFixed(2)}; client ${quote.client_name}; invoice ${payment.paypal_invoice_id}. Reply history: ${JSON.stringify(replies)}. You must call get_invoice before proposing any action and never state payment status without calling get_invoice. Use propose_action once you have checked the invoice. Send nothing; your draft requires seller approval.`
-      },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: 'Check the current PayPal balance invoice status and propose the appropriate next action.' }
     ];
     const stepEvents: AgentEvent[] = [];
@@ -862,7 +894,11 @@ export function createApp(options: AppOptions = {}): Hono {
             output: invoiceData
           }));
           stepEvents.push(toolEvent);
-          messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(invoiceData) });
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(compactInvoiceState(invoiceData))
+          });
         } else if (toolCall.function.name === 'propose_action') {
           const parsed = proposalActionSchema.safeParse(args);
           if (parsed.success) {
@@ -909,6 +945,23 @@ export function createApp(options: AppOptions = {}): Hono {
         draft_message: `Thanks, ${quote.client_name} — PayPal confirms your balance is paid.`
       };
     }
+    if (!proposed && status !== 'PAID') {
+      const recoverySystem = `${systemPrompt}\n\nPayPal invoice state (verified just now): ${JSON.stringify(compactInvoiceState(invoiceData))}. Invoice payer link: ${payment.invoice_url ?? 'not available'}. Pick exactly one action. If the client says they paid but PayPal is not PAID, do not accuse them: thank them, say PayPal doesn't show it yet, and include that they can pay or check via the invoice link. draft_message must be a short friendly message to the client in the seller's tone.`;
+      try {
+        proposed = await ai.toolResult(
+          recoverySystem,
+          'Propose the next action now.',
+          proposalTool,
+          (value) => proposalActionSchema.parse(value)
+        );
+        summary = proposed.reason;
+        stepEvents.push(saveEvent(store, createEvent('collections_agent', 'tool_call', quote.id, {
+          tool: 'propose_action',
+          input: proposed
+        })));
+      } catch {
+      }
+    }
     if (!proposed) {
       proposed = {
         action: 'wait',
@@ -937,6 +990,7 @@ export function createApp(options: AppOptions = {}): Hono {
       status: 'pending',
       created_at: timestamp()
     };
+    if (!summary.trim() || isDegenerateText(summary)) summary = proposal.reason;
     store.saveProposal(proposal);
     const decisionEvent = saveEvent(store, createEvent('collections_agent', 'decision', quote.id, {
       output: proposal,

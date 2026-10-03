@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { AIService } from '../src/ai.js';
 import { createApp } from '../src/app.js';
 import { createId, Store, timestamp } from '../src/db.js';
-import { invoiceIdFrom, PayPalService } from '../src/paypal.js';
-import type { Payment, Quote } from '../src/types.js';
+import { PayPalService } from '../src/paypal.js';
+import type { Quote } from '../src/types.js';
 
 const live = process.env.LIVE === '1';
 
@@ -35,25 +35,13 @@ describe.skipIf(!live)('live sandbox and AI gateway', () => {
       const order = await paypal.getOrder(orderId);
       expect(order.status).toBe('CREATED');
 
-      const createdInvoice = await paypal.createInvoice({
-        detail: { currency_code: 'USD', note: 'ServiceReady sandbox live-test invoice.' },
-        primary_recipients: [{
-          billing_info: {
-            name: { given_name: 'Demo', surname: 'Client' },
-            email_address: 'client-demo@example.com'
-          }
-        }],
-        items: [{
-          name: 'Logo design — balance',
-          quantity: '1',
-          unit_amount: { currency_code: 'USD', value: (quote.balance_cents / 100).toFixed(2) },
-          unit_of_measure: 'QUANTITY'
-        }]
-      });
-      invoiceId = invoiceIdFrom(createdInvoice);
-      expect(invoiceId, `PayPal invoice create response fields: ${Object.keys(createdInvoice).join(', ')}`).toBeTruthy();
-      expect(typeof invoiceId).toBe('string');
-      await paypal.sendInvoice(invoiceId!, 'ServiceReady sandbox live-test invoice.');
+      quote.status = 'deposit_paid';
+      quote.updated_at = timestamp();
+      store.saveQuote(quote);
+      const deliveryResponse = await app.request(`/api/quotes/${quote.id}/deliver`, { method: 'POST' });
+      expect(deliveryResponse.status).toBe(200);
+      invoiceId = store.getPayment(quote.id, 'balance')?.paypal_invoice_id ?? undefined;
+      expect(invoiceId).toBeTruthy();
       const invoiceDetails = await paypal.getInvoice(invoiceId!);
       expect(typeof invoiceDetails.status).toBe('string');
       expect(invoiceDetails.status).not.toBe('DRAFT');
@@ -71,19 +59,6 @@ describe.skipIf(!live)('live sandbox and AI gateway', () => {
       });
       expect(invoiceResult.role).toBe('tool');
 
-      const now = timestamp();
-      quote.status = 'balance_invoiced';
-      quote.updated_at = now;
-      store.saveQuote(quote);
-      const balance: Payment = {
-        id: createId('payment'),
-        kind: 'balance',
-        amount_cents: quote.balance_cents,
-        status: 'SENT',
-        paypal_invoice_id: invoiceId,
-        updated_at: now
-      };
-      store.savePayment(quote.id, balance);
       const catalogResponse = await app.request('/api/catalog/parse', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

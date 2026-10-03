@@ -12,6 +12,13 @@ import type { ServiceDraft } from './types.js';
 export const PRIMARY_MODEL = 'workers-ai/@cf/openai/gpt-oss-120b';
 export const FALLBACK_MODEL = 'workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
+export function isDegenerateText(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  const letterCount = (trimmed.match(/[A-Za-z]/g) ?? []).length;
+  return /(.)\1{15,}/.test(trimmed) || (trimmed.length >= 10 && letterCount < 3);
+}
+
 export class AIService {
   private readonly client: OpenAI;
   private readonly primaryModel: string;
@@ -146,18 +153,31 @@ export class AIService {
         ...('tool_calls' in message && message.tool_calls ? { tool_calls: message.tool_calls } : {})
       };
     });
-    const attempt = (model: string): Promise<ChatCompletion> => this.client.chat.completions.create({
-      model,
-      messages: requestMessages,
-      ...(tools.length > 0 ? { tools, tool_choice: toolChoice } : {})
-    });
+    const attempt = async (model: string, checkDegenerateText = true): Promise<ChatCompletion> => {
+      const response = await this.client.chat.completions.create({
+        model,
+        messages: requestMessages,
+        ...(tools.length > 0 ? { tools, tool_choice: toolChoice } : {})
+      });
+      const message = response.choices[0]?.message;
+      if (
+        checkDegenerateText &&
+        message &&
+        !message.tool_calls?.length &&
+        typeof message.content === 'string' &&
+        isDegenerateText(message.content)
+      ) {
+        throw new Error('Model returned degenerate text.');
+      }
+      return response;
+    };
     try {
       return await attempt(this.primaryModel);
     } catch {
       try {
         return await attempt(this.primaryModel);
       } catch {
-        return attempt(this.fallbackModel);
+        return attempt(this.fallbackModel, false);
       }
     }
   }
