@@ -6,7 +6,16 @@ import { CollectionsStudio } from "@/components/CollectionsStudio";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/app/collections")({
-  head: () => ({ meta: [{ title: "Collections — ServiceReady" }, { name: "description", content: "Who still owes what." }, { property: "og:title", content: "Collections — ServiceReady" }, { property: "og:description", content: "Who still owes what." }] }),
+  head: () => ({
+    meta: [
+      { title: "Collections — ServiceReady" },
+      { name: "description", content: "Who still owes what." },
+      { property: "og:title", content: "Collections — ServiceReady" },
+      { property: "og:description", content: "Who still owes what." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Collections,
 });
 
@@ -14,8 +23,15 @@ function Collections() {
   const { data, isLoading } = useQuery({ queryKey: ["stats"], queryFn: api.getStats });
   return (
     <>
-      <PageHeader title="Who still owes what" sub="A friendly view of open balances, deposits, and bookings." />
-      {isLoading || !data ? <Skeleton className="h-80 rounded-2xl" /> : <CollectionsStudio stats={data} />}
+      <PageHeader
+        title="Who owes what"
+        sub="Open balances, ordered by how long they have been waiting. Open a client to follow up."
+      />
+      {isLoading || !data ? (
+        <Skeleton className="h-80 rounded-2xl" />
+      ) : (
+        <CollectionsStudio stats={data} />
+      )}
     </>
   );
 }

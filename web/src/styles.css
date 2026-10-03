@@ -2,9 +2,6 @@
 @source "../src";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
-/* Ledgerline design system: deep teal surfaces, single mint accent, cream text. */
 @theme inline {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
@@ -12,17 +9,6 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --color-deep-950: var(--deep-950);
-  --color-deep-900: var(--deep-900);
-  --color-deep-800: var(--deep-800);
-  --color-deep-700: var(--deep-700);
-  --color-mint: var(--mint);
-  --color-cream: var(--cream);
-  --color-warn: var(--warn);
-  --color-danger: var(--danger);
-  --color-paypal: var(--paypal);
-  --color-paypal-ink: var(--paypal-ink);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -31,6 +17,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -42,6 +29,15 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-link: var(--link);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-paypal: var(--paypal);
+  --color-paypal-ink: var(--paypal-ink);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -53,130 +49,156 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --deep-950: #0a2a2b;
-  --deep-900: #0f3d3e;
-  --deep-800: #134847;
-  --deep-700: #1b5a58;
-  --mint: #4fd1c5;
-  --cream: #eef5f0;
-  --warn: #f2c46d;
-  --danger: #f58b7f;
+  --radius: 0.75rem;
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+  --primary-hover: #262626;
+  --secondary: #ffffff;
+  --secondary-foreground: #0a0a0a;
+  --muted: #f5f5f5;
+  --muted-foreground: #525252;
+  --accent: #f5f5f5;
+  --accent-foreground: #0a0a0a;
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --border: #e5e5e5;
+  --input: #8a8a8a;
+  --ring: #1d4ed8;
+  --link: #1d4ed8;
+  --success: #15803d;
+  --success-bg: #f0fdf4;
+  --warning: #b45309;
+  --warning-bg: #fffbeb;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
   --paypal: #ffc439;
   --paypal-ink: #003087;
-
-  --background: var(--deep-900);
-  --foreground: var(--cream);
-  --card: var(--deep-800);
-  --card-foreground: var(--cream);
-  --popover: var(--deep-950);
-  --popover-foreground: var(--cream);
-  --primary: var(--mint);
-  --primary-foreground: var(--deep-950);
-  --secondary: var(--deep-700);
-  --secondary-foreground: var(--cream);
-  --muted: var(--deep-800);
-  --muted-foreground: rgb(238 245 240 / 0.62);
-  --accent: var(--deep-700);
-  --accent-foreground: var(--cream);
-  --destructive: var(--danger);
-  --destructive-foreground: var(--deep-950);
-  --border: rgb(238 245 240 / 0.1);
-  --input: rgb(238 245 240 / 0.12);
-  --ring: var(--mint);
-  --sidebar: var(--deep-950);
-  --sidebar-foreground: var(--cream);
-  --sidebar-primary: var(--mint);
-  --sidebar-primary-foreground: var(--deep-950);
-  --sidebar-accent: var(--deep-800);
-  --sidebar-accent-foreground: var(--cream);
-  --sidebar-border: rgb(238 245 240 / 0.1);
-  --sidebar-ring: var(--mint);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: #0a0a0a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f5f5f5;
+  --sidebar-accent-foreground: #0a0a0a;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #1d4ed8;
 }
 
 @layer base {
   * {
-    border-color: var(--color-border);
+    border-color: var(--border);
   }
+
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
+
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    background: var(--background);
+    color: var(--foreground);
     font-family: var(--font-sans);
-    font-optical-sizing: auto;
-    font-feature-settings: "ss01" 1, "cv11" 1;
+    font-size: 16px;
+    font-feature-settings:
+      "ss01" 1,
+      "cv11" 1;
     -webkit-font-smoothing: antialiased;
   }
-  ::selection {
-    background: rgb(79 209 197 / 0.35);
+
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--ring) 38%, transparent);
+    outline-offset: 2px;
   }
 }
 
 @utility ringline {
-  box-shadow: inset 0 0 0 1px rgb(238 245 240 / 0.08);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
+
 @utility softcard {
-  box-shadow:
-    inset 0 1px 0 rgb(238 245 240 / 0.06),
-    inset 0 0 0 1px rgb(238 245 240 / 0.08),
-    0 24px 60px -28px rgb(0 0 0 / 0.7);
+  box-shadow: 0 4px 16px color-mix(in oklab, var(--foreground) 6%, transparent);
 }
+
 @utility dash-shadow {
-  box-shadow:
-    inset 0 0 0 1px rgb(238 245 240 / 0.08),
-    0 40px 90px -40px rgb(0 0 0 / 0.75);
+  box-shadow: 0 8px 28px color-mix(in oklab, var(--foreground) 7%, transparent);
 }
-@utility glow-mint {
-  box-shadow: 0 10px 30px -10px rgb(79 209 197 / 0.5);
-}
+
 @utility display {
-  letter-spacing: -0.045em;
-  line-height: 1.04;
-  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.06;
+  font-weight: 600;
 }
+
 @utility grain {
-  background-image:
-    radial-gradient(120% 90% at 82% -12%, rgb(79 209 197 / 0.18), transparent 60%),
-    radial-gradient(90% 70% at 6% 4%, rgb(79 209 197 / 0.07), transparent 60%),
-    linear-gradient(to bottom, rgb(10 42 43 / 0.55), transparent 70%);
+  background-image: linear-gradient(to bottom, rgb(245 245 245 / 0.9), transparent);
 }
 
 @layer components {
+  .btn-primary {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-glass {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-input bg-background px-5 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-sm {
+    @apply min-h-9 px-3.5 py-1.5 text-sm;
+  }
+
+  .glass-card {
+    @apply rounded-xl border border-border bg-card shadow-sm;
+  }
+
+  .glass-row {
+    @apply rounded-lg border border-border bg-muted;
+  }
+
+  .eyebrow {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .icon-tile {
+    @apply grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-foreground;
+  }
+
+  .field {
+    @apply w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20;
+  }
+
+  .text-link {
+    @apply font-medium text-link underline underline-offset-4 hover:no-underline;
+  }
+
+  .code-box {
+    @apply rounded-lg border border-border bg-muted p-4 font-mono text-sm text-foreground;
+  }
+
+  .surface-band {
+    @apply bg-accent;
+  }
+
   .collections-studio .ag-studio-layout-widget-title {
+    color: var(--foreground) !important;
+    font-family: Inter, sans-serif !important;
+    font-size: 13px !important;
     font-weight: 600 !important;
   }
-  .btn-mint {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-mint px-5 py-2.5 text-sm font-semibold text-deep-950 transition hover:bg-mint/90 disabled:opacity-50 disabled:pointer-events-none;
-    box-shadow: 0 10px 30px -10px rgb(79 209 197 / 0.5);
+
+  .paypal-button-wrapper {
+    color-scheme: light;
+    background: transparent;
   }
-  .btn-glass {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-cream/[0.04] px-5 py-2.5 text-sm font-medium text-cream transition hover:bg-cream/[0.08] disabled:opacity-50 disabled:pointer-events-none;
-    box-shadow: inset 0 0 0 1px rgb(238 245 240 / 0.1);
-  }
-  .btn-sm {
-    @apply px-3.5 py-1.5 text-[13px];
-  }
-  .glass-card {
-    @apply rounded-2xl bg-deep-800/60;
-    box-shadow:
-      inset 0 1px 0 rgb(238 245 240 / 0.06),
-      inset 0 0 0 1px rgb(238 245 240 / 0.08),
-      0 24px 60px -28px rgb(0 0 0 / 0.7);
-  }
-  .glass-row {
-    @apply rounded-xl bg-deep-950/60;
-    box-shadow: inset 0 0 0 1px rgb(238 245 240 / 0.08);
-  }
-  .eyebrow {
-    @apply text-[13px] font-semibold uppercase tracking-[0.14em] text-mint;
-  }
-  .icon-tile {
-    @apply grid size-9 shrink-0 place-items-center rounded-lg bg-mint/[0.13] text-mint;
-  }
-  .field {
-    @apply w-full rounded-lg bg-deep-950/60 px-3 py-2 text-sm text-cream placeholder:text-cream/40 outline-none focus:ring-2 focus:ring-mint/60;
-    box-shadow: inset 0 0 0 1px rgb(238 245 240 / 0.1);
+
+  .paypal-secure-box {
+    @apply rounded-lg border border-border bg-background p-4;
   }
 }

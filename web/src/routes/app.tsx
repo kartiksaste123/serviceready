@@ -1,56 +1,98 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, CheckSquare, Coins, LayoutList, Plug, ScrollText, Settings } from "lucide-react";
+import {
+  BookOpen,
+  CheckSquare,
+  Coins,
+  LayoutList,
+  Menu,
+  Plug,
+  ScrollText,
+  Settings,
+  X,
+} from "lucide-react";
+import { useState } from "react";
 import { api, USE_MOCKS } from "@/lib/api";
 import { money } from "@/lib/format";
 import { Wordmark } from "@/components/kit";
 import { Skeleton } from "@/components/ui/skeleton";
-
 export const Route = createFileRoute("/app")({
   head: () => ({
     meta: [
-      { title: "Seller console — ServiceReady" },
-      { name: "description", content: "Bookings, approvals, collections and agent activity for your service business." },
-      { property: "og:title", content: "Seller console — ServiceReady" },
-      { property: "og:description", content: "Manage bookings, deposits and agent approvals." },
+      { title: "Seller workspace — ServiceReady" },
+      { name: "description", content: "Manage bookings, approvals and payments." },
+      { property: "og:title", content: "Seller workspace — ServiceReady" },
+      { property: "og:description", content: "Manage bookings, approvals and payments." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
   }),
   component: AppLayout,
 });
-
 const NAV = [
   { to: "/app", l: "Bookings", i: LayoutList, exact: true },
-  { to: "/app/approvals", l: "Approvals", i: CheckSquare },
-  { to: "/app/collections", l: "Collections", i: Coins },
-  { to: "/app/log", l: "Agent log", i: ScrollText },
-  { to: "/app/connect", l: "Connect agents", i: Plug },
-  { to: "/app/catalog", l: "Catalog", i: BookOpen },
+  { to: "/app/approvals", l: "Needs your approval", i: CheckSquare },
+  { to: "/app/collections", l: "Who owes what", i: Coins },
+  { to: "/app/log", l: "Activity log", i: ScrollText },
+  { to: "/app/connect", l: "Connect AI assistants", i: Plug },
+  { to: "/app/catalog", l: "Services & prices", i: BookOpen },
   { to: "/app/settings", l: "Settings", i: Settings },
 ] as const;
-
 function AppLayout() {
-  const pending = useQuery({ queryKey: ["proposals", "pending"], queryFn: () => api.listProposals("pending") });
+  const [open, setOpen] = useState(false);
+  const pending = useQuery({
+    queryKey: ["proposals", "pending"],
+    queryFn: () => api.listProposals("pending"),
+  });
   const count = pending.data?.length ?? 0;
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
-      <aside className="sticky top-0 z-30 border-b border-cream/10 bg-deep-950/95 backdrop-blur-md lg:h-screen lg:border-b-0 lg:border-r">
-        <div className="flex h-16 items-center px-5"><Link to="/"><Wordmark /></Link></div>
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:pb-0">
+    <div className="min-h-screen bg-muted lg:grid lg:grid-cols-[250px_1fr]">
+      <aside className="sticky top-0 z-30 border-b border-border bg-background lg:h-screen lg:border-b-0 lg:border-r">
+        <div className="flex h-16 items-center justify-between px-5">
+          <Link to="/">
+            <Wordmark />
+          </Link>
+          <button
+            className="grid size-9 place-items-center rounded-lg border border-border lg:hidden"
+            aria-label="Toggle menu"
+            onClick={() => setOpen(!open)}
+          >
+            {open ? <X className="size-4" /> : <Menu className="size-4" />}
+          </button>
+        </div>
+        <nav
+          className={`${open ? "flex" : "hidden"} flex-col gap-1 border-t border-border px-3 py-3 lg:flex lg:border-0`}
+        >
           {NAV.map((n) => (
-            <Link key={n.to} to={n.to} activeOptions={{ exact: "exact" in n }} className="flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] text-cream/70 transition hover:bg-cream/[0.05] hover:text-cream" activeProps={{ className: "bg-mint/[0.12] !text-mint" }}>
-              <n.i className="size-4" />{n.l}
-              {n.to === "/app/approvals" && count > 0 && <span className="ml-auto rounded-full bg-warn px-1.5 text-[11px] font-bold tabular-nums text-deep-950">{count}</span>}
+            <Link
+              key={n.to}
+              to={n.to}
+              activeOptions={{ exact: "exact" in n }}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              activeProps={{
+                className: "!border-foreground bg-muted !font-semibold !text-foreground",
+              }}
+            >
+              <n.i className="size-4" />
+              {n.l}
+              {n.to === "/app/approvals" && count > 0 && (
+                <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                  {count}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
-        <div className="absolute bottom-5 left-5 right-5 hidden lg:block">
-          <div className="glass-row p-3 text-[12px]"><div className="font-semibold">Maya Rao Studio</div><div className="text-cream/55">{USE_MOCKS ? "Demo data · PayPal sandbox" : "PayPal sandbox"}</div></div>
+        <div className="absolute bottom-5 left-5 right-5 hidden border-t border-border pt-4 text-sm lg:block">
+          <p className="font-semibold">Maya Rao Studio</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {USE_MOCKS ? "Demo workspace · PayPal sandbox" : "PayPal sandbox"}
+          </p>
         </div>
       </aside>
       <div className="min-w-0">
-        <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-8">
+        <div className="mx-auto max-w-7xl px-5 py-7 sm:px-8">
           <KPIs />
           <Outlet />
         </div>
@@ -58,21 +100,27 @@ function AppLayout() {
     </div>
   );
 }
-
 function KPIs() {
   const { data, isLoading } = useQuery({ queryKey: ["stats"], queryFn: api.getStats });
   const k = [
-    { l: "Deposits collected", v: data && money(data.deposits_collected_cents), mint: true },
-    { l: "Outstanding balances", v: data && money(data.outstanding_cents), warn: true },
-    { l: "Paid", v: data && money(data.paid_cents) },
-    { l: "Avg days to pay", v: data && (data.avg_days_to_pay == null ? "—" : `${data.avg_days_to_pay} d`) },
+    { l: "Deposits received", v: data && money(data.deposits_collected_cents) },
+    { l: "Still to collect", v: data && money(data.outstanding_cents) },
+    { l: "Fully paid", v: data && money(data.paid_cents) },
+    {
+      l: "Average time to pay",
+      v: data && (data.avg_days_to_pay == null ? "—" : `${data.avg_days_to_pay} days`),
+    },
   ];
   return (
-    <div className="mb-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-cream/10 ringline lg:grid-cols-4">
+    <div className="mb-8 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4">
       {k.map((x) => (
-        <div key={x.l} className="bg-deep-950/70 p-4 sm:p-5">
-          <div className="text-[11px] uppercase tracking-wider text-cream/55">{x.l}</div>
-          {isLoading || !x.v ? <Skeleton className="mt-2 h-7 w-24" /> : <div className={`mt-1 text-xl font-bold tabular-nums sm:text-2xl ${x.mint ? "text-mint" : x.warn ? "text-warn" : ""}`}>{x.v}</div>}
+        <div key={x.l} className="bg-card p-4 sm:p-5">
+          <div className="text-xs font-medium text-muted-foreground">{x.l}</div>
+          {isLoading || !x.v ? (
+            <Skeleton className="mt-2 h-7 w-24" />
+          ) : (
+            <div className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl">{x.v}</div>
+          )}
         </div>
       ))}
     </div>

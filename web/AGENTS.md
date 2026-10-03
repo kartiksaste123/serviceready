@@ -11,3 +11,5 @@
 
 - All data access goes through `src/lib/api.ts`; it uses `src/lib/mock.ts` unless `VITE_USE_MOCKS === 'false'` — the real backend is external and owned by the user.
 - `PayPalDepositButton`, `BookingsGrid`, `CollectionsStudio` are swap-in seams; keep their props stable.
+- Frontend presentation uses only semantic light-mode tokens from `src/styles.css`; feature code must not introduce palette-specific colors.
+- Frontend presentation uses only semantic light-mode tokens from `src/styles.css`; feature code must not introduce palette-specific colors.

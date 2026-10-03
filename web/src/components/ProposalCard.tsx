@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Check, Loader2, ShieldCheck, X } from "lucide-react";
+import { Check, Clock3, Loader2, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Proposal } from "@/lib/types";
@@ -11,39 +11,114 @@ import { ActionPill } from "./kit";
 export function ProposalCard({ p, showClient = true }: { p: Proposal; showClient?: boolean }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState(p.draft_message);
-  const done = () => { ["proposals", "quote", "events", "stats", "quotes"].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); };
+  const done = () => {
+    ["proposals", "quote", "events", "stats", "quotes"].forEach((k) =>
+      qc.invalidateQueries({ queryKey: [k] }),
+    );
+  };
   const approve = useMutation({
     mutationFn: () => api.approveProposal(p.id, draft),
-    onSuccess: () => { toast.success("Approved and sent"); done(); },
+    onSuccess: () => {
+      toast.success("Message approved and sent");
+      done();
+    },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Unable to approve proposal");
       done();
     },
   });
-  const reject = useMutation({ mutationFn: () => api.rejectProposal(p.id), onSuccess: () => { toast("Proposal rejected"); done(); } });
+  const reject = useMutation({
+    mutationFn: () => api.rejectProposal(p.id),
+    onSuccess: () => {
+      toast("Message not sent");
+      done();
+    },
+  });
   const pending = p.status === "pending";
+  const statusLabel =
+    p.status === "executed"
+      ? "Sent"
+      : p.status === "approved"
+        ? "Approved"
+        : p.status === "failed"
+          ? "Failed"
+          : p.status === "rejected"
+            ? "Rejected"
+            : "Pending";
+  const statusTone =
+    p.status === "executed" || p.status === "approved"
+      ? "text-success"
+      : p.status === "rejected" || p.status === "failed"
+        ? "text-danger"
+        : "text-warning";
   return (
-    <div className="glass-card p-5">
+    <article className="glass-card p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">Suggested:</span>
         <ActionPill action={p.action} />
-        {showClient && <Link to="/app/quotes/$id" params={{ id: p.quote_id }} className="font-semibold hover:text-mint">{p.client_name}</Link>}
-        <span className="ml-auto text-[12px] text-cream/50">{timeAgo(p.created_at)}</span>
+        {showClient && (
+          <Link to="/app/quotes/$id" params={{ id: p.quote_id }} className="text-link">
+            {p.client_name}
+          </Link>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">{timeAgo(p.created_at)}</span>
       </div>
-      <p className="mt-3 text-sm text-cream/80">{p.reason}</p>
-      <p className="glass-row mt-3 flex items-center gap-2 px-3 py-2 font-mono text-[12px] text-cream/80"><ShieldCheck className="size-3.5 shrink-0 text-mint" />{p.evidence}</p>
+      <p className="mt-4 text-sm">
+        <span className="font-semibold">Why:</span> {p.reason}
+      </p>
+      <div className="mt-4 rounded-lg bg-muted p-3 text-sm">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="size-4" />
+          <span className="font-semibold">PayPal evidence</span>
+        </div>
+        <p className="mt-2 whitespace-pre-wrap font-mono text-xs text-muted-foreground">
+          {p.evidence}
+        </p>
+      </div>
       {pending ? (
         <>
-          <label className="mt-4 block text-[11px] uppercase tracking-wider text-cream/55">Draft message</label>
-          <textarea className="field mt-1.5 text-[13px] leading-relaxed" rows={5} value={draft} onChange={(e) => setDraft(e.target.value)} />
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button className="btn-mint btn-sm" disabled={approve.isPending || reject.isPending} onClick={() => approve.mutate()}>{approve.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}Approve</button>
-            <button className="btn-glass btn-sm" disabled={approve.isPending || reject.isPending} onClick={() => reject.mutate()}><X className="size-3.5" />Reject</button>
-            <span className="text-[12px] text-cream/50">Nothing is sent without you.</span>
+          <label className="mt-5 block text-sm font-semibold">Message to {p.client_name}</label>
+          <textarea
+            className="field mt-2 leading-relaxed"
+            rows={5}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              className="btn-primary btn-sm"
+              disabled={approve.isPending || reject.isPending}
+              onClick={() => approve.mutate()}
+            >
+              {approve.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+              Approve &amp; send
+            </button>
+            <button
+              className="btn-glass btn-sm"
+              disabled={approve.isPending || reject.isPending}
+              onClick={() => reject.mutate()}
+            >
+              <X className="size-4" />
+              Don&apos;t send
+            </button>
           </div>
         </>
       ) : (
-        <p className="mt-3 text-[12px] uppercase tracking-wider text-cream/55">Status: <span className={p.status === "executed" ? "text-mint" : ""}>{p.status}</span></p>
+        <p className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium">
+          {p.status === "executed" || p.status === "approved" ? (
+            <Check className={`size-4 ${statusTone}`} />
+          ) : p.status === "rejected" || p.status === "failed" ? (
+            <X className={`size-4 ${statusTone}`} />
+          ) : (
+            <Clock3 className={`size-4 ${statusTone}`} />
+          )}
+          <span className={statusTone}>{statusLabel}</span>
+        </p>
       )}
-    </div>
+    </article>
   );
 }
