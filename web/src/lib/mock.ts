@@ -96,7 +96,7 @@ function buildQuote(id: string, s: Service, client_name: string, client_email: s
   const deposit = Math.round((s.price_cents * s.deposit_pct) / 100);
   return {
     id, service_id: s.id, service_title: s.title, client_name, client_email, brief,
-    scope_summary: `${s.title} for ${client_name}: ${s.deliverables.join(', ')}. Delivered in ~${s.lead_time_days} days.`,
+    scope_summary: `${s.title} for ${client_name}: ${s.deliverables.join(', ')}. ${s.lead_time_days > 0 ? `Delivered in ~${s.lead_time_days} days.` : 'Lead time is available on request.'}`,
     line_items: [{ label: s.title, amount_cents: s.price_cents }],
     total_cents: s.price_cents, deposit_cents: deposit, balance_cents: s.price_cents - deposit,
     status: 'quoted', source, approval_url: `/q/${id}`, created_at: at, updated_at: at,
@@ -297,9 +297,9 @@ export async function agentChat(slug: string, messages: ChatMsg[]): Promise<{ me
     const email = last.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? 'you@example.com';
     quote = createQuote({ service_id: match.id, client_name: 'Agent demo client', client_email: email, brief: last, source: 'agent_sim' });
     tool_calls.push({ tool: 'request_quote', input: { service_id: match.id, client_email: email, brief: last }, output: { quote_id: quote.id, total_usd: quote.total_cents / 100, deposit_usd: quote.deposit_cents / 100, approval_url: quote.approval_url } });
-    reply = `I've requested a quote for **${match.title}** from Maya Rao Studio.\n\n- Total: $${quote.total_cents / 100}\n- Deposit due now: $${quote.deposit_cents / 100} (${match.deposit_pct}%)\n- Turnaround: ~${match.lead_time_days} days\n\nI can't pay on your behalf — review the quote and pay the deposit yourself using the button below.`;
+    reply = `I've requested a quote for **${match.title}** from Maya Rao Studio.\n\n- Total: $${quote.total_cents / 100}\n- Deposit due now: $${quote.deposit_cents / 100} (${match.deposit_pct}%)\n- Turnaround: ${match.lead_time_days > 0 ? `~${match.lead_time_days} days` : 'on request'}\n\nI can't pay on your behalf — review the quote and pay the deposit yourself using the button below.`;
   } else {
-    reply = `Maya Rao Studio offers:\n\n${services.map((s) => `- **${s.title}** — $${s.price_cents / 100}, ${s.deposit_pct}% deposit, ~${s.lead_time_days} days`).join('\n')}\n\nTell me which one you'd like and I'll request a quote.`;
+    reply = `Maya Rao Studio offers:\n\n${services.map((s) => `- **${s.title}** — $${s.price_cents / 100}, ${s.deposit_pct}% deposit, ${s.lead_time_days > 0 ? `~${s.lead_time_days} days` : 'lead time on request'}`).join('\n')}\n\nTell me which one you'd like and I'll request a quote.`;
   }
   return { messages: [...messages, { role: 'assistant', content: reply }], tool_calls, quote: quote ? clone(quote) : null };
 }

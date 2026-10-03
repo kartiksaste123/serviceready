@@ -69,7 +69,7 @@ function Catalog() {
                 </span>
                 <span className="flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
                   <Clock className="size-3" />
-                  {s.lead_time_days}d
+                  {s.lead_time_days > 0 ? `${s.lead_time_days}d` : "—"}
                 </span>
                 <span
                   className={`flex items-center gap-1 rounded-md px-2 py-0.5 ${s.status === "published" ? "bg-success-bg text-success" : "bg-muted text-muted-foreground"}`}

@@ -45,6 +45,14 @@ function Storefront() {
     queryFn: () => api.getPublicStore(slug),
   });
   const [picked, setPicked] = useState<Service | null>(null);
+  const initials = data?.seller.name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase() || "?";
 
   return (
     <div className="relative min-h-screen">
@@ -70,7 +78,7 @@ function Storefront() {
             <section className="flex flex-wrap items-end justify-between gap-6 py-10">
               <div className="flex items-center gap-4">
                 <span className="grid size-16 place-items-center rounded-2xl bg-muted text-xl font-bold text-foreground softcard">
-                  MR
+                  {initials}
                 </span>
                 <div>
                   <h1 className="display text-4xl">{data.seller.name}</h1>
@@ -97,7 +105,7 @@ function Storefront() {
                       </span>
                       <span className="flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-muted-foreground">
                         <Clock className="size-3" />
-                        {s.lead_time_days} days
+                        {s.lead_time_days > 0 ? `${s.lead_time_days} days` : "Lead time on request"}
                       </span>
                     </div>
                     <ul className="mt-3 flex-1 space-y-1 text-[13px] text-muted-foreground">

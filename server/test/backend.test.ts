@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type OpenAI from 'openai';
-import type { ChatCompletion, ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources';
+import type {
+  ChatCompletion,
+  ChatCompletionMessageParam,
+  ChatCompletionTool,
+  ChatCompletionToolChoiceOption
+} from 'openai/resources';
 import { AIService, isDegenerateText } from '../src/ai.js';
 import { createApp } from '../src/app.js';
 import { ClientTools } from '../src/client-tools.js';
@@ -15,13 +20,19 @@ import type { Payment, Proposal, Quote, Source } from '../src/types.js';
 class StubAI extends AIService {
   readonly completionQueue: ChatCompletion[] = [];
   readonly messageHistory: ChatCompletionMessageParam[][] = [];
+  readonly toolChoiceHistory: ChatCompletionToolChoiceOption[] = [];
   readonly toolResultCalls: Array<{ system: string; user: string; tool: ChatCompletionTool }> = [];
   forcedToolResult: unknown;
   async quoteScope(): Promise<string> {
     return 'A concise scope summary. Fit check: Good fit.';
   }
-  async chatCompletion(messages: ChatCompletionMessageParam[], _tools: ChatCompletionTool[]): Promise<ChatCompletion> {
+  async chatCompletion(
+    messages: ChatCompletionMessageParam[],
+    _tools: ChatCompletionTool[],
+    toolChoice: ChatCompletionToolChoiceOption = 'auto'
+  ): Promise<ChatCompletion> {
     this.messageHistory.push([...messages]);
+    this.toolChoiceHistory.push(toolChoice);
     return this.completionQueue.shift() ?? {
       choices: [{ message: { role: 'assistant', content: 'Please share your project details.' } }]
     } as unknown as ChatCompletion;
@@ -225,6 +236,38 @@ afterEach(() => {
 });
 
 describe('catalog flags and quote amounts', () => {
+  it('publishes services without a lead time so they remain publicly visible', async () => {
+    const store = new Store(':memory:');
+    const { app } = appWith(store);
+    const seller = store.getSellerById('seller_maya');
+    const published = await app.request('/api/catalog/publish', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        services: [{
+          tmp_id: 'on-request',
+          title: 'Cafe social media',
+          description: 'Instagram management',
+          deliverables: ['Monthly content'],
+          price_cents: 60000,
+          deposit_pct: 50,
+          lead_time_days: null
+        }]
+      })
+    });
+
+    expect(published.status).toBe(200);
+    const [service] = await published.json() as Array<{ id: string; status: string; lead_time_days: number }>;
+    expect(service).toMatchObject({ status: 'published', lead_time_days: 0 });
+
+    const publicStore = await app.request(`/api/public/${seller?.slug}`);
+    expect(publicStore.status).toBe(200);
+    expect(await publicStore.json()).toMatchObject({
+      services: [expect.objectContaining({ id: service?.id, status: 'published', lead_time_days: 0 })]
+    });
+    store.close();
+  });
+
   it('computes positive-price outliers and all requested input flags in code', () => {
     const result = computeServiceDrafts([
       { tmp_id: 'median-a', title: 'A', description: '', deliverables: ['Design'], price_usd: 450, price_currency: null, deposit_pct: 50, lead_time_days: 7 },
@@ -1062,6 +1105,44 @@ describe('PayPal webhooks', () => {
     });
     expect(response.status).toBe(200);
     expect(store.getQuote(quote.id)?.status).toBe('balance_invoiced');
+    store.close();
+  });
+});
+
+describe('agent simulator', () => {
+  it('uses studio catalog context and returns an assistant answer after repeated tool calls', async () => {
+    const store = new Store(':memory:');
+    const ai = new StubAI();
+    for (let index = 0; index < 5; index += 1) {
+      ai.completionQueue.push(toolCall(
+        'list_services',
+        { seller_slug: 'maya-rao-studio' },
+        `list-services-${index}`
+      ));
+    }
+    const { app } = appWith(store, ai);
+    const response = await app.request('/api/agent-sim/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slug: 'maya-rao-studio',
+        messages: [{ role: 'user', content: 'I want a logo for my cafe.' }]
+      })
+    });
+
+    expect(response.status).toBe(200);
+    const result = await response.json() as { messages: Array<{ role: string; content?: string }> };
+    expect(result.messages.at(-1)).toEqual({
+      role: 'assistant',
+      content: "Sorry, I couldn't finish that. Could you rephrase your request?"
+    });
+    expect(ai.toolChoiceHistory).toEqual(['auto', 'auto', 'auto', 'auto', 'none']);
+    const systemMessage = ai.messageHistory[0]?.[0];
+    expect(systemMessage).toMatchObject({
+      role: 'system',
+      content: expect.stringContaining('maya-rao-studio')
+    });
+    expect(systemMessage?.content).toContain('Logo design');
     store.close();
   });
 });

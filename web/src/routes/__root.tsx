@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
+import { reportClientError } from "../lib/api";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -39,9 +40,22 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
+  const message =
+    error instanceof Response
+      ? `Response ${error.status}${error.url ? ` at ${error.url}` : ""}`
+      : error instanceof Error
+        ? error.message
+        : String(error);
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+    reportLovableError(error, { boundary: "root" });
+    reportClientError({
+      message: message.slice(0, 500),
+      ...(error instanceof Error && error.stack ? { stack: error.stack.slice(0, 4000) } : {}),
+      url: window.location.href.slice(0, 500),
+      user_agent: navigator.userAgent.slice(0, 300),
+      boundary: "root",
+    });
+  }, [error, message]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -51,6 +65,9 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
+        </p>
+        <p className="mt-3 break-words text-xs text-muted-foreground">
+          Error: {message.slice(0, 200)}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button

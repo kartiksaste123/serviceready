@@ -23,6 +23,14 @@ export interface AuthChallenge {
   email_hint: string;
 }
 
+export interface ClientErrorPayload {
+  message: string;
+  stack?: string;
+  url: string;
+  user_agent?: string;
+  boundary?: string;
+}
+
 export interface StudioLlmMessage {
   role: 'system' | 'developer' | 'user' | 'assistant' | 'tool';
   content?: string | null;
@@ -137,6 +145,20 @@ export function safeRedirect(value: unknown): string | null {
     !path.startsWith('/onboard/')
   ) return null;
   return value;
+}
+
+export function reportClientError(payload: ClientErrorPayload): void {
+  if (USE_MOCKS) return;
+  try {
+    void fetch('/api/client-errors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      credentials: 'omit',
+      keepalive: true
+    }).catch(() => undefined);
+  } catch {
+  }
 }
 
 export const api = {

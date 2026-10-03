@@ -81,6 +81,13 @@ const agentSimSchema = z.object({
     content: z.string().max(4000)
   }).strict()).min(1).max(40)
 }).strict();
+const clientErrorSchema = z.object({
+  message: z.string().max(500),
+  stack: z.string().max(4000).optional(),
+  url: z.string().max(500),
+  user_agent: z.string().max(300).optional(),
+  boundary: z.string().max(50).optional()
+}).strict();
 const studioLlmContentPartSchema = z.union([
   z.object({ type: z.literal('text'), text: z.string() }).strict(),
   z.object({
@@ -145,6 +152,22 @@ function parseBody<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) throw new HttpError(400, result.error.issues[0]?.message ?? 'Invalid request body.');
   return result.data;
+}
+
+function consumeRateLimitSlot(limits: Map<string, number[]>, c: Context, maxRequests: number): boolean {
+  const ip = c.req.header('fly-client-ip')?.trim()
+    || c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+    || c.req.header('x-real-ip')?.trim()
+    || 'unknown';
+  const now = Date.now();
+  const requests = (limits.get(ip) ?? []).filter((started) => now - started < 60_000);
+  if (requests.length >= maxRequests) {
+    limits.set(ip, requests);
+    return false;
+  }
+  requests.push(now);
+  limits.set(ip, requests);
+  return true;
 }
 
 async function readLimitedJson(request: Request, maxBytes: number): Promise<unknown> {
@@ -396,6 +419,7 @@ export function createApp(options: AppOptions = {}): Hono {
   };
   const rateLimit = new Map<string, number[]>();
   const authRateLimit = new Map<string, number[]>();
+  const clientErrorRateLimit = new Map<string, number[]>();
   const secureCookie = baseUrl.startsWith('https');
   const getSessionContext = (c: Context): {
     tokenHash: string;
@@ -495,15 +519,9 @@ export function createApp(options: AppOptions = {}): Hono {
   app.use('/api/*', async (c, next) => {
     const aiPath = /^\/api\/(catalog\/parse|public\/[^/]+\/quotes|quotes\/[^/]+\/replies|quotes\/[^/]+\/collections\/run|agent-sim\/chat|studio\/llm)$/.test(c.req.path);
     if (!aiPath) return next();
-    const now = Date.now();
-    const ip = c.req.header('fly-client-ip')?.trim()
-      || c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
-      || c.req.header('x-real-ip')?.trim()
-      || 'unknown';
-    const requests = (rateLimit.get(ip) ?? []).filter((started) => now - started < 60_000);
-    if (requests.length >= 20) return c.json({ error: 'Too many AI requests; try again in a minute.' }, 429);
-    requests.push(now);
-    rateLimit.set(ip, requests);
+    if (!consumeRateLimitSlot(rateLimit, c, 20)) {
+      return c.json({ error: 'Too many AI requests; try again in a minute.' }, 429);
+    }
     await next();
   });
 
@@ -558,17 +576,28 @@ export function createApp(options: AppOptions = {}): Hono {
 
   app.get('/api/health', (c) => c.json({ ok: true }));
 
+  app.use('/api/client-errors', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    if (!consumeRateLimitSlot(clientErrorRateLimit, c, 20)) {
+      return c.json({ error: 'Too many client error reports; try again in a minute.' }, 429);
+    }
+    await next();
+  });
+
+  app.post('/api/client-errors', async (c) => {
+    const input = parseBody(clientErrorSchema, await c.req.json());
+    console.log('[client-error]', JSON.stringify({
+      ...input,
+      ...(input.stack === undefined ? {} : { stack: input.stack.slice(0, 1500) })
+    }));
+    return c.body(null, 204);
+  });
+
   app.use('/api/auth/*', async (c, next) => {
     if (c.req.method !== 'POST') return next();
-    const ip = c.req.header('fly-client-ip')?.trim()
-      || c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
-      || c.req.header('x-real-ip')?.trim()
-      || 'unknown';
-    const now = Date.now();
-    const requests = (authRateLimit.get(ip) ?? []).filter((started) => now - started < 60_000);
-    if (requests.length >= 10) return c.json({ error: 'Too many authentication requests; try again in a minute.' }, 429);
-    requests.push(now);
-    authRateLimit.set(ip, requests);
+    if (!consumeRateLimitSlot(authRateLimit, c, 10)) {
+      return c.json({ error: 'Too many authentication requests; try again in a minute.' }, 429);
+    }
     await next();
   });
 
@@ -827,7 +856,7 @@ export function createApp(options: AppOptions = {}): Hono {
         price_cents: draft.price_cents,
         deposit_pct: draft.deposit_pct,
         lead_time_days: draft.lead_time_days ?? 0,
-        status: draft.lead_time_days === null ? 'draft' : 'published'
+        status: 'published'
       };
     });
     store.replaceServices(seller.id, services);
@@ -1590,6 +1619,12 @@ export function createApp(options: AppOptions = {}): Hono {
     const input = parseBody(agentSimSchema, await c.req.json());
     const seller = store.getSellerBySlug(input.slug);
     if (!seller || !store.isSellerActive(seller.id)) throw new HttpError(404, 'Store not found.');
+    const publishedServices = store.listServices(seller.id, 'published');
+    const serviceSummary = publishedServices.length
+      ? publishedServices.map((service) =>
+        `- ${service.title} (id: ${service.id}; price: $${(service.price_cents / 100).toFixed(2)} USD; deposit: ${service.deposit_pct}%; lead time: ${service.lead_time_days > 0 ? `${service.lead_time_days} days` : 'on request'})`
+      ).join('\n')
+      : 'No published services.';
     const schemas = [
       jsonSchemaTool('list_services', 'List published services for a seller.', {
         type: 'object', properties: { seller_slug: { type: 'string' } }, required: ['seller_slug'], additionalProperties: false
@@ -1612,18 +1647,22 @@ export function createApp(options: AppOptions = {}): Hono {
     ];
     const messages: import('openai/resources').ChatCompletionMessageParam[] = [{
       role: 'system',
-      content: `You are a client's personal assistant helping explore ${seller.name}. Use only the listed client tools for service details or quotes. Ask for any missing client name, email, or project brief before calling request_quote. Do not pay or claim to pay. A human must approve the quote and deposit. Reply in short plain sentences or simple bullet lists, never markdown tables or HTML.`
+      content: `You are a client's personal assistant helping explore ${seller.name} (seller slug: ${seller.slug}).\nCurrently published services:\n${serviceSummary}\nUse only the listed client tools for service details or quotes. Never ask the client for a seller slug or service ID; match the client's words to a listed service yourself. If there are no published services, say plainly that the studio has no services listed yet. Ask for any missing client name, email, or project brief before calling request_quote. Do not pay or claim to pay. A human must approve the quote and deposit. Reply in short plain sentences or simple bullet lists, never markdown tables or HTML.`
     }, ...input.messages.map((message) => ({ role: message.role, content: message.content }))];
     const transcript: ChatMsg[] = [...input.messages];
     const toolCalls: ToolTrace[] = [];
     let quote: Quote | null = null;
     let requestedQuote = false;
+    let hasAssistantText = false;
     for (let step = 0; step < 5; step += 1) {
-      const response = await ai.chatCompletion(messages, schemas, 'auto');
+      const response = await ai.chatCompletion(messages, schemas, step === 4 ? 'none' : 'auto');
       const assistant = response.choices[0]?.message;
       if (!assistant) break;
       messages.push(assistant);
-      if (assistant.content) transcript.push({ role: 'assistant', content: assistant.content });
+      if (typeof assistant.content === 'string' && assistant.content.trim()) {
+        transcript.push({ role: 'assistant', content: assistant.content });
+        hasAssistantText = true;
+      }
       const calls = assistant.tool_calls ?? [];
       if (!calls.length) break;
       for (const call of calls) {
@@ -1672,6 +1711,9 @@ export function createApp(options: AppOptions = {}): Hono {
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(output) });
         }
       }
+    }
+    if (!hasAssistantText) {
+      transcript.push({ role: 'assistant', content: "Sorry, I couldn't finish that. Could you rephrase your request?" });
     }
     return c.json({ messages: transcript, tool_calls: toolCalls, quote });
   });
