@@ -583,6 +583,7 @@ export function createApp(options: AppOptions = {}): Hono {
       throw new HttpError(409, 'An account with this email already exists. Log in instead.');
     }
     const passwordHash = await hashPassword(input.password);
+    let newSellerId: string | null = null;
     if (user) {
       const seller = store.getSellerById(user.seller_id);
       if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
@@ -615,6 +616,7 @@ export function createApp(options: AppOptions = {}): Hono {
         }
       };
       store.saveSeller(seller);
+      newSellerId = seller.id;
       user = {
         id: createId('user'),
         email: input.email,
@@ -625,7 +627,13 @@ export function createApp(options: AppOptions = {}): Hono {
       };
       store.saveUser(user);
     }
-    const challenge = await createChallenge(user, 'verify');
+    let challenge: AuthChallengeRecord;
+    try {
+      challenge = await createChallenge(user, 'verify');
+    } catch (error) {
+      if (newSellerId) store.deleteUserAndSeller(user.id, newSellerId);
+      throw error;
+    }
     return c.json(challengeResponse(challenge, user.email), 201);
   });
 
@@ -837,7 +845,7 @@ export function createApp(options: AppOptions = {}): Hono {
 
   app.get('/api/public/:slug', (c) => {
     const seller = store.getSellerBySlug(c.req.param('slug'));
-    if (!seller) throw new HttpError(404, 'Store not found.');
+    if (!seller || !store.isSellerActive(seller.id)) throw new HttpError(404, 'Store not found.');
     const publicStore: PublicStore = {
       seller: { name: seller.name, slug: seller.slug, tagline: seller.tagline },
       services: store.listServices(seller.id, 'published'),
@@ -850,9 +858,9 @@ export function createApp(options: AppOptions = {}): Hono {
   });
 
   app.post('/api/public/:slug/quotes', async (c) => {
-    const input = parseBody(quoteInput, await c.req.json());
     const seller = store.getSellerBySlug(c.req.param('slug'));
-    if (!seller) throw new HttpError(404, 'Store not found.');
+    if (!seller || !store.isSellerActive(seller.id)) throw new HttpError(404, 'Store not found.');
+    const input = parseBody(quoteInput, await c.req.json());
     const service = store.getService(input.service_id);
     if (!service || service.seller_id !== seller.id || service.status !== 'published') {
       throw new HttpError(404, 'Service not found.');
@@ -951,7 +959,13 @@ export function createApp(options: AppOptions = {}): Hono {
         await reconcileInvoice(quote, balance.paypal_invoice_id);
       }
     }
-    return c.json(detail(store, quote.id));
+    const quoteDetail = detail(store, quote.id);
+    if (getSessionContext(c)?.seller.id === quote.seller_id) return c.json(quoteDetail);
+    return c.json({
+      ...quoteDetail,
+      events: quoteDetail.events.filter((event) => event.demo_sample === true),
+      proposals: [],
+    });
   });
 
   app.post('/api/quotes/:id/deposit/order', async (c) => {
@@ -1575,7 +1589,7 @@ export function createApp(options: AppOptions = {}): Hono {
   app.post('/api/agent-sim/chat', async (c) => {
     const input = parseBody(agentSimSchema, await c.req.json());
     const seller = store.getSellerBySlug(input.slug);
-    if (!seller) throw new HttpError(404, 'Store not found.');
+    if (!seller || !store.isSellerActive(seller.id)) throw new HttpError(404, 'Store not found.');
     const schemas = [
       jsonSchemaTool('list_services', 'List published services for a seller.', {
         type: 'object', properties: { seller_slug: { type: 'string' } }, required: ['seller_slug'], additionalProperties: false

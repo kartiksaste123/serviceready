@@ -12,7 +12,7 @@ import type { Mailer } from '../src/mail.js';
 import { ClientTools } from '../src/client-tools.js';
 import type { ChatCompletion } from 'openai/resources';
 import { hashSessionToken } from '../src/auth.js';
-import { createId, Store, timestamp } from '../src/db.js';
+import { createEvent, createId, Store, timestamp } from '../src/db.js';
 import type { AuthPurpose } from '../src/db.js';
 import { createMcpServer } from '../src/mcp.js';
 import type { Proposal, Quote } from '../src/types.js';
@@ -202,6 +202,120 @@ describe('email authentication', () => {
     expect(await duplicateVerified.json()).toEqual({
       error: 'An account with this email already exists. Log in instead.',
     });
+    store.close();
+  });
+
+  it('keeps unverified studios private until their email is verified', async () => {
+    const { app, store, mailer } = setup();
+    const challenge = await signup(app, mailer, 'private@example.com', 'Private Studio');
+    const seller = store.getSellerBySlug('private-studio');
+    expect(seller).not.toBeNull();
+    expect(store.isSellerActive(seller!.id)).toBe(false);
+
+    const hiddenStore = await request(app, '/api/public/private-studio');
+    expect(hiddenStore.status).toBe(404);
+    expect(await hiddenStore.json()).toEqual({ error: 'Store not found.' });
+    const quoteInput = {
+      service_id: 'svc_private',
+      client_name: 'Avery Client',
+      client_email: 'avery@example.com',
+      brief: 'A private studio request',
+    };
+    const hiddenQuote = await request(app, '/api/public/private-studio/quotes', { body: quoteInput });
+    expect(hiddenQuote.status).toBe(404);
+    expect(await hiddenQuote.json()).toEqual({ error: 'Store not found.' });
+    const hiddenAgent = await request(app, '/api/agent-sim/chat', {
+      body: { slug: 'private-studio', messages: [{ role: 'user', content: 'What do they offer?' }] },
+    });
+    expect(hiddenAgent.status).toBe(404);
+    expect(await hiddenAgent.json()).toEqual({ error: 'Store not found.' });
+
+    const clientTools = new ClientTools({
+      store,
+      publicBaseUrl: 'http://localhost:8080',
+      createQuote: async () => {
+        throw new Error('An inactive studio must not create quotes.');
+      },
+    });
+    await expect(clientTools.execute(
+      'list_services',
+      { seller_slug: seller!.slug },
+      'mcp',
+    )).rejects.toThrow('Store not found.');
+    await expect(clientTools.execute(
+      'get_service',
+      { seller_slug: seller!.slug, service_id: 'svc_private' },
+      'mcp',
+    )).rejects.toThrow('Store not found.');
+    await expect(clientTools.execute(
+      'request_quote',
+      {
+        seller_slug: seller!.slug,
+        service_id: 'svc_private',
+        client_name: 'Avery Client',
+        client_email: 'avery@example.com',
+        brief: 'A private studio request',
+      },
+      'mcp',
+    )).rejects.toThrow('Store not found.');
+
+    const mcp = createMcpServer(clientTools);
+    const client = new Client({ name: 'serviceready-unverified-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await mcp.connect(serverTransport);
+    await client.connect(clientTransport);
+    const hiddenMcp = await client.callTool({
+      name: 'list_services',
+      arguments: { seller_slug: seller!.slug },
+    });
+    expect(hiddenMcp.isError).toBe(true);
+    expect(hiddenMcp.content).toEqual([
+      expect.objectContaining({ type: 'text', text: expect.stringContaining('Store not found.') }),
+    ]);
+
+    const verified = await verify(app, challenge.challenge_id, lastCode(mailer));
+    expect(verified.status).toBe(200);
+    const cookie = sessionCookie(verified);
+    expect(store.isSellerActive(seller!.id)).toBe(true);
+    const published = await request(app, '/api/catalog/publish', {
+      method: 'POST',
+      cookie,
+      body: {
+        services: [{
+          tmp_id: 'private-service',
+          title: 'Private studio service',
+          description: 'A published service',
+          deliverables: ['Final files'],
+          price_cents: 30000,
+          deposit_pct: 50,
+          lead_time_days: 3,
+        }],
+      },
+    });
+    expect(published.status).toBe(200);
+    const [service] = await published.json() as Array<{ id: string }>;
+    const visibleStore = await request(app, '/api/public/private-studio');
+    expect(visibleStore.status).toBe(200);
+    expect(await visibleStore.json()).toMatchObject({
+      seller: { slug: 'private-studio' },
+      services: [expect.objectContaining({ id: service!.id })],
+    });
+    const visibleQuote = await request(app, '/api/public/private-studio/quotes', {
+      body: { ...quoteInput, service_id: service!.id },
+    });
+    expect(visibleQuote.status).toBe(201);
+    expect(await clientTools.execute('list_services', { seller_slug: seller!.slug }, 'mcp'))
+      .toMatchObject([expect.objectContaining({ id: service!.id })]);
+    const visibleMcp = await client.callTool({
+      name: 'list_services',
+      arguments: { seller_slug: seller!.slug },
+    });
+    expect(visibleMcp.isError).not.toBe(true);
+    expect(JSON.parse(
+      ((visibleMcp.content as Array<{ text: string }>)[0]?.text ?? '[]'),
+    )).toMatchObject([expect.objectContaining({ id: service!.id })]);
+    await client.close();
+    await mcp.close();
     store.close();
   });
 
@@ -493,6 +607,32 @@ describe('email authentication', () => {
       created_at: timestamp(),
     };
     store.saveProposal(proposal);
+    const privateEvent = createEvent('seller', 'message', quote.id, { text: 'A private seller note.' });
+    const sampleEvent = createEvent('seller_agent', 'tool_call', quote.id, {
+      demo_sample: true,
+      tool: 'sample',
+      input: {},
+      output: {},
+    });
+    store.saveEvent(privateEvent);
+    store.saveEvent(sampleEvent);
+
+    const publicDetailResponse = await request(app, `/api/quotes/${quote.id}`);
+    expect(publicDetailResponse.status).toBe(200);
+    const publicDetail = await publicDetailResponse.json() as {
+      events: Array<{ id: string; demo_sample?: boolean }>;
+      proposals: Proposal[];
+    };
+    expect(publicDetail.events).toEqual([expect.objectContaining({ id: sampleEvent.id, demo_sample: true })]);
+    expect(publicDetail.proposals).toEqual([]);
+    const ownerDetailResponse = await request(app, `/api/quotes/${quote.id}`, { cookie: accountA.cookie });
+    const ownerDetail = await ownerDetailResponse.json() as {
+      events: Array<{ id: string }>;
+      proposals: Proposal[];
+    };
+    expect(ownerDetail.events.map((event) => event.id)).toContain(privateEvent.id);
+    expect(ownerDetail.events.map((event) => event.id)).toContain(sampleEvent.id);
+    expect(ownerDetail.proposals).toContainEqual(proposal);
 
     expect(await (await request(app, '/api/services', { cookie: accountB.cookie })).json()).toEqual([]);
     expect(await (await request(app, '/api/quotes', { cookie: accountB.cookie })).json()).toEqual([]);
@@ -613,6 +753,17 @@ describe('email authentication', () => {
       error: "We couldn't send a code to this email. Check the address and try again.",
     });
     expect(store.raw.prepare('SELECT COUNT(*) AS count FROM auth_challenges').get()).toMatchObject({ count: 0 });
+    expect(store.raw.prepare('SELECT COUNT(*) AS count FROM auth_code_sends').get()).toMatchObject({ count: 0 });
+    expect(store.getUserByEmail('recipient@example.com')).toBeNull();
+    expect(store.getSellerBySlug('mail-failure-studio')).toBeNull();
+
+    mailer.failure = null;
+    const retry = await request(app, '/api/auth/signup', {
+      body: { studio_name: 'Mail Failure Studio', email: 'recipient@example.com', password: 'password-123' },
+    });
+    expect(retry.status).toBe(201);
+    expect(store.getUserByEmail('recipient@example.com')).not.toBeNull();
+    expect(store.getSellerBySlug('mail-failure-studio')).not.toBeNull();
     store.close();
   });
 

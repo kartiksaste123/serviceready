@@ -116,7 +116,9 @@ function AppLayout() {
           ))}
           <div className="mt-3 border-t border-border px-3 pt-4 text-sm lg:hidden">
             <p className="font-semibold">{account.data.seller.name}</p>
-            <p className="mt-1 break-all text-xs text-muted-foreground">{account.data.user.email}</p>
+            <p className="mt-1 truncate text-xs text-muted-foreground" title={account.data.user.email}>
+              {account.data.user.email}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {account.data.user.is_demo ? "Demo studio · PayPal sandbox" : "PayPal sandbox"}
             </p>
@@ -127,7 +129,9 @@ function AppLayout() {
         </nav>
         <div className="mt-auto hidden border-t border-border px-5 pb-5 pt-4 text-sm lg:block">
           <p className="font-semibold">{account.data.seller.name}</p>
-          <p className="mt-1 break-all text-xs text-muted-foreground">{account.data.user.email}</p>
+          <p className="mt-1 truncate text-xs text-muted-foreground" title={account.data.user.email}>
+            {account.data.user.email}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {account.data.user.is_demo ? "Demo studio · PayPal sandbox" : "PayPal sandbox"}
           </p>

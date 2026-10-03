@@ -38,14 +38,14 @@ export class ClientTools {
       const args = toolSchemas.list_services.parse(input);
       eventInput = args;
       const seller = this.deps.store.getSellerBySlug(args.seller_slug);
-      if (!seller) throw new Error('Seller not found.');
+      if (!seller || !this.deps.store.isSellerActive(seller.id)) throw new Error('Store not found.');
       sellerId = seller.id;
       output = this.deps.store.listServices(seller.id, 'published');
     } else if (name === 'get_service') {
       const args = toolSchemas.get_service.parse(input);
       eventInput = args;
       const seller = this.deps.store.getSellerBySlug(args.seller_slug);
-      if (!seller) throw new Error('Seller not found.');
+      if (!seller || !this.deps.store.isSellerActive(seller.id)) throw new Error('Store not found.');
       sellerId = seller.id;
       const service = this.deps.store.getService(args.service_id);
       if (!service || service.seller_id !== seller.id || service.status !== 'published') {
@@ -56,7 +56,7 @@ export class ClientTools {
       const args = toolSchemas.request_quote.parse(input);
       eventInput = args;
       const seller = this.deps.store.getSellerBySlug(args.seller_slug);
-      if (!seller) throw new Error('Seller not found.');
+      if (!seller || !this.deps.store.isSellerActive(seller.id)) throw new Error('Store not found.');
       sellerId = seller.id;
       const service = this.deps.store.getService(args.service_id);
       if (!service || service.seller_id !== seller.id || service.status !== 'published') {

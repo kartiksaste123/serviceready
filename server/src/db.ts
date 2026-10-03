@@ -83,6 +83,13 @@ export class Store {
     return row ? JSON.parse(row.payload) as Seller : null;
   }
 
+  isSellerActive(sellerId: string): boolean {
+    if (sellerId === 'seller_maya') return true;
+    return Boolean(this.raw.prepare(
+      'SELECT 1 FROM users WHERE seller_id = ? AND email_verified_at IS NOT NULL LIMIT 1'
+    ).get(sellerId));
+  }
+
   sellerSlugExists(slug: string): boolean {
     return Boolean(this.raw.prepare("SELECT 1 FROM sellers WHERE json_extract(payload, '$.slug') = ?").get(slug));
   }
@@ -230,6 +237,16 @@ export class Store {
       INSERT OR REPLACE INTO users(id,email,password_hash,seller_id,email_verified_at,created_at)
       VALUES(?,?,?,?,?,?)
     `).run(user.id, user.email, user.password_hash, user.seller_id, user.email_verified_at, user.created_at);
+  }
+
+  deleteUserAndSeller(userId: string, sellerId: string): void {
+    this.raw.transaction(() => {
+      this.raw.prepare('DELETE FROM auth_challenges WHERE user_id = ?').run(userId);
+      this.raw.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+      this.raw.prepare('DELETE FROM auth_code_sends WHERE user_id = ?').run(userId);
+      this.raw.prepare('DELETE FROM users WHERE id = ?').run(userId);
+      this.raw.prepare('DELETE FROM sellers WHERE id = ?').run(sellerId);
+    })();
   }
 
   getAuthChallenge(id: string): AuthChallengeRecord | null {
