@@ -21,9 +21,10 @@ import type {
 import { PartyPopper } from "lucide-react";
 import { useMemo } from "react";
 import { api } from "@/lib/api";
-import type { QuoteStatus, Stats } from "@/lib/types";
+import type { Stats } from "@/lib/types";
 import { money } from "@/lib/format";
 import { getStudioAiAdapter, getStudioNudgeTools } from "@/lib/studio-ai";
+import { sourceLabel, statusLabel } from "@/components/kit";
 
 if (import.meta.env.DEV) enableStudioDevValidations();
 
@@ -252,22 +253,13 @@ const initialState: AgReportState<CollectionsRegistry> = {
 
 const currencyFormatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
-const statusLabels: Record<QuoteStatus, string> = {
-  quoted: "Quoted",
-  deposit_paid: "Deposit paid",
-  delivered: "Delivered",
-  balance_invoiced: "Balance invoiced",
-  paid: "Paid",
-  cancelled: "Cancelled",
-};
-
 const bookingsFields: AgFieldDefinition<CollectionsRegistry>[] = [
   { id: "quote_id", name: "Quote ID", format: "textFormat" },
   { id: "client_name", name: "Client", format: "textFormat" },
   { id: "service_title", name: "Service", format: "textFormat" },
-  { id: "source", name: "Source", format: "textFormat" },
-  { id: "status", name: "Status", format: "textFormat" },
-  { id: "status_label", name: "Status label", format: "textFormat" },
+  { id: "source", name: "Booked through", format: "textFormat" },
+  { id: "status", name: "Status code", format: "textFormat" },
+  { id: "status_label", name: "Status", format: "textFormat" },
   {
     id: "total_usd",
     name: "Total",
@@ -343,9 +335,9 @@ const ledgerlineTheme = studioTheme.withParams({
   chartFontFamily: "Inter, sans-serif",
   chartTextColor: "var(--foreground)",
   chartSubtleTextColor: "var(--muted-foreground)",
-  chartPaletteFills1Color: "var(--foreground)",
+  chartPaletteFills1Color: "var(--muted-foreground)",
   chartPaletteFills2Color: "var(--muted-foreground)",
-  chartPaletteFills3Color: "var(--foreground)",
+  chartPaletteFills3Color: "var(--muted-foreground)",
   chartPaletteFills4Color: "var(--muted-foreground)",
   chartPaletteFills5Color: "var(--muted-foreground)",
 });
@@ -362,9 +354,9 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
         quote_id: quote.id,
         client_name: quote.client_name,
         service_title: quote.service_title,
-        source: quote.source,
+        source: sourceLabel[quote.source],
         status: quote.status,
-        status_label: statusLabels[quote.status],
+        status_label: statusLabel[quote.status],
         total_usd: quote.total_cents / 100,
         deposit_usd: quote.deposit_cents / 100,
         balance_usd: quote.balance_cents / 100,

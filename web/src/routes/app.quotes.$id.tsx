@@ -194,7 +194,7 @@ function Detail() {
             </div>
           )}
           <div className="mt-5 border-t border-border pt-4">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Brief</p>
+            <p className="text-[11px] text-muted-foreground">Brief</p>
             <p className="mt-1 text-sm text-muted-foreground">{q.brief}</p>
           </div>
         </section>
@@ -220,9 +220,7 @@ function Detail() {
                 Run collections agent
               </button>
               <div>
-                <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Paste client reply
-                </label>
+                <label className="text-[11px] text-muted-foreground">Paste client reply</label>
                 <textarea
                   className="field mt-1.5"
                   rows={3}
@@ -249,7 +247,7 @@ function Detail() {
           )}
           {data.replies.length > 0 && (
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Replies</p>
+              <p className="text-[11px] text-muted-foreground">Replies</p>
               {data.replies.map((r) => (
                 <p key={r.id} className="mt-2 rounded-lg bg-muted px-3 py-2 text-[13px]">
                   <span className="text-muted-foreground">

@@ -305,9 +305,7 @@ function Onboard() {
 function L({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
+      <span className="mb-1 block text-[11px] text-muted-foreground">{label}</span>
       {children}
     </label>
   );

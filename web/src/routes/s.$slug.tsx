@@ -132,7 +132,7 @@ function AgentBadge({ mcp }: { mcp: string }) {
         Agent-ready
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 border-border bg-background text-foreground">
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">MCP endpoint</p>
+        <p className="text-[11px] text-muted-foreground">MCP endpoint</p>
         <p className="mt-1 break-all font-mono text-[12px] text-link">{mcp}</p>
         <p className="mt-4 text-sm text-muted-foreground">
           Connect through MCP. WebMCP tool registration is not implemented yet.
@@ -256,8 +256,8 @@ function AgentChat({ slug }: { slug: string }) {
           <Bot className="size-4" />
         </span>
         <div>
-          <h2 className="text-sm font-semibold">Try it with an AI agent</h2>
-          <p className="text-[12px] text-muted-foreground">Watch it call this storefront's tools</p>
+          <h2 className="text-sm font-semibold">Try booking with an AI assistant</h2>
+          <p className="text-[12px] text-muted-foreground">See which storefront tools it uses</p>
         </div>
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">

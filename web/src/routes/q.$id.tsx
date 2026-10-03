@@ -13,10 +13,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import type { AgentRun, QuoteStatus } from "@/lib/types";
+import type { AgentRun } from "@/lib/types";
 import { money } from "@/lib/format";
 import { Empty, StatusBadge, Wordmark } from "@/components/kit";
 import { PayPalDepositButton } from "@/components/PayPalDepositButton";
+import { StatusTracker } from "@/components/StatusTracker";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/q/$id")({
@@ -39,14 +40,6 @@ export const Route = createFileRoute("/q/$id")({
   component: QuotePage,
 });
 
-const STEPS: { s: QuoteStatus; l: string }[] = [
-  { s: "quoted", l: "Quoted" },
-  { s: "deposit_paid", l: "Deposit paid" },
-  { s: "delivered", l: "Delivered" },
-  { s: "balance_invoiced", l: "Balance invoiced" },
-  { s: "paid", l: "Paid" },
-];
-
 function QuotePage() {
   const { id } = Route.useParams();
   const qc = useQueryClient();
@@ -56,6 +49,7 @@ function QuotePage() {
   });
   const [msg, setMsg] = useState("");
   const [run, setRun] = useState<AgentRun | null>(null);
+  const [showFullScope, setShowFullScope] = useState(false);
   const reply = useMutation({
     mutationFn: () => api.postReply(id, msg, "client"),
     onSuccess: (r) => {
@@ -91,14 +85,14 @@ function QuotePage() {
             const q = data.quote;
             const bal = data.payments.find((p) => p.kind === "balance");
             const isSample = data.events.some((event) => event.demo_sample);
-            const idx = q.status === "cancelled" ? -1 : STEPS.findIndex((x) => x.s === q.status);
+            const hasLongScope = q.scope_summary.length > 220;
             return (
               <>
                 <article className="glass-card overflow-hidden">
                   <div className="border-b border-dashed border-border p-6 sm:p-8">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="eyebrow">Quote · Maya Rao Studio</p>
+                        <p className="eyebrow">Quote from Maya Rao Studio</p>
                         <h1 className="mt-2 text-2xl font-bold tracking-tight">
                           {q.service_title}
                         </h1>
@@ -112,9 +106,21 @@ function QuotePage() {
                       </div>
                       <StatusBadge status={q.status} />
                     </div>
-                    <p className="mt-5 text-[14px] leading-relaxed text-muted-foreground">
+                    <p
+                      className={`mt-5 text-[14px] leading-relaxed text-muted-foreground ${hasLongScope && !showFullScope ? "line-clamp-3" : ""}`}
+                    >
                       {q.scope_summary}
                     </p>
+                    {hasLongScope && (
+                      <button
+                        type="button"
+                        className="mt-2 text-sm font-medium text-link underline underline-offset-4 hover:no-underline"
+                        aria-expanded={showFullScope}
+                        onClick={() => setShowFullScope((expanded) => !expanded)}
+                      >
+                        {showFullScope ? "Show less" : "Show full details"}
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-2 p-6 text-sm tabular-nums sm:px-8">
                     {q.line_items.map((li) => (
@@ -138,22 +144,7 @@ function QuotePage() {
                     </div>
                   </div>
                   <div className="border-t border-border p-6 sm:px-8">
-                    <ol className="space-y-0">
-                      {STEPS.map((st, i) => (
-                        <li key={st.s} className="flex items-center gap-3 py-1.5 text-sm">
-                          <span
-                            className={`grid size-5 place-items-center rounded-full ${i <= idx ? "bg-primary text-primary-foreground" : "ringline text-muted-foreground"}`}
-                          >
-                            {i <= idx ? (
-                              <Check className="size-3" strokeWidth={3} />
-                            ) : (
-                              <span className="size-1 rounded-full bg-muted" />
-                            )}
-                          </span>
-                          <span className={i <= idx ? "" : "text-muted-foreground"}>{st.l}</span>
-                        </li>
-                      ))}
-                    </ol>
+                    <StatusTracker status={q.status} />
                   </div>
                   <div className="border-t border-border p-6 sm:px-8">
                     {q.status === "quoted" &&
@@ -172,6 +163,10 @@ function QuotePage() {
                               quoteId={q.id}
                               onPaid={() => qc.invalidateQueries({ queryKey: ["quote", id] })}
                             />
+                            <p className="mt-3 text-center text-xs text-muted-foreground">
+                              You pay through PayPal. ServiceReady never sees your card or bank
+                              details.
+                            </p>
                           </div>
                           <p className="mt-2 text-center text-[12px] text-muted-foreground">
                             Work starts once the deposit is captured.
@@ -185,8 +180,7 @@ function QuotePage() {
                         rel="noreferrer"
                         className="btn-primary w-full"
                       >
-                        Pay balance invoice · {money(bal.amount_cents)}{" "}
-                        <ExternalLink className="size-4" />
+                        Pay remaining {money(bal.amount_cents)} <ExternalLink className="size-4" />
                       </a>
                     )}
                     {q.status === "deposit_paid" && (
@@ -233,6 +227,9 @@ function QuotePage() {
                     </p>
                   ) : (
                     <>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Already paid or have a question? Tell Maya here.
+                      </p>
                       <textarea
                         className="field mt-3"
                         rows={3}

@@ -126,9 +126,7 @@ function Home() {
         </section>
         <section className="border-b border-border bg-muted">
           <div className="mx-auto max-w-7xl px-5 py-7 sm:px-8">
-            <p className="text-center text-xs font-semibold uppercase text-muted-foreground">
-              Built on
-            </p>
+            <p className="text-center text-xs font-semibold text-muted-foreground">Built on</p>
             <div className="mt-4 flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm font-semibold">
               {tools.map((tool) => (
                 <span key={tool}>{tool}</span>

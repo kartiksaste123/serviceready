@@ -50,7 +50,7 @@ export function StatusBadge({ status }: { status: QuoteStatus }) {
     </span>
   );
 }
-const sourceLabel: Record<Source, string> = {
+export const sourceLabel: Record<Source, string> = {
   web: "Website",
   mcp: "AI assistant",
   webmcp: "Browser assistant",

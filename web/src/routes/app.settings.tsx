@@ -134,9 +134,7 @@ function SettingsPage() {
 function F({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
+      <span className="mb-1.5 block text-sm font-medium text-muted-foreground">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-sm text-muted-foreground">{hint}</span>}
     </label>
