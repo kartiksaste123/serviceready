@@ -21,7 +21,7 @@ import type {
 import { PartyPopper } from 'lucide-react';
 import { useMemo } from 'react';
 import { api } from '@/lib/api';
-import type { Stats } from '@/lib/types';
+import type { QuoteStatus, Stats } from '@/lib/types';
 import { money } from '@/lib/format';
 import { getStudioAiAdapter, getStudioNudgeTools } from '@/lib/studio-ai';
 
@@ -45,6 +45,7 @@ interface BookingRow {
   service_title: string;
   source: string;
   status: string;
+  status_label: string;
   total_usd: number;
   deposit_usd: number;
   balance_usd: number;
@@ -194,7 +195,7 @@ const initialState: AgReportState<CollectionsRegistry> = {
       status: {
         type: 'column-chart-grouped',
         dataMapping: {
-          categoryKey: [{ id: 'bookings.status' }],
+          categoryKey: [{ id: 'bookings.status_label' }],
           valueKey: [{ id: 'bookings.quote_id', aggregation: 'count' }],
         },
         format: { title: { text: 'Bookings by status', enabled: true } },
@@ -203,11 +204,10 @@ const initialState: AgReportState<CollectionsRegistry> = {
         type: 'grid',
         dataMapping: {
           cols: [
-            { id: 'bookings.quote_id' },
             { id: 'bookings.client_name' },
             { id: 'bookings.service_title' },
             { id: 'bookings.source' },
-            { id: 'bookings.status' },
+            { id: 'bookings.status_label' },
             { id: 'bookings.total_usd' },
             { id: 'bookings.deposit_usd' },
             { id: 'bookings.balance_usd' },
@@ -230,12 +230,22 @@ const initialState: AgReportState<CollectionsRegistry> = {
 
 const currencyFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
+const statusLabels: Record<QuoteStatus, string> = {
+  quoted: 'Quoted',
+  deposit_paid: 'Deposit paid',
+  delivered: 'Delivered',
+  balance_invoiced: 'Balance invoiced',
+  paid: 'Paid',
+  cancelled: 'Cancelled',
+};
+
 const bookingsFields: AgFieldDefinition<CollectionsRegistry>[] = [
   { id: 'quote_id', name: 'Quote ID', format: 'textFormat' },
   { id: 'client_name', name: 'Client', format: 'textFormat' },
   { id: 'service_title', name: 'Service', format: 'textFormat' },
   { id: 'source', name: 'Source', format: 'textFormat' },
   { id: 'status', name: 'Status', format: 'textFormat' },
+  { id: 'status_label', name: 'Status label', format: 'textFormat' },
   { id: 'total_usd', name: 'Total', format: 'currencyFormat', formatOptions: { format: currencyFormatter } },
   { id: 'deposit_usd', name: 'Deposit', format: 'currencyFormat', formatOptions: { format: currencyFormatter } },
   { id: 'balance_usd', name: 'Balance', format: 'currencyFormat', formatOptions: { format: currencyFormatter } },
@@ -300,6 +310,7 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
     service_title: quote.service_title,
     source: quote.source,
     status: quote.status,
+    status_label: statusLabels[quote.status],
     total_usd: quote.total_cents / 100,
     deposit_usd: quote.deposit_cents / 100,
     balance_usd: quote.balance_cents / 100,
