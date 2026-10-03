@@ -188,7 +188,7 @@ Set `VITE_AG_STUDIO_LICENSE_KEY` in the web build environment to enable the Stud
 - USD and the PayPal sandbox are hardcoded. No real-money transaction is supported.
 - **WebMCP is not implemented.** The storefront lists the proposed tools and checks whether `navigator.modelContext` exists, but the code does not register tools with that browser API. Use the working `/mcp` endpoint for agent access.
 - The demo has no seller authentication. `POST /api/demo/reset` is unauthenticated and resets the single-seller application data; do not use this prototype for private production data.
-- `npm audit --omit=dev` on the root lockfile reports **10 production dependency findings: 3 low, 2 moderate, and 5 high**. The findings are transitive through the pinned `@paypal/agent-toolkit@1.11.0` dependency tree, including AI SDK, LangChain, `jsondiffpatch`, LangSmith, `mathjs`, and `uuid`. npm's suggested forced remediation downgrades the toolkit to `1.3.5`; that breaking downgrade was not applied.
+- **Dependency audit.** `npm audit --omit=dev` reports 9 remaining advisories (4 high, 2 moderate, 3 low), all inside `@paypal/agent-toolkit@1.11.0` (the latest release). npm's only suggested fix is a downgrade to 1.3.5, which we don't take. ServiceReady imports only `@paypal/agent-toolkit/openai`; at runtime that entry point loads `mathjs` but none of the flagged packages (`@langchain/core`, `langsmith`, `ai`, `@ai-sdk/*`, `jsondiffpatch`, the toolkit's `uuid`). We pin `mathjs` to 15.2.0 through `overrides`, which clears its advisory. The toolkit only calls `mathjs.round`.
 
 ## License
 
