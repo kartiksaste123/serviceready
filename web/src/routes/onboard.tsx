@@ -41,6 +41,13 @@ export const Route = createFileRoute("/onboard")({
 const EXAMPLE =
   "logo 450 (2 rounds) | brand kit w/ logo+colors+fonts 1200, half upfront | social templates x10 - 15 | rush +30% | website landing pg 900 2wks";
 
+const flagFieldByDraftField: Partial<Record<keyof ServiceDraft, string>> = {
+  price_cents: "price_cents",
+  lead_time_days: "lead_time_days",
+  deposit_pct: "deposit_pct",
+  deliverables: "deliverables",
+};
+
 function Onboard() {
   const [raw, setRaw] = useState("");
   const [drafts, setDrafts] = useState<ServiceDraft[] | null>(null);
@@ -61,8 +68,18 @@ function Onboard() {
     },
   });
   const step = published ? 3 : drafts ? 2 : 1;
-  const upd = (id: string, patch: Partial<ServiceDraft>) =>
+  const hasErrorFlags = flags.some((flag) => flag.severity === "error");
+  const upd = (id: string, patch: Partial<ServiceDraft>) => {
     setDrafts((d) => d?.map((x) => (x.tmp_id === id ? { ...x, ...patch } : x)) ?? null);
+    const fields = Object.keys(patch)
+      .map((key) => flagFieldByDraftField[key as keyof ServiceDraft])
+      .filter((field): field is string => field !== undefined);
+    if (fields.length) {
+      setFlags((current) =>
+        current.filter((flag) => flag.tmp_id !== id || !fields.includes(flag.field)),
+      );
+    }
+  };
 
   return (
     <div className="relative min-h-screen">
@@ -138,14 +155,19 @@ function Onboard() {
                     : "Everything looks good."}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button className="btn-glass btn-sm" onClick={() => setDrafts(null)}>
                   <ArrowLeft className="size-4" />
                   Back
                 </button>
+                {hasErrorFlags && (
+                  <p className="text-sm text-danger">
+                    Fix the items marked “Fix before publishing” first.
+                  </p>
+                )}
                 <button
                   className="btn-primary btn-sm"
-                  disabled={!drafts.length || publish.isPending}
+                  disabled={!drafts.length || publish.isPending || hasErrorFlags}
                   onClick={() => publish.mutate()}
                 >
                   {publish.isPending && <Loader2 className="size-4 animate-spin" />}Approve &
@@ -207,7 +229,10 @@ function Onboard() {
                       <button
                         aria-label="Remove"
                         className="btn-glass btn-sm h-[38px]"
-                        onClick={() => setDrafts(drafts.filter((x) => x.tmp_id !== d.tmp_id))}
+                        onClick={() => {
+                          setDrafts(drafts.filter((x) => x.tmp_id !== d.tmp_id));
+                          setFlags((current) => current.filter((flag) => flag.tmp_id !== d.tmp_id));
+                        }}
                       >
                         <Trash2 className="size-4" />
                       </button>

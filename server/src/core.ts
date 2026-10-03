@@ -7,6 +7,7 @@ export const serviceDraftInput = z.object({
   description: z.string().trim().max(2000),
   deliverables: z.array(z.string().trim().max(240)).max(40),
   price_usd: z.number().finite(),
+  price_currency: z.string().trim().max(10).nullable(),
   deposit_pct: z.number().finite(),
   lead_time_days: z.number().int().positive().nullable()
 }).strict();
@@ -28,19 +29,29 @@ export function computeServiceDrafts(input: unknown[]): { services: ServiceDraft
   const flags: Flag[] = [];
   const services = parsed.map((item): ServiceDraft => {
     const priceCents = Math.round(item.price_usd * 100);
-    if (priceCents <= 0) {
-      flags.push({ tmp_id: item.tmp_id, field: 'price_usd', severity: 'error', message: 'Price must be greater than $0.' });
-    } else if (median > 0 && priceCents < median / 3) {
+    const currency = item.price_currency?.toUpperCase();
+    const nonUsdPrice = currency !== undefined && currency !== 'USD';
+    if (nonUsdPrice) {
       flags.push({
         tmp_id: item.tmp_id,
-        field: 'price_usd',
+        field: 'price_cents',
+        severity: 'error',
+        message: `Written as ${currency} ${item.price_usd.toLocaleString('en-US')}. Payments are charged in USD, so enter the price in US dollars.`
+      });
+    }
+    if (priceCents <= 0) {
+      flags.push({ tmp_id: item.tmp_id, field: 'price_cents', severity: 'error', message: 'Price must be greater than $0.' });
+    } else if (!nonUsdPrice && median > 0 && priceCents < median / 3) {
+      flags.push({
+        tmp_id: item.tmp_id,
+        field: 'price_cents',
         severity: 'warning',
         message: `${usd(priceCents)} is ${multiplier(median / priceCents)} below your median — typo?`
       });
-    } else if (median > 0 && priceCents > median * 3) {
+    } else if (!nonUsdPrice && median > 0 && priceCents > median * 3) {
       flags.push({
         tmp_id: item.tmp_id,
-        field: 'price_usd',
+        field: 'price_cents',
         severity: 'warning',
         message: `${usd(priceCents)} is ${multiplier(priceCents / median)} above your median — typo?`
       });

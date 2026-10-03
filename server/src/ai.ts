@@ -34,47 +34,64 @@ export class AIService {
   }
 
   async parseCatalog(rawText: string): Promise<{ services: ServiceDraft[]; flags: ReturnType<typeof computeServiceDrafts>['flags'] }> {
-    const schema = {
-      type: 'object',
-      properties: {
-        services: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              tmp_id: { type: 'string' },
-              title: { type: 'string' },
-              description: { type: 'string' },
-              deliverables: { type: 'array', items: { type: 'string' } },
-              price_usd: { type: 'number' },
-              deposit_pct: { type: 'number' },
-              lead_time_days: { type: ['integer', 'null'] }
-            },
-            required: ['tmp_id', 'title', 'description', 'deliverables', 'price_usd', 'deposit_pct', 'lead_time_days'],
-            additionalProperties: false
+    try {
+      const schema = {
+        type: 'object',
+        properties: {
+          services: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                tmp_id: { type: 'string' },
+                title: { type: 'string' },
+                description: { type: 'string' },
+                deliverables: { type: 'array', items: { type: 'string' } },
+                price_usd: { type: 'number' },
+                price_currency: { type: ['string', 'null'] },
+                deposit_pct: { type: 'number' },
+                lead_time_days: { type: ['integer', 'null'] }
+              },
+              required: ['tmp_id', 'title', 'description', 'deliverables', 'price_usd', 'price_currency', 'deposit_pct', 'lead_time_days'],
+              additionalProperties: false
+            }
           }
+        },
+        required: ['services'],
+        additionalProperties: false
+      };
+      const tool: ChatCompletionTool = {
+        type: 'function',
+        function: {
+          name: 'submit_services',
+          description: 'Return service packages parsed from the seller rate card. Preserve stated prices and terms.',
+          strict: true,
+          parameters: schema
         }
-      },
-      required: ['services'],
-      additionalProperties: false
-    };
-    const tool: ChatCompletionTool = {
-      type: 'function',
-      function: {
-        name: 'submit_services',
-        description: 'Return service packages parsed from the seller rate card. Preserve stated prices and terms.',
-        strict: true,
-        parameters: schema
-      }
-    };
-    const result = await this.toolResult<{ services: unknown[] }>(
-      'Extract each priced service package. Never invent a price or lead time. Use a null lead_time_days if it is absent. Include deliverables only when stated or plainly implied.',
-      rawText,
-      tool,
-      (value) => z.object({ services: z.array(serviceDraftInput) }).strict().parse(value)
-    );
-    const computed = computeServiceDrafts(result.services);
-    return computed;
+      };
+      const system = [
+        `Extract each priced service package from the seller's rate card.`,
+        `Rules:`,
+        `- Never invent or convert a price. Copy each number exactly as written into price_usd, and put the currency as written into price_currency as an ISO 4217 code (USD for $, INR for ₹ or Rs, EUR for €, GBP for £). Use null only if no currency is shown.`,
+        `- Only create a package for a line that sells a deliverable at its own price. Add-ons, surcharges, revision policies and payment terms (for example urgent-delivery fees, extra-revision fees, included revisions, upfront percentages) are not packages: mention them briefly in the description of each package they apply to.`,
+        `- deposit_pct: the upfront percentage stated for that package, else the general payment terms if they apply to every package, else 50.`,
+        `- If a price is a starting price (onwards, from, starting at), use the stated number and begin the description with "Starting price."`,
+        `- lead_time_days: only if stated, otherwise null.`,
+        `- Include deliverables only when stated or plainly implied.`
+      ].join('\n') + '\n';
+      const result = await this.toolResult<{ services: unknown[] }>(
+        system,
+        rawText,
+        tool,
+        (value) => z.object({ services: z.array(serviceDraftInput) }).strict().parse(value)
+      );
+      return computeServiceDrafts(result.services);
+    } catch {
+      throw Object.assign(
+        new Error("The AI couldn't read this rate card. Try again, or paste fewer lines at a time."),
+        { status: 502 }
+      );
+    }
   }
 
   async quoteScope(serviceTitle: string, description: string, brief: string): Promise<string> {
@@ -121,6 +138,7 @@ export class AIService {
     const attempt = async (model: string): Promise<T> => {
       const response = await this.client.chat.completions.create({
         model,
+        max_tokens: 4096,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
         tools: [tool],
         tool_choice: { type: 'function', function: { name: tool.function.name } }
@@ -156,6 +174,7 @@ export class AIService {
     const attempt = async (model: string, checkDegenerateText = true): Promise<ChatCompletion> => {
       const response = await this.client.chat.completions.create({
         model,
+        max_tokens: 4096,
         messages: requestMessages,
         ...(tools.length > 0 ? { tools, tool_choice: toolChoice } : {})
       });

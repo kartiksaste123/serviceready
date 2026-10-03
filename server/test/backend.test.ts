@@ -210,20 +210,54 @@ afterEach(() => {
 describe('catalog flags and quote amounts', () => {
   it('computes positive-price outliers and all requested input flags in code', () => {
     const result = computeServiceDrafts([
-      { tmp_id: 'median-a', title: 'A', description: '', deliverables: ['Design'], price_usd: 450, deposit_pct: 50, lead_time_days: 7 },
-      { tmp_id: 'median-b', title: 'B', description: '', deliverables: ['Design'], price_usd: 450, deposit_pct: 50, lead_time_days: 7 },
-      { tmp_id: 'low', title: 'Low', description: '', deliverables: [], price_usd: 15, deposit_pct: 10, lead_time_days: null },
-      { tmp_id: 'zero', title: 'Zero', description: '', deliverables: ['Something'], price_usd: 0, deposit_pct: 101, lead_time_days: 5 }
+      { tmp_id: 'median-a', title: 'A', description: '', deliverables: ['Design'], price_usd: 450, price_currency: null, deposit_pct: 50, lead_time_days: 7 },
+      { tmp_id: 'median-b', title: 'B', description: '', deliverables: ['Design'], price_usd: 450, price_currency: null, deposit_pct: 50, lead_time_days: 7 },
+      { tmp_id: 'low', title: 'Low', description: '', deliverables: [], price_usd: 15, price_currency: null, deposit_pct: 10, lead_time_days: null },
+      { tmp_id: 'zero', title: 'Zero', description: '', deliverables: ['Something'], price_usd: 0, price_currency: null, deposit_pct: 101, lead_time_days: 5 }
     ]);
     expect(result.flags).toEqual(expect.arrayContaining([
-      expect.objectContaining({ tmp_id: 'low', field: 'price_usd', severity: 'warning', message: '$15.00 is 30× below your median — typo?' }),
+      expect.objectContaining({ tmp_id: 'low', field: 'price_cents', severity: 'warning', message: '$15.00 is 30× below your median — typo?' }),
       expect.objectContaining({ tmp_id: 'low', field: 'deposit_pct', severity: 'warning' }),
       expect.objectContaining({ tmp_id: 'low', field: 'deliverables', severity: 'warning' }),
       expect.objectContaining({ tmp_id: 'low', field: 'lead_time_days', severity: 'warning' }),
-      expect.objectContaining({ tmp_id: 'zero', field: 'price_usd', severity: 'error' }),
+      expect.objectContaining({ tmp_id: 'zero', field: 'price_cents', severity: 'error' }),
       expect.objectContaining({ tmp_id: 'zero', field: 'deposit_pct', severity: 'warning' })
     ]));
     expect(result.services.find((service) => service.tmp_id === 'low')?.price_cents).toBe(1500);
+  });
+
+  it('flags non-USD prices and skips median typo warnings for them', () => {
+    const result = computeServiceDrafts([
+      { tmp_id: 'usd', title: 'USD', description: '', deliverables: ['Design'], price_usd: 450, price_currency: 'usd', deposit_pct: 50, lead_time_days: 7 },
+      { tmp_id: 'unspecified', title: 'Unspecified', description: '', deliverables: ['Design'], price_usd: 450, price_currency: null, deposit_pct: 50, lead_time_days: 7 },
+      { tmp_id: 'inr', title: 'INR', description: '', deliverables: ['Design'], price_usd: 15, price_currency: 'inr', deposit_pct: 50, lead_time_days: 7 }
+    ]);
+
+    expect(result.flags).toEqual([{
+      tmp_id: 'inr',
+      field: 'price_cents',
+      severity: 'error',
+      message: 'Written as INR 15. Payments are charged in USD, so enter the price in US dollars.'
+    }]);
+    expect(result.services.find((service) => service.tmp_id === 'inr')).not.toHaveProperty('price_currency');
+  });
+
+  it('returns a clear 502 when catalog parsing fails', async () => {
+    const store = new Store(':memory:');
+    const ai = new StubAI();
+    const message = "The AI couldn't read this rate card. Try again, or paste fewer lines at a time.";
+    vi.spyOn(ai, 'parseCatalog').mockRejectedValue(Object.assign(new Error(message), { status: 502 }));
+    const { app } = appWith(store, ai);
+
+    const response = await app.request('/api/catalog/parse', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ raw_text: 'A rate card' })
+    });
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: message });
+    store.close();
   });
 
   it('uses exact integer cents and rounds half-cent deposits', () => {
@@ -538,6 +572,7 @@ describe('Studio LLM proxy', () => {
     await ai.chatCompletion([{ role: 'user', content: 'Reply ready.' }], []);
     expect(calls[0]).not.toHaveProperty('tools');
     expect(calls[0]).not.toHaveProperty('tool_choice');
+    expect(calls[0]).toHaveProperty('max_tokens', 4096);
   });
 
   it('rejects malformed, oversized, over-tooled, and model-selecting bodies', async () => {
@@ -574,6 +609,26 @@ describe('Studio LLM proxy', () => {
 });
 
 describe('AI response safeguards', () => {
+  it('caps forced tool calls at 4096 tokens and maps catalog failures to 502', async () => {
+    const calls: unknown[] = [];
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: unknown) => {
+            calls.push(params);
+            throw new Error('Model request failed.');
+          }
+        }
+      }
+    } as unknown as OpenAI;
+    const ai = new AIService(client, 'workers-ai/primary-test', 'workers-ai/fallback-test');
+    const message = "The AI couldn't read this rate card. Try again, or paste fewer lines at a time.";
+
+    await expect(ai.parseCatalog('Rate card')).rejects.toMatchObject({ status: 502, message });
+    expect(calls).toHaveLength(3);
+    expect(calls.map((call) => (call as { max_tokens: number }).max_tokens)).toEqual([4096, 4096, 4096]);
+  });
+
   it('classifies repetitive and low-letter outputs without rejecting short replies', () => {
     expect(isDegenerateText('!!!!!!!!!!!!!!!!!!!!')).toBe(true);
     expect(isDegenerateText('ok')).toBe(false);

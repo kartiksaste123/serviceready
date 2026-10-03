@@ -63,7 +63,7 @@ describe.skipIf(!live)('live sandbox and AI gateway', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          raw_text: 'logo 450 (2 rounds) | brand kit w/ logo+colors+fonts 1200, half upfront | social templates x10 - 15 | rush +30% | website landing pg 900 2wks'
+          raw_text: 'logo 450 (2 rounds) | brand kit w/ logo+colors+fonts 1200, half upfront | social templates x10 (package price $15) | rush +30% | website landing pg 900 2wks'
         })
       });
       expect(catalogResponse.status).toBe(200);
@@ -73,7 +73,7 @@ describe.skipIf(!live)('live sandbox and AI gateway', () => {
       };
       const lowPrice = catalog.services.find((service) => service.price_cents === 1500);
       expect(lowPrice).toBeTruthy();
-      expect(catalog.flags.some((flag) => flag.tmp_id === lowPrice?.tmp_id && flag.field === 'price_usd')).toBe(true);
+      expect(catalog.flags.some((flag) => flag.tmp_id === lowPrice?.tmp_id && flag.field === 'price_cents')).toBe(true);
 
       const collections = await app.request(`/api/quotes/${quote.id}/collections/run`, { method: 'POST' });
       expect(collections.status).toBe(200);
