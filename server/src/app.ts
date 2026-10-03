@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { extname, resolve } from 'node:path';
+import { extname, resolve, sep } from 'node:path';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
@@ -1732,8 +1732,15 @@ export function createApp(options: AppOptions = {}): Hono {
       '.txt': 'text/plain; charset=utf-8',
       '.map': 'application/json; charset=utf-8'
     };
+    const assetsDirectory = resolve(webDist, 'assets');
+    const cacheControl = safePath.startsWith(`${assetsDirectory}${sep}`)
+      ? 'public, max-age=31536000, immutable'
+      : 'no-cache';
     return new Response(readFileSync(safePath), {
-      headers: { 'Content-Type': mime[extname(safePath)] ?? 'application/octet-stream' }
+      headers: {
+        'Content-Type': mime[extname(safePath)] ?? 'application/octet-stream',
+        'Cache-Control': cacheControl
+      }
     });
   });
 

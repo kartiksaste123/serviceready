@@ -1,6 +1,7 @@
-import OpenAI from 'openai';
+import OpenAI, { APIConnectionTimeoutError, APIUserAbortError } from 'openai';
 import type {
   ChatCompletion,
+  ChatCompletionCreateParamsNonStreaming,
   ChatCompletionMessageParam,
   ChatCompletionTool,
   ChatCompletionToolChoiceOption
@@ -11,6 +12,69 @@ import type { ServiceDraft } from './types.js';
 
 export const PRIMARY_MODEL = 'workers-ai/@cf/openai/gpt-oss-120b';
 export const FALLBACK_MODEL = 'workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+
+export interface AIRequestOptions {
+  maxTokens?: number;
+  timeoutMs?: number;
+}
+
+class ImmediateFallbackError extends Error {}
+
+function isTimeoutOrAbort(error: unknown): boolean {
+  if (error instanceof APIConnectionTimeoutError || error instanceof APIUserAbortError) return true;
+  const name = typeof error === 'object' && error !== null && 'name' in error
+    ? String(error.name)
+    : '';
+  return name === 'AbortError' || name === 'APIConnectionTimeoutError' || name === 'APIUserAbortError';
+}
+
+async function withFallback<T>(
+  primaryModel: string,
+  fallbackModel: string,
+  attempt: (model: string) => Promise<T>
+): Promise<T> {
+  try {
+    return await attempt(primaryModel);
+  } catch (error) {
+    if (error instanceof ImmediateFallbackError || isTimeoutOrAbort(error)) return attempt(fallbackModel);
+    try {
+      return await attempt(primaryModel);
+    } catch {
+      return attempt(fallbackModel);
+    }
+  }
+}
+
+async function loggedModelCall<T>(
+  client: OpenAI,
+  model: string,
+  request: ChatCompletionCreateParamsNonStreaming,
+  timeoutMs: number,
+  parse: (response: ChatCompletion) => T
+): Promise<T> {
+  const startedAt = Date.now();
+  let finish = '?';
+  let outTokens: number | '?' = '?';
+  let logged = false;
+  const log = (ok: boolean) => {
+    if (logged) return;
+    logged = true;
+    const shortModel = model.split('/').at(-1) ?? model;
+    console.log(`[ai] model=${shortModel} ms=${Date.now() - startedAt} finish=${finish} out_tokens=${outTokens} ok=${ok}`);
+  };
+  try {
+    const response = await client.chat.completions.create(request, { timeout: timeoutMs });
+    finish = response.choices[0]?.finish_reason ?? '?';
+    outTokens = response.usage?.completion_tokens ?? '?';
+    if (finish === 'length') throw new ImmediateFallbackError('Model response reached its token limit.');
+    const result = parse(response);
+    log(true);
+    return result;
+  } catch (error) {
+    log(false);
+    throw error;
+  }
+}
 
 export function isDegenerateText(text: string): boolean {
   const trimmed = text.trim();
@@ -27,7 +91,8 @@ export class AIService {
   constructor(client?: OpenAI, primaryModel = PRIMARY_MODEL, fallbackModel = FALLBACK_MODEL) {
     this.client = client ?? new OpenAI({
       baseURL: `https://gateway.ai.cloudflare.com/v1/${process.env.CLOUDFLARE_ACCOUNT_ID ?? ''}/${process.env.AI_GATEWAY ?? 'paypal-hackathon'}/compat`,
-      apiKey: process.env.CLOUDFLARE_API_TOKEN ?? 'missing-cloudflare-token'
+      apiKey: process.env.CLOUDFLARE_API_TOKEN ?? 'missing-cloudflare-token',
+      maxRetries: 0
     });
     this.primaryModel = primaryModel;
     this.fallbackModel = fallbackModel;
@@ -85,7 +150,8 @@ export class AIService {
         system,
         rawText,
         tool,
-        (value) => z.object({ services: z.array(serviceDraftInput) }).strict().parse(value)
+        (value) => z.object({ services: z.array(serviceDraftInput) }).strict().parse(value),
+        { maxTokens: 4096, timeoutMs: 30_000 }
       );
       return computeServiceDrafts(result.services);
     } catch {
@@ -135,36 +201,38 @@ export class AIService {
     system: string,
     user: string,
     tool: ChatCompletionTool,
-    validate: (value: unknown) => T = (value) => value as T
+    validate: (value: unknown) => T = (value) => value as T,
+    opts: AIRequestOptions = {}
   ): Promise<T> {
-    const attempt = async (model: string): Promise<T> => {
-      const response = await this.client.chat.completions.create({
+    const maxTokens = opts.maxTokens ?? 1024;
+    const timeoutMs = opts.timeoutMs ?? 15_000;
+    return withFallback(this.primaryModel, this.fallbackModel, (model) => loggedModelCall(
+      this.client,
+      model,
+      {
         model,
-        max_tokens: 4096,
+        max_tokens: maxTokens,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
         tools: [tool],
         tool_choice: { type: 'function', function: { name: tool.function.name } }
-      });
-      const call = response.choices[0]?.message.tool_calls?.find((entry) => entry.function.name === tool.function.name);
-      if (!call) throw new Error(`Missing forced tool call: ${tool.function.name}`);
-      return validate(JSON.parse(call.function.arguments) as unknown);
-    };
-    try {
-      return await attempt(this.primaryModel);
-    } catch {
-      try {
-        return await attempt(this.primaryModel);
-      } catch {
-        return attempt(this.fallbackModel);
+      },
+      timeoutMs,
+      (response) => {
+        const call = response.choices[0]?.message.tool_calls?.find((entry) => entry.function.name === tool.function.name);
+        if (!call) throw new Error(`Missing forced tool call: ${tool.function.name}`);
+        return validate(JSON.parse(call.function.arguments) as unknown);
       }
-    }
+    ));
   }
 
   async chatCompletion(
     messages: ChatCompletionMessageParam[],
     tools: ChatCompletionTool[],
-    toolChoice: ChatCompletionToolChoiceOption = 'auto'
+    toolChoice: ChatCompletionToolChoiceOption = 'auto',
+    opts: AIRequestOptions = {}
   ): Promise<ChatCompletion> {
+    const maxTokens = opts.maxTokens ?? 1024;
+    const timeoutMs = opts.timeoutMs ?? 15_000;
     const requestMessages = messages.map((message): ChatCompletionMessageParam => {
       if (message.role !== 'assistant') return message;
       return {
@@ -173,34 +241,30 @@ export class AIService {
         ...('tool_calls' in message && message.tool_calls ? { tool_calls: message.tool_calls } : {})
       };
     });
-    const attempt = async (model: string, checkDegenerateText = true): Promise<ChatCompletion> => {
-      const response = await this.client.chat.completions.create({
+    return withFallback(this.primaryModel, this.fallbackModel, (model) => loggedModelCall(
+      this.client,
+      model,
+      {
         model,
-        max_tokens: 4096,
+        max_tokens: maxTokens,
         messages: requestMessages,
         ...(tools.length > 0 ? { tools, tool_choice: toolChoice } : {})
-      });
-      const message = response.choices[0]?.message;
-      if (
-        checkDegenerateText &&
-        message &&
-        !message.tool_calls?.length &&
-        typeof message.content === 'string' &&
-        isDegenerateText(message.content)
-      ) {
-        throw new Error('Model returned degenerate text.');
+      },
+      timeoutMs,
+      (response) => {
+        const message = response.choices[0]?.message;
+        if (
+          model !== this.fallbackModel &&
+          message &&
+          !message.tool_calls?.length &&
+          typeof message.content === 'string' &&
+          isDegenerateText(message.content)
+        ) {
+          throw new Error('Model returned degenerate text.');
+        }
+        return response;
       }
-      return response;
-    };
-    try {
-      return await attempt(this.primaryModel);
-    } catch {
-      try {
-        return await attempt(this.primaryModel);
-      } catch {
-        return attempt(this.fallbackModel, false);
-      }
-    }
+    ));
   }
 }
 

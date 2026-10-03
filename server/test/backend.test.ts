@@ -600,7 +600,7 @@ describe('Studio LLM proxy', () => {
     await ai.chatCompletion([{ role: 'user', content: 'Reply ready.' }], []);
     expect(calls[0]).not.toHaveProperty('tools');
     expect(calls[0]).not.toHaveProperty('tool_choice');
-    expect(calls[0]).toHaveProperty('max_tokens', 4096);
+    expect(calls[0]).toHaveProperty('max_tokens', 1024);
   });
 
   it('rejects malformed, oversized, over-tooled, and model-selecting bodies', async () => {
