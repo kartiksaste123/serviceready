@@ -28,10 +28,15 @@ class StubPayPal extends PayPalService {
   verification = true;
   invoice: Record<string, unknown> = { id: 'INV-TEST', status: 'UNPAID' };
   order: Record<string, unknown> = {};
+  createOrderCount = 0;
   captureCount = 0;
+  orderReadCount = 0;
+  invoiceCreateCount = 0;
+  invoiceSendCount = 0;
   invoiceReadCount = 0;
 
   async createOrder(): Promise<{ id: string }> {
+    this.createOrderCount += 1;
     return { id: 'ORDER12345678901234' };
   }
   async captureOrder(): Promise<Record<string, unknown>> {
@@ -39,7 +44,16 @@ class StubPayPal extends PayPalService {
     return { status: 'COMPLETED' };
   }
   async getOrder(): Promise<Record<string, unknown>> {
+    this.orderReadCount += 1;
     return this.order;
+  }
+  async createInvoice(_payload: unknown): Promise<Record<string, unknown>> {
+    this.invoiceCreateCount += 1;
+    return { id: 'INV-CREATED', status: 'DRAFT' };
+  }
+  async sendInvoice(_invoiceId: string, _note: string): Promise<Record<string, unknown>> {
+    this.invoiceSendCount += 1;
+    return { id: 'INV-CREATED', status: 'SENT' };
   }
   async getInvoice(): Promise<Record<string, unknown>> {
     this.invoiceReadCount += 1;
@@ -289,6 +303,107 @@ describe('quotes and deposit state machine', () => {
     });
     expect(captured.status).toBe(200);
     expect((paypal as StubPayPal).captureCount).toBe(captureCount);
+    store.close();
+  });
+});
+
+describe('development sample quotes', () => {
+  it('gates sample reset in production and seeds three local-only quote states', async () => {
+    const store = new Store(':memory:');
+    const { app } = appWith(store);
+    store.saveQuote(makeQuote());
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('ALLOW_DEMO_SAMPLES', '');
+
+    const blocked = await app.request('/api/demo/reset?with_samples=1', { method: 'POST' });
+    expect(blocked.status).toBe(403);
+    expect(await blocked.json()).toMatchObject({ error: expect.stringContaining('disabled in production') });
+    expect(store.listQuotes()).toHaveLength(1);
+
+    vi.stubEnv('ALLOW_DEMO_SAMPLES', '1');
+    const seeded = await app.request('/api/demo/reset?with_samples=1', { method: 'POST' });
+    expect(seeded.status).toBe(200);
+    const quotes = store.listQuotes();
+    expect(quotes).toHaveLength(3);
+    expect(quotes.map((quote) => quote.status).sort()).toEqual(['balance_invoiced', 'deposit_paid', 'quoted']);
+    for (const quote of quotes) {
+      expect(store.listEvents(quote.id).some((event) => event.demo_sample === true)).toBe(true);
+      const payments = store.listPayments(quote.id);
+      expect(payments.length).toBe(quote.status === 'balance_invoiced' ? 2 : 1);
+      expect(payments.every((payment) => (
+        payment.paypal_order_id === null
+        && payment.paypal_capture_id === null
+        && payment.paypal_invoice_id === null
+      ))).toBe(true);
+    }
+    const statsResponse = await app.request('/api/stats');
+    const stats = await statsResponse.json() as {
+      by_status: Record<string, number>;
+      deposits_collected_cents: number;
+      owed_by_client: Array<{ client_name: string; quote_id: string }>;
+    };
+    expect(stats.by_status).toMatchObject({ quoted: 1, deposit_paid: 1, balance_invoiced: 1 });
+    expect(stats.deposits_collected_cents).toBeGreaterThan(0);
+    expect(stats.owed_by_client).toHaveLength(1);
+    expect(stats.owed_by_client[0]?.client_name).toBe('Avery Brooks');
+
+    const regularReset = await app.request('/api/demo/reset', { method: 'POST' });
+    expect(regularReset.status).toBe(200);
+    expect(store.listQuotes()).toHaveLength(0);
+    store.close();
+  });
+
+  it('refuses PayPal, delivery, refresh and collections actions before provider calls', async () => {
+    const store = new Store(':memory:');
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('ALLOW_DEMO_SAMPLES', '');
+    const { app, paypal, toolkit } = appWith(store);
+    const reset = await app.request('/api/demo/reset?with_samples=1', { method: 'POST' });
+    expect(reset.status).toBe(200);
+    const quotes = store.listQuotes();
+    const quoted = quotes.find((quote) => quote.status === 'quoted')!;
+    const depositPaid = quotes.find((quote) => quote.status === 'deposit_paid')!;
+    const invoiced = quotes.find((quote) => quote.status === 'balance_invoiced')!;
+    const proposal: Proposal = {
+      ...makeReminderProposal(invoiced),
+      status: 'pending'
+    };
+    store.saveProposal(proposal);
+
+    const requests = await Promise.all([
+      app.request(`/api/quotes/${quoted.id}?refresh=1`),
+      app.request(`/api/quotes/${quoted.id}/deposit/order`, { method: 'POST' }),
+      app.request(`/api/quotes/${quoted.id}/deposit/capture`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ order_id: 'ORDER-LOCAL-SAMPLE' })
+      }),
+      app.request(`/api/quotes/${depositPaid.id}/deliver`, { method: 'POST' }),
+      app.request(`/api/quotes/${invoiced.id}/collections/run`, { method: 'POST' }),
+      app.request(`/api/quotes/${invoiced.id}/replies`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ from: 'client', text: 'I have a question about this sample.' })
+      }),
+      app.request(`/api/proposals/${proposal.id}/approve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ draft_message: 'A sample reminder.' })
+      })
+    ]);
+    for (const response of requests) {
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ error: expect.stringContaining('development sample quote') });
+    }
+    expect(paypal.createOrderCount).toBe(0);
+    expect(paypal.captureCount).toBe(0);
+    expect(paypal.orderReadCount).toBe(0);
+    expect(paypal.invoiceCreateCount).toBe(0);
+    expect(paypal.invoiceSendCount).toBe(0);
+    expect(paypal.invoiceReadCount).toBe(0);
+    expect(toolkit.calls).toEqual([]);
+    expect(store.listReplies(invoiced.id)).toHaveLength(0);
+    expect(store.getProposal(proposal.id)?.status).toBe('pending');
     store.close();
   });
 });

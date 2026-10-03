@@ -5,6 +5,7 @@ import {
   AgStudioLicenseManager,
   createAiHarness,
   directLlmRunner,
+  enableStudioDevValidations,
   studioTheme,
 } from 'ag-studio';
 import type {
@@ -23,6 +24,8 @@ import { api } from '@/lib/api';
 import type { Stats } from '@/lib/types';
 import { money } from '@/lib/format';
 import { getStudioAiAdapter, getStudioNudgeTools } from '@/lib/studio-ai';
+
+if (import.meta.env.DEV) enableStudioDevValidations();
 
 type FriendlyScoreboardFormat = AgWidgetDataFormat<Record<string, never>>;
 interface FriendlyScoreboardState extends AgWidgetData<Record<string, never>, FriendlyScoreboardFormat> {
@@ -161,23 +164,38 @@ const studioWidgets = createWidgets<CollectionsRegistry>({
 const initialState: AgReportState<CollectionsRegistry> = {
   pages: [{
     id: 'collections',
+    layout: { height: 920, columns: 24, rowHeight: 36, pagePadding: 12 },
     widgets: {
       scoreboard: { type: 'friendly-scoreboard', dataMapping: {}, format: {} },
       deposits: {
         type: 'value',
-        dataMapping: { value: [{ id: 'metrics_deposits_collected_usd', aggregation: 'sum' }] },
-        format: { title: { text: 'Deposits collected', enabled: true } },
+        dataMapping: { value: [{ id: 'metrics.deposits_collected_usd', aggregation: 'sum' }] },
+        format: {
+          title: {
+            text: 'Deposits in',
+            enabled: true,
+            color: '#eef5f0',
+            typography: { fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 'normal' },
+          },
+        },
       },
       outstanding: {
         type: 'value',
-        dataMapping: { value: [{ id: 'metrics_outstanding_usd', aggregation: 'sum' }] },
-        format: { title: { text: 'Balances outstanding', enabled: true } },
+        dataMapping: { value: [{ id: 'metrics.outstanding_usd', aggregation: 'sum' }] },
+        format: {
+          title: {
+            text: 'Still owed',
+            enabled: true,
+            color: '#eef5f0',
+            typography: { fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 'normal' },
+          },
+        },
       },
       status: {
         type: 'column-chart-grouped',
         dataMapping: {
-          categoryKey: [{ id: 'bookings_status' }],
-          valueKey: [{ id: 'bookings_quote_id', aggregation: 'count' }],
+          categoryKey: [{ id: 'bookings.status' }],
+          valueKey: [{ id: 'bookings.quote_id', aggregation: 'count' }],
         },
         format: { title: { text: 'Bookings by status', enabled: true } },
       },
@@ -185,26 +203,26 @@ const initialState: AgReportState<CollectionsRegistry> = {
         type: 'grid',
         dataMapping: {
           cols: [
-            { id: 'bookings_quote_id' },
-            { id: 'bookings_client_name' },
-            { id: 'bookings_service_title' },
-            { id: 'bookings_source' },
-            { id: 'bookings_status' },
-            { id: 'bookings_total_usd' },
-            { id: 'bookings_deposit_usd' },
-            { id: 'bookings_balance_usd' },
-            { id: 'bookings_created_at' },
+            { id: 'bookings.quote_id' },
+            { id: 'bookings.client_name' },
+            { id: 'bookings.service_title' },
+            { id: 'bookings.source' },
+            { id: 'bookings.status' },
+            { id: 'bookings.total_usd' },
+            { id: 'bookings.deposit_usd' },
+            { id: 'bookings.balance_usd' },
+            { id: 'bookings.created_at' },
           ],
         },
         format: { title: { text: 'Bookings', enabled: true } },
       },
     },
     widgetLayout: {
-      scoreboard: { xTrack: 0, yTrack: 0, xSpan: 14, ySpan: 12 },
-      deposits: { xTrack: 14, yTrack: 0, xSpan: 5, ySpan: 6 },
-      outstanding: { xTrack: 19, yTrack: 0, xSpan: 5, ySpan: 6 },
-      status: { xTrack: 14, yTrack: 6, xSpan: 10, ySpan: 8 },
-      bookings: { xTrack: 0, yTrack: 12, xSpan: 24, ySpan: 18 },
+      scoreboard: { xTrack: 0, yTrack: 0, xSpan: 12, ySpan: 4 },
+      deposits: { xTrack: 12, yTrack: 0, xSpan: 6, ySpan: 4 },
+      outstanding: { xTrack: 18, yTrack: 0, xSpan: 6, ySpan: 4 },
+      status: { xTrack: 0, yTrack: 4, xSpan: 24, ySpan: 6 },
+      bookings: { xTrack: 0, yTrack: 10, xSpan: 24, ySpan: 14 },
     },
   }],
   selectedPageId: 'collections',
@@ -213,27 +231,27 @@ const initialState: AgReportState<CollectionsRegistry> = {
 const currencyFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
 const bookingsFields: AgFieldDefinition<CollectionsRegistry>[] = [
-  { id: 'bookings_quote_id', name: 'Quote ID', format: 'textFormat', accessor: 'quote_id' },
-  { id: 'bookings_client_name', name: 'Client', format: 'textFormat', accessor: 'client_name' },
-  { id: 'bookings_service_title', name: 'Service', format: 'textFormat', accessor: 'service_title' },
-  { id: 'bookings_source', name: 'Source', format: 'textFormat', accessor: 'source' },
-  { id: 'bookings_status', name: 'Status', format: 'textFormat', accessor: 'status' },
-  { id: 'bookings_total_usd', name: 'Total', format: 'currencyFormat', formatOptions: { format: currencyFormatter }, accessor: 'total_usd' },
-  { id: 'bookings_deposit_usd', name: 'Deposit', format: 'currencyFormat', formatOptions: { format: currencyFormatter }, accessor: 'deposit_usd' },
-  { id: 'bookings_balance_usd', name: 'Balance', format: 'currencyFormat', formatOptions: { format: currencyFormatter }, accessor: 'balance_usd' },
-  { id: 'bookings_created_at', name: 'Created', format: 'dateTimeFormat', accessor: 'created_at' },
+  { id: 'quote_id', name: 'Quote ID', format: 'textFormat' },
+  { id: 'client_name', name: 'Client', format: 'textFormat' },
+  { id: 'service_title', name: 'Service', format: 'textFormat' },
+  { id: 'source', name: 'Source', format: 'textFormat' },
+  { id: 'status', name: 'Status', format: 'textFormat' },
+  { id: 'total_usd', name: 'Total', format: 'currencyFormat', formatOptions: { format: currencyFormatter } },
+  { id: 'deposit_usd', name: 'Deposit', format: 'currencyFormat', formatOptions: { format: currencyFormatter } },
+  { id: 'balance_usd', name: 'Balance', format: 'currencyFormat', formatOptions: { format: currencyFormatter } },
+  { id: 'created_at', name: 'Created', format: 'dateTimeFormat' },
 ];
 
 const owedFields: AgFieldDefinition<CollectionsRegistry>[] = [
-  { id: 'owed_client_name', name: 'Client', format: 'textFormat', accessor: 'client_name' },
-  { id: 'owed_quote_id', name: 'Quote ID', format: 'textFormat', accessor: 'quote_id' },
-  { id: 'owed_outstanding_usd', name: 'Outstanding', format: 'currencyFormat', formatOptions: { format: currencyFormatter }, accessor: 'outstanding_usd' },
-  { id: 'owed_days_since_invoice', name: 'Days since invoice', format: 'integerFormat', accessor: 'days_since_invoice' },
+  { id: 'client_name', name: 'Client', format: 'textFormat' },
+  { id: 'quote_id', name: 'Quote ID', format: 'textFormat' },
+  { id: 'outstanding_usd', name: 'Outstanding', format: 'currencyFormat', formatOptions: { format: currencyFormatter } },
+  { id: 'days_since_invoice', name: 'Days since invoice', format: 'integerFormat' },
 ];
 
 const summaryFields: AgFieldDefinition<CollectionsRegistry>[] = [
-  { id: 'metrics_deposits_collected_usd', name: 'Deposits collected', format: 'currencyFormat', formatOptions: { format: currencyFormatter }, accessor: 'deposits_collected_usd' },
-  { id: 'metrics_outstanding_usd', name: 'Balances outstanding', format: 'currencyFormat', formatOptions: { format: currencyFormatter }, accessor: 'outstanding_usd' },
+  { id: 'deposits_collected_usd', name: 'Deposits collected', format: 'currencyFormat', formatOptions: { format: currencyFormatter } },
+  { id: 'outstanding_usd', name: 'Balances outstanding', format: 'currencyFormat', formatOptions: { format: currencyFormatter } },
 ];
 
 const ledgerlineTheme = studioTheme.withParams({
@@ -345,18 +363,19 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
 
   return (
     <>
-      <div className="h-[920px] min-h-[720px] w-full overflow-hidden rounded-2xl tabular-nums">
-      <AgStudio<CollectionsRegistry>
-        className="h-full w-full"
-        data={data}
-        initialState={initialState}
-        mode="view"
-        theme={ledgerlineTheme}
-        context={context}
-        widgets={studioWidgets}
-        {...(licenseKey ? { modules: [AgStudioAiModule] } : {})}
-        {...(ai ? { ai } : {})}
-      />
+      <div className="collections-studio h-[920px] min-h-[720px] w-full overflow-hidden rounded-2xl tabular-nums">
+        <AgStudio<CollectionsRegistry>
+          className="h-full w-full"
+          data={data}
+          initialState={initialState}
+          mode="view"
+          theme={ledgerlineTheme}
+          context={context}
+          panels={{ view: { left: [], right: [] } }}
+          widgets={studioWidgets}
+          {...(licenseKey ? { modules: [AgStudioAiModule] } : {})}
+          {...(ai ? { ai } : {})}
+        />
       </div>
       {!licenseKey && <p className="mt-2 text-xs text-cream/50">AI assistant activates with an AG Studio licence</p>}
     </>

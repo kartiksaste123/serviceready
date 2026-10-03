@@ -59,41 +59,43 @@ export function PayPalDepositButton({ quoteId, onPaid }: { quoteId: string; onPa
 
   return (
     <PayPalScriptProvider options={{ clientId: config.data.client_id, currency: 'USD', intent: 'capture', disableFunding: 'paylater' }}>
-      <PayPalButtons
-        className="bg-transparent"
-        style={{ layout: 'vertical', shape: 'pill', color: 'gold', label: 'paypal' }}
-        disabled={busy}
-        createOrder={async () => {
-          setBusy(true);
-          try {
-            const { order_id } = await api.createDepositOrder(quoteId);
-            return order_id;
-          } finally {
+      <div className="bg-transparent" style={{ colorScheme: 'light', backgroundColor: 'transparent' }}>
+        <PayPalButtons
+          className="bg-transparent"
+          style={{ layout: 'vertical', shape: 'pill', color: 'gold', label: 'paypal' }}
+          disabled={busy}
+          createOrder={async () => {
+            setBusy(true);
+            try {
+              const { order_id } = await api.createDepositOrder(quoteId);
+              return order_id;
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onApprove={async ({ orderID }) => {
+            setBusy(true);
+            try {
+              await api.captureDeposit(quoteId, orderID);
+              const detail = await api.getQuote(quoteId);
+              toast.success('Deposit captured by PayPal');
+              onPaid?.(detail.quote);
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : 'Payment failed');
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onCancel={() => {
             setBusy(false);
-          }
-        }}
-        onApprove={async ({ orderID }) => {
-          setBusy(true);
-          try {
-            await api.captureDeposit(quoteId, orderID);
-            const detail = await api.getQuote(quoteId);
-            toast.success('Deposit captured by PayPal');
-            onPaid?.(detail.quote);
-          } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Payment failed');
-          } finally {
+            toast.info('PayPal payment was cancelled.');
+          }}
+          onError={(error) => {
             setBusy(false);
-          }
-        }}
-        onCancel={() => {
-          setBusy(false);
-          toast.info('PayPal payment was cancelled.');
-        }}
-        onError={(error) => {
-          setBusy(false);
-          toast.error(error instanceof Error ? error.message : 'PayPal payment failed.');
-        }}
-      />
+            toast.error(error instanceof Error ? error.message : 'PayPal payment failed.');
+          }}
+        />
+      </div>
     </PayPalScriptProvider>
   );
 }

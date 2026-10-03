@@ -144,6 +144,9 @@
 }
 
 @layer components {
+  .collections-studio .ag-studio-layout-widget-title {
+    font-weight: 600 !important;
+  }
   .btn-mint {
     @apply inline-flex items-center justify-center gap-2 rounded-full bg-mint px-5 py-2.5 text-sm font-semibold text-deep-950 transition hover:bg-mint/90 disabled:opacity-50 disabled:pointer-events-none;
     box-shadow: 0 10px 30px -10px rgb(79 209 197 / 0.5);

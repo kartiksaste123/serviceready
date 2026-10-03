@@ -35,6 +35,7 @@ function Detail() {
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-20" /><Skeleton className="h-48" /><Skeleton className="h-72" /></div>;
   if (isError || !data) return <Empty title="Booking not found"><Link to="/app" className="text-mint">Back to bookings</Link></Empty>;
   const q = data.quote;
+  const isSample = data.events.some((event) => event.demo_sample);
   const pending = data.proposals.filter((p) => p.status === "pending");
 
   return (
@@ -42,12 +43,12 @@ function Detail() {
       <Link to="/app" className="mb-4 inline-flex items-center gap-1.5 text-sm text-cream/60 hover:text-cream"><ArrowLeft className="size-4" />Bookings</Link>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-bold tracking-tight">{q.client_name}</h1><StatusBadge status={q.status} /><SourceBadge source={q.source} /></div>
+          <div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-bold tracking-tight">{q.client_name}</h1><StatusBadge status={q.status} /><SourceBadge source={q.source} />{isSample && <span className="rounded-full border border-cream/10 bg-cream/[0.04] px-2.5 py-0.5 text-[11px] text-cream/55">Sample data</span>}</div>
           <p className="mt-1 text-sm text-cream/60">{q.service_title} · <span className="tabular-nums">{money(q.total_cents)}</span> · updated {timeAgo(q.updated_at)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-glass btn-sm" disabled={refresh.isPending} onClick={() => refresh.mutate()}>{refresh.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}Refresh from PayPal</button>
-          {(q.status === "deposit_paid" || q.status === "delivered") && <button className="btn-mint btn-sm" onClick={() => setConfirm(true)}><PackageCheck className="size-3.5" />Mark delivered & send balance invoice</button>}
+          {!isSample && <button className="btn-glass btn-sm" disabled={refresh.isPending} onClick={() => refresh.mutate()}>{refresh.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}Refresh from PayPal</button>}
+          {!isSample && (q.status === "deposit_paid" || q.status === "delivered") && <button className="btn-mint btn-sm" onClick={() => setConfirm(true)}><PackageCheck className="size-3.5" />Mark delivered & send balance invoice</button>}
         </div>
       </div>
 
@@ -77,13 +78,15 @@ function Detail() {
 
         <section className="glass-card space-y-4 p-5">
           <h2 className="font-semibold">Collections</h2>
-          <button className="btn-glass btn-sm w-full" disabled={collect.isPending} onClick={() => collect.mutate()}>{collect.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Bot className="size-3.5 text-mint" />}Run collections agent</button>
-          <div>
-            <label className="text-[11px] uppercase tracking-wider text-cream/55">Paste client reply</label>
-            <textarea className="field mt-1.5" rows={3} maxLength={2000} placeholder="e.g. Already paid this morning!" value={paste} onChange={(e) => setPaste(e.target.value)} />
-            <button className="btn-mint btn-sm mt-2" disabled={!paste.trim() || reply.isPending} onClick={() => reply.mutate()}>{reply.isPending && <Loader2 className="size-3.5 animate-spin" />}Send to agent</button>
-          </div>
-          {run && <div className="glass-row flex gap-2 p-3 text-[13px]"><Bot className="mt-0.5 size-4 shrink-0 text-mint" />{run.summary}</div>}
+          {isSample ? <p className="text-sm text-cream/55">Sample data — PayPal and collections actions are disabled.</p> : <>
+            <button className="btn-glass btn-sm w-full" disabled={collect.isPending} onClick={() => collect.mutate()}>{collect.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Bot className="size-3.5 text-mint" />}Run collections agent</button>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider text-cream/55">Paste client reply</label>
+              <textarea className="field mt-1.5" rows={3} maxLength={2000} placeholder="e.g. Already paid this morning!" value={paste} onChange={(e) => setPaste(e.target.value)} />
+              <button className="btn-mint btn-sm mt-2" disabled={!paste.trim() || reply.isPending} onClick={() => reply.mutate()}>{reply.isPending && <Loader2 className="size-3.5 animate-spin" />}Send to agent</button>
+            </div>
+            {run && <div className="glass-row flex gap-2 p-3 text-[13px]"><Bot className="mt-0.5 size-4 shrink-0 text-mint" />{run.summary}</div>}
+          </>}
           {data.replies.length > 0 && (
             <div><p className="text-[11px] uppercase tracking-wider text-cream/55">Replies</p>
               {data.replies.map((r) => <p key={r.id} className="mt-2 rounded-lg bg-cream/[0.04] px-3 py-2 text-[13px]"><span className="text-cream/50">{r.from} · {timeAgo(r.created_at)}</span><br />{r.text}</p>)}

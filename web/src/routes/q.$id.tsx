@@ -51,13 +51,14 @@ function QuotePage() {
         {isLoading ? <Skeleton className="h-[560px] rounded-2xl" /> : isError || !data ? <Empty title="Quote not found">This link may be outdated.</Empty> : (() => {
           const q = data.quote;
           const bal = data.payments.find((p) => p.kind === "balance");
+          const isSample = data.events.some((event) => event.demo_sample);
           const idx = q.status === "cancelled" ? -1 : STEPS.findIndex((x) => x.s === q.status);
           return (
             <>
               <article className="glass-card overflow-hidden">
                 <div className="border-b border-dashed border-cream/15 p-6 sm:p-8">
                   <div className="flex items-start justify-between gap-3">
-                    <div><p className="eyebrow">Quote · Maya Rao Studio</p><h1 className="mt-2 text-2xl font-bold tracking-tight">{q.service_title}</h1><p className="mt-1 text-sm text-cream/60">for {q.client_name}</p></div>
+                    <div><p className="eyebrow">Quote · Maya Rao Studio</p><h1 className="mt-2 text-2xl font-bold tracking-tight">{q.service_title}</h1><p className="mt-1 text-sm text-cream/60">for {q.client_name}</p>{isSample && <span className="mt-2 inline-flex rounded-full border border-cream/10 bg-cream/[0.04] px-2.5 py-0.5 text-[11px] text-cream/55">Sample data</span>}</div>
                     <StatusBadge status={q.status} />
                   </div>
                   <p className="mt-5 text-[14px] leading-relaxed text-cream/75">{q.scope_summary}</p>
@@ -80,14 +81,14 @@ function QuotePage() {
                   </ol>
                 </div>
                 <div className="border-t border-cream/10 p-6 sm:px-8">
-                  {q.status === "quoted" && <><PayPalDepositButton quoteId={q.id} onPaid={() => qc.invalidateQueries({ queryKey: ["quote", id] })} /><p className="mt-2 text-center text-[12px] text-cream/50">Work starts once the deposit is captured.</p></>}
+                  {q.status === "quoted" && (isSample ? <p className="text-center text-sm text-cream/55">Sample data — PayPal payments are disabled.</p> : <><PayPalDepositButton quoteId={q.id} onPaid={() => qc.invalidateQueries({ queryKey: ["quote", id] })} /><p className="mt-2 text-center text-[12px] text-cream/50">Work starts once the deposit is captured.</p></>)}
                   {q.status === "balance_invoiced" && bal?.invoice_url && <a href={bal.invoice_url} target="_blank" rel="noreferrer" className="btn-mint w-full">Pay balance invoice · {money(bal.amount_cents)} <ExternalLink className="size-4" /></a>}
                   {q.status === "deposit_paid" && <p className="text-center text-sm text-mint">Deposit received — Maya is on it.</p>}
                   {q.status === "paid" && <p className="text-center text-sm text-mint">All paid. Thank you!</p>}
                   {(q.status === "delivered" || q.status === "cancelled") && <p className="text-center text-sm text-cream/60">{q.status === "cancelled" ? "This quote was cancelled." : "Delivered — balance invoice coming shortly."}</p>}
-                  <button className="btn-glass mt-3 flex w-full justify-center" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+                  {!isSample && <button className="btn-glass mt-3 flex w-full justify-center" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
                     {refresh.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}Refresh from PayPal
-                  </button>
+                  </button>}
                 </div>
               </article>
 

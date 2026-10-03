@@ -203,6 +203,86 @@ function detail(store: Store, quoteId: string): QuoteDetail {
   };
 }
 
+function seedDemoSamples(store: Store, baseUrl: string): void {
+  const samples = [
+    {
+      serviceId: 'svc_logo_design',
+      clientName: 'Riley Chen',
+      clientEmail: 'riley@example.invalid',
+      brief: 'A fresh, versatile logo for a neighborhood bakery.',
+      status: 'quoted',
+      quoteAgeDays: 1
+    },
+    {
+      serviceId: 'svc_social_templates',
+      clientName: 'Morgan Lee',
+      clientEmail: 'morgan@example.invalid',
+      brief: 'Reusable social templates for a small ceramics studio.',
+      status: 'deposit_paid',
+      quoteAgeDays: 3
+    },
+    {
+      serviceId: 'svc_brand_identity_kit',
+      clientName: 'Avery Brooks',
+      clientEmail: 'avery@example.invalid',
+      brief: 'A complete identity for a community coffee shop.',
+      status: 'balance_invoiced',
+      quoteAgeDays: 8
+    }
+  ] as const;
+
+  for (const sample of samples) {
+    const service = store.getService(sample.serviceId);
+    if (!service) throw new Error(`Demo sample service "${sample.serviceId}" is missing.`);
+    const amounts = calculateQuoteAmounts(service.price_cents, service.deposit_pct);
+    const quoteId = createId('q');
+    const createdAt = new Date(Date.now() - sample.quoteAgeDays * 86_400_000).toISOString();
+    const quote: Quote = {
+      id: quoteId,
+      service_id: service.id,
+      service_title: service.title,
+      client_name: sample.clientName,
+      client_email: sample.clientEmail,
+      brief: sample.brief,
+      scope_summary: `A focused ${service.title.toLowerCase()} project, shaped around the client's goals and audience.`,
+      line_items: [{ label: service.title, amount_cents: amounts.total_cents }],
+      ...amounts,
+      status: sample.status,
+      source: 'web',
+      approval_url: `${baseUrl.replace(/\/+$/, '')}/q/${quoteId}`,
+      created_at: createdAt,
+      updated_at: createdAt
+    };
+    store.saveQuote(quote);
+    store.savePayment(quoteId, {
+      id: createId('pay'),
+      kind: 'deposit',
+      amount_cents: quote.deposit_cents,
+      status: sample.status === 'quoted' ? 'PENDING' : 'COMPLETED',
+      paypal_order_id: null,
+      paypal_capture_id: null,
+      paypal_invoice_id: null,
+      updated_at: createdAt
+    });
+    if (sample.status === 'balance_invoiced') {
+      store.savePayment(quoteId, {
+        id: createId('pay'),
+        kind: 'balance',
+        amount_cents: quote.balance_cents,
+        status: 'SENT',
+        paypal_order_id: null,
+        paypal_capture_id: null,
+        paypal_invoice_id: null,
+        updated_at: new Date(Date.now() - 6 * 86_400_000).toISOString()
+      });
+    }
+    store.saveEvent(createEvent('system', 'approval', quoteId, {
+      text: 'Development sample quote seeded.',
+      demo_sample: true
+    }));
+  }
+}
+
 function publicUrl(path: string): string {
   return `${(process.env.PUBLIC_BASE_URL ?? 'http://localhost:8080').replace(/\/+$/, '')}${path}`;
 }
@@ -256,6 +336,13 @@ export function createApp(options: AppOptions = {}): Hono {
   const paypal = options.paypal ?? new PayPalService();
   const toolkitFactory = options.toolkitFactory ?? (() => paypal.toolkit());
   const baseUrl = options.publicBaseUrl ?? process.env.PUBLIC_BASE_URL ?? 'http://localhost:8080';
+  const isDemoSampleQuote = (quoteId: string): boolean =>
+    store.listEvents(quoteId).some((event) => event.demo_sample === true);
+  const assertNotDemoSampleQuote = (quoteId: string): void => {
+    if (isDemoSampleQuote(quoteId)) {
+      throw new HttpError(409, 'This development sample quote cannot use PayPal or collections actions.');
+    }
+  };
   const rateLimit = new Map<string, number[]>();
 
   app.use('/api/*', async (c, next) => {
@@ -459,6 +546,7 @@ export function createApp(options: AppOptions = {}): Hono {
     const quote = store.getQuote(c.req.param('id'));
     if (!quote) throw new HttpError(404, 'Quote not found.');
     if (c.req.query('refresh') === '1') {
+      assertNotDemoSampleQuote(quote.id);
       const deposit = store.getPayment(quote.id, 'deposit');
       const balance = store.getPayment(quote.id, 'balance');
       if (deposit?.paypal_order_id) {
@@ -482,6 +570,7 @@ export function createApp(options: AppOptions = {}): Hono {
   app.post('/api/quotes/:id/deposit/order', async (c) => {
     const quote = store.getQuote(c.req.param('id'));
     if (!quote) throw new HttpError(404, 'Quote not found.');
+    assertNotDemoSampleQuote(quote.id);
     if (quote.status !== 'quoted') throw new HttpError(409, 'A deposit order can only be created for a quoted request.');
     const existing = store.getPayment(quote.id, 'deposit');
     if (existing?.paypal_order_id) return c.json({ order_id: existing.paypal_order_id });
@@ -514,6 +603,7 @@ export function createApp(options: AppOptions = {}): Hono {
     const input = parseBody(captureSchema, await c.req.json());
     const quote = store.getQuote(c.req.param('id'));
     if (!quote) throw new HttpError(404, 'Quote not found.');
+    assertNotDemoSampleQuote(quote.id);
     const existing = store.getPayment(quote.id, 'deposit');
     if (existing?.status === 'COMPLETED' && existing.paypal_order_id === input.order_id) {
       return c.json(quote);
@@ -543,6 +633,7 @@ export function createApp(options: AppOptions = {}): Hono {
   app.post('/api/quotes/:id/deliver', async (c) => {
     const quote = store.getQuote(c.req.param('id'));
     if (!quote) throw new HttpError(404, 'Quote not found.');
+    assertNotDemoSampleQuote(quote.id);
     if (quote.status === 'balance_invoiced' || quote.status === 'paid') return c.json(detail(store, quote.id));
     if (quote.status !== 'deposit_paid') throw new HttpError(409, 'Delivery is only available after the deposit has been paid.');
     const seller = store.getSeller();
@@ -649,7 +740,7 @@ export function createApp(options: AppOptions = {}): Hono {
       }
       if (resolvedCustomId) {
         const quote = store.getQuote(resolvedCustomId);
-        if (quote) {
+        if (quote && !isDemoSampleQuote(quote.id)) {
           quoteId = quote.id;
           if (orderId) await reconcileOrder(quote, orderId);
           else if (resource.status === 'COMPLETED' && centsFromAmount(resource.amount) === quote.deposit_cents) {
@@ -698,6 +789,7 @@ export function createApp(options: AppOptions = {}): Hono {
   const runCollections = async (quoteId: string): Promise<AgentRun> => {
     const quote = store.getQuote(quoteId);
     if (!quote) throw new HttpError(404, 'Quote not found.');
+    assertNotDemoSampleQuote(quote.id);
     if (quote.status !== 'balance_invoiced') throw new HttpError(409, 'Collections runs require an outstanding balance invoice.');
     const payment = store.getPayment(quote.id, 'balance');
     if (!payment?.paypal_invoice_id) throw new HttpError(409, 'Quote has no PayPal balance invoice.');
@@ -866,6 +958,7 @@ export function createApp(options: AppOptions = {}): Hono {
     const input = parseBody(replySchema, await c.req.json());
     const quote = store.getQuote(c.req.param('id'));
     if (!quote) throw new HttpError(404, 'Quote not found.');
+    if (quote.status === 'balance_invoiced') assertNotDemoSampleQuote(quote.id);
     const reply = {
       id: createId('reply'),
       quote_id: quote.id,
@@ -892,6 +985,7 @@ export function createApp(options: AppOptions = {}): Hono {
     if (proposal.status !== 'pending') throw new HttpError(409, 'Proposal is no longer pending.');
     const quote = store.getQuote(proposal.quote_id);
     if (!quote) throw new HttpError(404, 'Quote not found.');
+    assertNotDemoSampleQuote(quote.id);
     const payment = store.getPayment(quote.id, 'balance');
     if (!payment?.paypal_invoice_id && proposal.action !== 'wait' && proposal.action !== 'escalate') {
       throw new HttpError(409, 'Quote has no balance invoice.');
@@ -1099,7 +1193,12 @@ export function createApp(options: AppOptions = {}): Hono {
   app.get('/api/paypal/config', (c) => c.json({ client_id: process.env.PAYPAL_CLIENT_ID ?? '', env: 'sandbox' as const }));
 
   app.post('/api/demo/reset', (c) => {
+    const withSamples = c.req.query('with_samples') === '1';
+    if (withSamples && process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_SAMPLES !== '1') {
+      throw new HttpError(403, 'Development sample data is disabled in production.');
+    }
     store.reset();
+    if (withSamples) seedDemoSamples(store, baseUrl);
     return c.json({ ok: true as const });
   });
 

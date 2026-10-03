@@ -73,9 +73,9 @@ export interface Payment {
   kind: 'deposit' | 'balance';
   amount_cents: number;
   status: string;
-  paypal_order_id?: string;
-  paypal_capture_id?: string;
-  paypal_invoice_id?: string;
+  paypal_order_id?: string | null;
+  paypal_capture_id?: string | null;
+  paypal_invoice_id?: string | null;
   invoice_url?: string;
   updated_at: string;
 }
@@ -88,6 +88,7 @@ export interface AgentEvent {
   input?: unknown;
   output?: unknown;
   text?: string;
+  demo_sample?: boolean;
   created_at: string;
 }
 export interface Proposal {
