@@ -69,7 +69,7 @@ function QuotePage() {
   return (
     <div className="relative min-h-screen">
       <div className="grain pointer-events-none absolute inset-x-0 top-0 h-[380px]" />
-      <header className="relative mx-auto flex h-16 max-w-2xl items-center justify-between px-6">
+      <header className="relative mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link to="/">
           <Wordmark />
         </Link>
@@ -143,8 +143,16 @@ function QuotePage() {
                       </div>
                       <div className="flex justify-between text-foreground">
                         <span className="flex items-center gap-1.5">
-                          {q.status !== "quoted" && <Check className="size-4 text-success" />}
-                          {q.status === "quoted" ? "Deposit due now" : "Deposit paid"}
+                          {["deposit_paid", "delivered", "balance_invoiced", "paid"].includes(
+                            q.status,
+                          ) && <Check className="size-4 text-success" />}
+                          {q.status === "quoted"
+                            ? "Deposit due now"
+                            : ["deposit_paid", "delivered", "balance_invoiced", "paid"].includes(
+                                  q.status,
+                                )
+                              ? "Deposit paid"
+                              : "Deposit"}
                         </span>
                         <span className="font-bold">{money(q.deposit_cents)}</span>
                       </div>

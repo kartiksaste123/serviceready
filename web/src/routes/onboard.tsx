@@ -151,7 +151,7 @@ function Onboard() {
             </div>
             <div
               ref={examplePanelRef}
-              className="glass-card scroll-mt-6 p-5 sm:p-6"
+              className="glass-card scroll-mt-6 p-5 sm:p-6 lg:row-span-2"
               id="rate-card-examples"
             >
               <h2 className="text-lg font-semibold">Try an example</h2>
@@ -178,14 +178,14 @@ function Onboard() {
                   </button>
                 ))}
               </div>
-              <div className="mt-5 border-t border-border pt-4">
-                <h3 className="text-sm font-semibold">What the AI does</h3>
-                <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-                  <li>Finds each service, price, deposit and delivery time</li>
-                  <li>Flags missing delivery times, non-USD prices and prices that look like typos</li>
-                  <li>Never changes or converts your prices. You review everything before publishing</li>
-                </ul>
-              </div>
+            </div>
+            <div className="glass-card p-5 sm:p-6">
+              <h2 className="text-sm font-semibold">What the AI does</h2>
+              <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                <li>Finds each service, price, deposit and delivery time</li>
+                <li>Flags missing delivery times, non-USD prices and prices that look like typos</li>
+                <li>Never changes or converts your prices. You review everything before publishing</li>
+              </ul>
             </div>
           </section>
         )}

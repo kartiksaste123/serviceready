@@ -105,12 +105,14 @@ function Storefront() {
                         <li key={d}>· {d}</li>
                       ))}
                     </ul>
-                    <button
-                      className="btn-primary btn-sm mt-auto self-start"
-                      onClick={() => setPicked(s)}
-                    >
-                      Request quote <ArrowRight className="size-3.5" />
-                    </button>
+                    <div className="mt-auto pt-4">
+                      <button
+                        className="btn-primary btn-sm self-start"
+                        onClick={() => setPicked(s)}
+                      >
+                        Request quote <ArrowRight className="size-3.5" />
+                      </button>
+                    </div>
                   </article>
                 ))}
               </div>

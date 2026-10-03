@@ -15,7 +15,7 @@ const balanceState = (q: Quote) =>
 export function BookingsGrid({ rows, onOpen }: { rows: Quote[]; onOpen: (id: string) => void }) {
   return (
     <div>
-      <div className="max-h-[560px] space-y-3 overflow-auto p-3 md:hidden">
+      <div className="space-y-3 p-3 md:hidden">
         {rows.map((q) => {
           const balance = balanceState(q);
           const BalanceIcon = balance.icon;
@@ -46,11 +46,11 @@ export function BookingsGrid({ rows, onOpen }: { rows: Quote[]; onOpen: (id: str
                   ) : (
                     <Clock3 className="size-3.5" />
                   )}
-                  Deposit {deposit} · {money(q.deposit_cents)}
+                  Deposit {deposit.toLowerCase()} · {money(q.deposit_cents)}
                 </span>
                 <span className={`flex items-center gap-1.5 ${balance.className}`}>
                   <BalanceIcon className="size-3.5" />
-                  Balance {balance.label}
+                  Balance {balance.label === "Not due" ? "not due yet" : balance.label.toLowerCase()}
                 </span>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">Updated {timeAgo(q.updated_at)}</p>
