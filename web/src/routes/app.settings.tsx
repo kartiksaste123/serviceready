@@ -22,6 +22,14 @@ export const Route = createFileRoute("/app/settings")({
   component: SettingsPage,
 });
 
+const reminderExamples: Record<SellerRules["reminder_tone"], string> = {
+  friendly:
+    "Hi Avery, just a friendly reminder that the $600.00 balance for Brand identity kit is ready to pay whenever you get a moment. Thank you!",
+  neutral:
+    "Hi Avery, this is a reminder that the $600.00 balance for Brand identity kit is now due. You can pay it from the PayPal invoice link.",
+  firm: "Hi Avery, the $600.00 balance for Brand identity kit is now overdue. Please pay it through the PayPal invoice link today.",
+};
+
 function SettingsPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["seller"], queryFn: api.getSeller });
@@ -53,65 +61,87 @@ function SettingsPage() {
       {isLoading || !r ? (
         <Skeleton className="h-80 rounded-2xl" />
       ) : (
-        <form
-          className="glass-card max-w-2xl space-y-5 p-6"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save.mutate();
-          }}
-        >
-          <F label="Default deposit %" hint="Applied to newly imported services.">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              className="field tabular-nums"
-              value={r.default_deposit_pct}
-              onChange={(e) => setR({ ...r, default_deposit_pct: Number(e.target.value) })}
-            />
-          </F>
-          <F label="Reminder tone">
-            <div className="flex gap-2">
-              {(["friendly", "neutral", "firm"] as const).map((t) => (
-                <button
-                  type="button"
-                  key={t}
-                  onClick={() => setR({ ...r, reminder_tone: t })}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-sm capitalize ${r.reminder_tone === t ? "border-foreground bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
-                >
-                  {t}
-                </button>
-              ))}
+        <div className="grid items-start gap-5 lg:grid-cols-2">
+          <form
+            className="glass-card space-y-5 p-6"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save.mutate();
+            }}
+          >
+            <F label="Default deposit %" hint="Applied to newly imported services.">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="field tabular-nums"
+                value={r.default_deposit_pct}
+                onChange={(e) => setR({ ...r, default_deposit_pct: Number(e.target.value) })}
+              />
+            </F>
+            <F label="Reminder tone">
+              <div className="flex gap-2">
+                {(["friendly", "neutral", "firm"] as const).map((t) => (
+                  <button
+                    type="button"
+                    key={t}
+                    onClick={() => setR({ ...r, reminder_tone: t })}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm capitalize ${r.reminder_tone === t ? "border-foreground bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </F>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <F label="Max reminders">
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  className="field tabular-nums"
+                  value={r.max_reminders}
+                  onChange={(e) => setR({ ...r, max_reminders: Number(e.target.value) })}
+                />
+              </F>
+              <F label="Wait days before nudge">
+                <input
+                  type="number"
+                  min={0}
+                  max={60}
+                  className="field tabular-nums"
+                  value={r.wait_days_before_nudge}
+                  onChange={(e) => setR({ ...r, wait_days_before_nudge: Number(e.target.value) })}
+                />
+              </F>
             </div>
-          </F>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <F label="Max reminders">
-              <input
-                type="number"
-                min={0}
-                max={10}
-                className="field tabular-nums"
-                value={r.max_reminders}
-                onChange={(e) => setR({ ...r, max_reminders: Number(e.target.value) })}
-              />
-            </F>
-            <F label="Wait days before nudge">
-              <input
-                type="number"
-                min={0}
-                max={60}
-                className="field tabular-nums"
-                value={r.wait_days_before_nudge}
-                onChange={(e) => setR({ ...r, wait_days_before_nudge: Number(e.target.value) })}
-              />
-            </F>
-          </div>
-          <button className="btn-primary" disabled={save.isPending}>
-            {save.isPending && <Loader2 className="size-4 animate-spin" />}Save rules
-          </button>
-        </form>
+            <button className="btn-primary" disabled={save.isPending}>
+              {save.isPending && <Loader2 className="size-4 animate-spin" />}Save rules
+            </button>
+          </form>
+          <aside className="glass-card space-y-5 p-6">
+            <div>
+              <h2 className="text-lg font-semibold">How assistants use these rules</h2>
+              <p className="mt-4 text-sm font-medium text-muted-foreground">Example reminder</p>
+              <p className="glass-row mt-2 p-4 text-sm leading-6">
+                {reminderExamples[r.reminder_tone]}
+              </p>
+            </div>
+            <div className="space-y-3 border-t border-border pt-4 text-sm leading-6">
+              <p>
+                <span className="font-semibold">Max reminders: </span>
+                assistants won&apos;t suggest more than {r.max_reminders} reminders for one invoice.
+              </p>
+              <p>
+                <span className="font-semibold">Wait days: </span>
+                assistants won&apos;t suggest a reminder until {r.wait_days_before_nudge} days after
+                the balance invoice is sent.
+              </p>
+            </div>
+          </aside>
+        </div>
       )}
-      <section className="glass-card mt-6 flex max-w-2xl flex-wrap items-center justify-between gap-4 p-6">
+      <section className="glass-card mt-6 flex flex-wrap items-center justify-between gap-4 p-6">
         <div>
           <h2 className="font-semibold">Reset demo data</h2>
           <p className="text-sm text-muted-foreground">

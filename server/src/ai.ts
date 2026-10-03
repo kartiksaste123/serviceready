@@ -74,9 +74,11 @@ export class AIService {
         `Rules:`,
         `- Never invent or convert a price. Copy each number exactly as written into price_usd, and put the currency as written into price_currency as an ISO 4217 code (USD for $, INR for ₹ or Rs, EUR for €, GBP for £). Use null only if no currency is shown.`,
         `- Only create a package for a line that sells a deliverable at its own price. Add-ons, surcharges, revision policies and payment terms (for example urgent-delivery fees, extra-revision fees, included revisions, upfront percentages) are not packages: mention them briefly in the description of each package they apply to.`,
+        `- If a price is per unit (each, per hour, /hour, per month, /month, per person, per window), keep the number as written and add the unit to the title in brackets, for example "Bug fixes (per hour)".`,
         `- deposit_pct: the upfront percentage stated for that package, else the general payment terms if they apply to every package, else 50.`,
-        `- If a price is a starting price (onwards, from, starting at), use the stated number and begin the description with "Starting price."`,
-        `- lead_time_days: only if stated, otherwise null.`,
+        `- Begin the description with "Starting price." only when that line says onwards, from or starting at.`,
+        `- lead_time_days: only if a delivery time is stated for that package; convert weeks to days (2 weeks = 14). Otherwise null.`,
+        `- Do not add terms, discounts or conditions that are not written.`,
         `- Include deliverables only when stated or plainly implied.`
       ].join('\n') + '\n';
       const result = await this.toolResult<{ services: unknown[] }>(

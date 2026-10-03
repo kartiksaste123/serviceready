@@ -226,6 +226,17 @@ describe('catalog flags and quote amounts', () => {
     expect(result.services.find((service) => service.tmp_id === 'low')?.price_cents).toBe(1500);
   });
 
+  it('does not flag normal price spreads below ten times the median', () => {
+    const result = computeServiceDrafts([
+      { tmp_id: 'mini', title: 'Mini session', description: '', deliverables: ['Photos'], price_usd: 150, price_currency: 'USD', deposit_pct: 30, lead_time_days: 5 },
+      { tmp_id: 'family', title: 'Family session', description: '', deliverables: ['Photos'], price_usd: 350, price_currency: 'USD', deposit_pct: 30, lead_time_days: 7 },
+      { tmp_id: 'event', title: 'Event coverage', description: '', deliverables: ['Photos'], price_usd: 900, price_currency: 'USD', deposit_pct: 30, lead_time_days: 14 },
+      { tmp_id: 'wedding', title: 'Wedding full day', description: '', deliverables: ['Photos'], price_usd: 2800, price_currency: 'USD', deposit_pct: 30, lead_time_days: 21 }
+    ]);
+
+    expect(result.flags).toEqual([]);
+  });
+
   it('flags non-USD prices and skips median typo warnings for them', () => {
     const result = computeServiceDrafts([
       { tmp_id: 'usd', title: 'USD', description: '', deliverables: ['Design'], price_usd: 450, price_currency: 'usd', deposit_pct: 50, lead_time_days: 7 },
@@ -753,11 +764,51 @@ describe('collections safeguards', () => {
     const { app } = appWith(store, ai, new StubPayPal(), toolkit);
     const quote = makeQuote();
     saveBalanceInvoice(store, quote);
+    const seller = store.getSeller()!;
+    seller.rules.wait_days_before_nudge = 0;
+    store.saveSeller(seller);
     store.saveProposal(makeReminderProposal(quote));
     const response = await app.request(`/api/quotes/${quote.id}/collections/run`, { method: 'POST' });
     expect(response.status).toBe(200);
     const run = await response.json() as { proposal: Proposal };
     expect(run.proposal.action).toBe('send_reminder');
+    store.close();
+  });
+
+  it('waits until the configured whole days have elapsed after the balance invoice was sent', async () => {
+    const store = new Store(':memory:');
+    const ai = new StubAI();
+    const toolkit = new StubToolkit();
+    ai.completionQueue.push(toolCall('get_invoice', { invoice_id: 'INV-TEST' }));
+    ai.completionQueue.push(toolCall('propose_action', {
+      action: 'send_reminder',
+      reason: 'A reminder is appropriate.',
+      draft_message: 'A friendly reminder.'
+    }));
+    const { app } = appWith(store, ai, new StubPayPal(), toolkit);
+    const quote = makeQuote();
+    saveBalanceInvoice(store, quote);
+    const payment = store.getPayment(quote.id, 'balance')!;
+    payment.updated_at = timestamp();
+    store.savePayment(quote.id, payment);
+    const sentAt = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    store.saveEvent({
+      ...createEvent('paypal', 'tool_call', quote.id, {
+        tool: 'send_invoice',
+        output: { invoice_id: 'INV-TEST' }
+      }),
+      created_at: sentAt
+    });
+
+    const response = await app.request(`/api/quotes/${quote.id}/collections/run`, { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    const run = await response.json() as { proposal: Proposal };
+    expect(run.proposal.action).toBe('wait');
+    expect(run.proposal.reason).toBe(
+      'The balance invoice was sent 2 days ago; your rule is to wait 3 days before a reminder.'
+    );
+    expect(run.proposal.draft_message).toBe('A friendly reminder.');
     store.close();
   });
 
@@ -887,6 +938,9 @@ describe('collections safeguards', () => {
     const { app } = appWith(store, ai, new StubPayPal(), toolkit);
     const quote = makeQuote({ client_name: 'Casey' });
     saveBalanceInvoice(store, quote);
+    const seller = store.getSeller()!;
+    seller.rules.wait_days_before_nudge = 0;
+    store.saveSeller(seller);
 
     const response = await app.request(`/api/quotes/${quote.id}/collections/run`, { method: 'POST' });
 

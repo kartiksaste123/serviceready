@@ -998,6 +998,25 @@ export function createApp(options: AppOptions = {}): Hono {
         draft_message: proposed.draft_message
       };
     }
+    if (proposed.action === 'send_reminder') {
+      const sendEvent = store.listEvents(quote.id).find((event) => {
+        if (event.actor !== 'paypal' || event.tool !== 'send_invoice' || !event.output) return false;
+        const output = event.output as Record<string, unknown>;
+        return output.invoice_id === payment.paypal_invoice_id;
+      });
+      const invoiceSentAt = Date.parse(sendEvent?.created_at ?? payment.updated_at);
+      const daysSinceInvoiceSent = Number.isFinite(invoiceSentAt)
+        ? Math.max(0, Math.floor((Date.now() - invoiceSentAt) / 86_400_000))
+        : 0;
+      const waitDays = seller.rules.wait_days_before_nudge;
+      if (daysSinceInvoiceSent < waitDays) {
+        proposed = {
+          action: 'wait',
+          reason: `The balance invoice was sent ${daysSinceInvoiceSent} day${daysSinceInvoiceSent === 1 ? '' : 's'} ago; your rule is to wait ${waitDays} days before a reminder.`,
+          draft_message: proposed.draft_message
+        };
+      }
+    }
     const proposal: Proposal = {
       id: createId('prop'),
       quote_id: quote.id,

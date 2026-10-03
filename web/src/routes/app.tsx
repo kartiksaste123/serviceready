@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
@@ -40,6 +40,8 @@ const NAV = [
 ] as const;
 function AppLayout() {
   const [open, setOpen] = useState(false);
+  const pathname = useLocation().pathname;
+  const showKpis = pathname === "/app" || pathname === "/app/collections";
   const pending = useQuery({
     queryKey: ["proposals", "pending"],
     queryFn: () => api.listProposals("pending"),
@@ -47,7 +49,7 @@ function AppLayout() {
   const count = pending.data?.length ?? 0;
   return (
     <div className="min-h-screen bg-muted lg:grid lg:grid-cols-[250px_1fr]">
-      <aside className="sticky top-0 z-30 border-b border-border bg-background lg:h-screen lg:border-b-0 lg:border-r">
+      <aside className="sticky top-0 z-30 border-b border-border bg-background lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r">
         <div className="flex h-16 items-center justify-between px-5">
           <Link to="/">
             <Wordmark />
@@ -61,7 +63,7 @@ function AppLayout() {
           </button>
         </div>
         <nav
-          className={`${open ? "flex" : "hidden"} flex-col gap-1 border-t border-border px-3 py-3 lg:flex lg:border-0`}
+          className={`${open ? "flex" : "hidden"} flex-col gap-1 border-t border-border px-3 py-3 lg:flex lg:flex-1 lg:border-0`}
         >
           {NAV.map((n) => (
             <Link
@@ -84,7 +86,7 @@ function AppLayout() {
             </Link>
           ))}
         </nav>
-        <div className="absolute bottom-5 left-5 right-5 hidden border-t border-border pt-4 text-sm lg:block">
+        <div className="mt-auto hidden border-t border-border px-5 pb-5 pt-4 text-sm lg:block">
           <p className="font-semibold">Maya Rao Studio</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {USE_MOCKS ? "Demo workspace · PayPal sandbox" : "PayPal sandbox"}
@@ -93,7 +95,7 @@ function AppLayout() {
       </aside>
       <div className="min-w-0">
         <div className="mx-auto max-w-7xl px-5 py-7 sm:px-8">
-          <KPIs />
+          {showKpis && <KPIs />}
           <Outlet />
         </div>
       </div>

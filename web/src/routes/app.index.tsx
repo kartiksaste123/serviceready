@@ -109,7 +109,7 @@ function Bookings() {
               }}
             />
           </div>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex w-full min-w-0 gap-1 overflow-x-auto pb-1 sm:w-auto sm:flex-wrap sm:overflow-visible">
             {(["all", "quoted", "deposit_paid", "balance_invoiced", "paid"] as const).map((s) => (
               <button
                 key={s}
@@ -117,7 +117,7 @@ function Bookings() {
                   setSt(s);
                   setPage(0);
                 }}
-                className={`rounded-lg border px-2.5 py-1.5 text-sm ${st === s ? "border-foreground bg-primary text-primary-foreground" : "border-input bg-background text-muted-foreground hover:text-foreground"}`}
+                className={`shrink-0 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-sm ${st === s ? "border-foreground bg-primary text-primary-foreground" : "border-input bg-background text-muted-foreground hover:text-foreground"}`}
               >
                 {s === "all" ? "All" : statusLabel[s]}
               </button>

@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Clock, FileText, Upload } from "lucide-react";
+import { Check, Clock, Copy, ExternalLink, FileText, Upload } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { money0 } from "@/lib/format";
 import { Empty, PageHeader } from "@/components/kit";
@@ -22,6 +23,11 @@ export const Route = createFileRoute("/app/catalog")({
 
 function Catalog() {
   const { data, isLoading } = useQuery({ queryKey: ["services"], queryFn: api.listServices });
+  const { data: seller } = useQuery({ queryKey: ["seller"], queryFn: api.getSeller });
+  const storefrontUrl =
+    seller && typeof window !== "undefined"
+      ? `${window.location.origin}/s/${seller.slug}`
+      : "";
   return (
     <>
       <PageHeader title="Services & prices" sub="What AI assistants and clients can book.">
@@ -78,6 +84,51 @@ function Catalog() {
           ))}
         </div>
       )}
+      <section className="glass-card mt-5 p-5">
+        <h2 className="font-semibold">How clients find you</h2>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <p className="min-w-0 flex-1 break-all rounded-lg border border-border bg-muted px-3 py-2 font-mono text-sm text-link">
+            {storefrontUrl || "Loading storefront link…"}
+          </p>
+          <div className="flex shrink-0 gap-2">
+            {storefrontUrl ? (
+              <a
+                href={storefrontUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-glass btn-sm"
+              >
+                <ExternalLink className="size-3.5" />
+                Open
+              </a>
+            ) : (
+              <button className="btn-glass btn-sm" disabled>
+                <ExternalLink className="size-3.5" />
+                Open
+              </button>
+            )}
+            <button
+              className="btn-glass btn-sm"
+              disabled={!storefrontUrl}
+              onClick={() => {
+                if (!storefrontUrl) return;
+                navigator.clipboard.writeText(storefrontUrl);
+                toast.success("Storefront link copied");
+              }}
+            >
+              <Copy className="size-3.5" />
+              Copy
+            </button>
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          AI assistants can also book you through your{" "}
+          <Link to="/app/connect" className="text-link">
+            connection link
+          </Link>
+          .
+        </p>
+      </section>
     </>
   );
 }

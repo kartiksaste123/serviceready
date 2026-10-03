@@ -83,7 +83,7 @@ function Home() {
           <nav className="hidden items-center gap-7 text-sm md:flex">
             <a href="#how" className="text-muted-foreground hover:text-foreground">
               How it works
-            </a>
+          </a>
             <a href="#proof" className="text-muted-foreground hover:text-foreground">
               Why now
             </a>
@@ -92,13 +92,15 @@ function Home() {
             </a>
           </nav>
           <Link to="/onboard" className="btn-primary btn-sm">
-            Make my services bookable <ArrowRight className="size-4" />
+            <span className="sm:hidden">Get started</span>
+            <span className="hidden sm:inline">Make my services bookable</span>
+            <ArrowRight className="size-4" />
           </Link>
         </div>
       </header>
       <main>
         <section className="border-b border-border">
-          <div className="mx-auto grid max-w-7xl items-center gap-14 px-5 py-16 sm:px-8 lg:grid-cols-[1.03fr_.97fr] lg:py-24">
+          <div className="mx-auto grid max-w-7xl items-center gap-14 px-5 py-11 sm:px-8 lg:grid-cols-[1.03fr_.97fr] lg:py-16">
             <div>
               <p className="eyebrow">The agent-ready service desk for freelancers</p>
               <h1 className="mt-5 max-w-3xl text-5xl font-semibold leading-[1.02] sm:text-6xl lg:text-7xl">
@@ -134,7 +136,7 @@ function Home() {
             </div>
           </div>
         </section>
-        <section id="how" className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
+        <section id="how" className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
           <div className="max-w-2xl">
             <p className="eyebrow">How it works</p>
             <h2 className="mt-3 text-3xl font-semibold sm:text-5xl">
@@ -160,7 +162,7 @@ function Home() {
           </div>
         </section>
         <section id="proof" className="border-y border-border bg-muted">
-          <div className="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[.8fr_1.2fr]">
+          <div className="mx-auto grid max-w-7xl gap-12 px-5 py-14 sm:px-8 lg:grid-cols-[.8fr_1.2fr]">
             <div>
               <p className="eyebrow">Why now</p>
               <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">Less chasing. More trust.</h2>
@@ -186,7 +188,7 @@ function Home() {
         </section>
         <section
           id="control"
-          className="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 lg:grid-cols-2"
+          className="mx-auto grid max-w-7xl gap-12 px-5 py-14 sm:px-8 lg:grid-cols-2"
         >
           <div>
             <p className="eyebrow">Human-in-the-loop by design</p>
@@ -237,7 +239,7 @@ function Home() {
           </ul>
         </section>
         <section className="border-y border-border bg-muted">
-          <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-8">
+          <div className="mx-auto max-w-3xl px-5 py-14 text-center sm:px-8">
             <MessageSquareText className="mx-auto size-7" />
             <h2 className="mt-5 text-4xl font-semibold">
               Make your services ready for the next client.

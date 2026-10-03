@@ -41,14 +41,14 @@ export function computeServiceDrafts(input: unknown[]): { services: ServiceDraft
     }
     if (priceCents <= 0) {
       flags.push({ tmp_id: item.tmp_id, field: 'price_cents', severity: 'error', message: 'Price must be greater than $0.' });
-    } else if (!nonUsdPrice && median > 0 && priceCents < median / 3) {
+    } else if (!nonUsdPrice && median > 0 && priceCents < median / 10) {
       flags.push({
         tmp_id: item.tmp_id,
         field: 'price_cents',
         severity: 'warning',
         message: `${usd(priceCents)} is ${multiplier(median / priceCents)} below your median — typo?`
       });
-    } else if (!nonUsdPrice && median > 0 && priceCents > median * 3) {
+    } else if (!nonUsdPrice && median > 0 && priceCents > median * 10) {
       flags.push({
         tmp_id: item.tmp_id,
         field: 'price_cents',

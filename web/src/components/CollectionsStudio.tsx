@@ -412,7 +412,7 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
   if (quotesQuery.isLoading) {
     return (
       <div
-        className="h-[920px] animate-pulse rounded-2xl bg-muted"
+        className="h-[560px] animate-pulse rounded-2xl bg-muted sm:h-[700px] lg:h-[920px]"
         aria-label="Loading collections report"
       />
     );
@@ -457,9 +457,9 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
 
   return (
     <>
-      <div className="collections-studio h-[920px] min-h-[720px] w-full overflow-hidden rounded-2xl tabular-nums">
+      <div className="collections-studio h-[560px] min-h-0 w-full overflow-x-auto overflow-y-auto rounded-2xl tabular-nums sm:h-[700px] lg:h-[920px]">
         <AgStudio<CollectionsRegistry>
-          className="h-full w-full"
+          className="h-full min-w-[720px] lg:min-w-0"
           data={data}
           initialState={initialState}
           mode="view"

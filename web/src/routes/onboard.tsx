@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -17,6 +17,7 @@ import { api } from "@/lib/api";
 import type { Flag, Service, ServiceDraft } from "@/lib/types";
 import { Wordmark } from "@/components/kit";
 import { money } from "@/lib/format";
+import { RATE_CARD_EXAMPLES } from "@/lib/examples";
 
 export const Route = createFileRoute("/onboard")({
   head: () => ({
@@ -38,9 +39,6 @@ export const Route = createFileRoute("/onboard")({
   component: Onboard,
 });
 
-const EXAMPLE =
-  "logo 450 (2 rounds) | brand kit w/ logo+colors+fonts 1200, half upfront | social templates x10 - 15 | rush +30% | website landing pg 900 2wks";
-
 const flagFieldByDraftField: Partial<Record<keyof ServiceDraft, string>> = {
   price_cents: "price_cents",
   lead_time_days: "lead_time_days",
@@ -53,6 +51,8 @@ function Onboard() {
   const [drafts, setDrafts] = useState<ServiceDraft[] | null>(null);
   const [flags, setFlags] = useState<Flag[]>([]);
   const [published, setPublished] = useState<Service[] | null>(null);
+  const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null);
+  const examplePanelRef = useRef<HTMLDivElement>(null);
   const parse = useMutation({
     mutationFn: () => api.parseCatalog(raw),
     onSuccess: (r) => {
@@ -107,37 +107,85 @@ function Onboard() {
         </ol>
 
         {step === 1 && (
-          <section className="glass-card max-w-3xl p-6 sm:p-8">
-            <h1 className="display text-3xl sm:text-4xl">
-              Paste your rate card, price list or WhatsApp message
-            </h1>
-            <p className="mt-3 text-muted-foreground">
-              Any format. AI will structure it — it never changes your prices, only flags what looks
-              off.
-            </p>
-            <textarea
-              value={raw}
-              onChange={(e) => setRaw(e.target.value)}
-              rows={8}
-              placeholder="e.g. logo 450, brand kit 1200 half upfront…"
-              className="field mt-6 resize-y font-mono text-[13px] leading-relaxed"
-            />
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                className="btn-primary"
-                disabled={!raw.trim() || parse.isPending}
-                onClick={() => parse.mutate()}
-              >
-                {parse.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Wand2 className="size-4" />
-                )}
-                {parse.isPending ? "Structuring…" : "Structure with AI"}
-              </button>
-              <button className="btn-glass" onClick={() => setRaw(EXAMPLE)}>
-                Load example
-              </button>
+          <section className="grid gap-5 lg:grid-cols-2 lg:items-start">
+            <div className="glass-card p-6 sm:p-8">
+              <h1 className="display text-3xl sm:text-4xl">
+                Paste your rate card, price list or WhatsApp message
+              </h1>
+              <p className="mt-3 text-muted-foreground">
+                Any format. AI will structure it — it never changes your prices, only flags what
+                looks off.
+              </p>
+              <textarea
+                value={raw}
+                onChange={(e) => {
+                  setRaw(e.target.value);
+                  setSelectedExampleId(null);
+                }}
+                rows={8}
+                placeholder="e.g. logo 450, brand kit 1200 half upfront…"
+                className="field mt-6 resize-y font-mono text-[13px] leading-relaxed"
+              />
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  className="btn-primary"
+                  disabled={!raw.trim() || parse.isPending}
+                  onClick={() => parse.mutate()}
+                >
+                  {parse.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="size-4" />
+                  )}
+                  {parse.isPending ? "Structuring…" : "Structure with AI"}
+                </button>
+                <button
+                  className="btn-glass lg:hidden"
+                  onClick={() =>
+                    examplePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                  }
+                >
+                  Try an example
+                </button>
+              </div>
+            </div>
+            <div
+              ref={examplePanelRef}
+              className="glass-card scroll-mt-6 p-5 sm:p-6"
+              id="rate-card-examples"
+            >
+              <h2 className="text-lg font-semibold">Try an example</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Choose a rate card to fill the editor. It will not submit until you are ready.
+              </p>
+              <div className="mt-4 space-y-2">
+                {RATE_CARD_EXAMPLES.map((example) => (
+                  <button
+                    key={example.id}
+                    type="button"
+                    aria-pressed={selectedExampleId === example.id}
+                    onClick={() => {
+                      setRaw(example.text);
+                      setSelectedExampleId(example.id);
+                    }}
+                    className={`w-full rounded-lg border p-3 text-left text-sm transition ${
+                      selectedExampleId === example.id
+                        ? "border-foreground bg-muted text-foreground"
+                        : "border-border bg-background hover:bg-muted"
+                    }`}
+                  >
+                    {example.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-5 border-t border-border pt-4">
+                <h3 className="text-sm font-semibold">What the AI does</h3>
+                <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                  <li>Finds each service, price, deposit and delivery time</li>
+                  <li>Flags missing delivery times, non-USD prices and prices that look like typos</li>
+                  <li>Never changes or converts your prices. You review everything before publishing</li>
+                </ul>
+              </div>
             </div>
           </section>
         )}

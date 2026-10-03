@@ -14,8 +14,52 @@ const balanceState = (q: Quote) =>
         : { label: "Not due", icon: Clock3, className: "text-muted-foreground" };
 export function BookingsGrid({ rows, onOpen }: { rows: Quote[]; onOpen: (id: string) => void }) {
   return (
-    <div className="max-h-[560px] overflow-auto">
-      <table className="w-full min-w-[900px] border-collapse text-sm tabular-nums">
+    <div>
+      <div className="max-h-[560px] space-y-3 overflow-auto p-3 md:hidden">
+        {rows.map((q) => {
+          const balance = balanceState(q);
+          const BalanceIcon = balance.icon;
+          const deposit = depositState(q);
+          return (
+            <button
+              key={q.id}
+              type="button"
+              onClick={() => onOpen(q.id)}
+              className="glass-card block w-full p-4 text-left transition hover:bg-muted"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{q.client_name}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{q.client_email}</p>
+                </div>
+                <StatusBadge status={q.status} />
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">{q.service_title}</p>
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3 text-sm">
+                <span className="text-muted-foreground">Total</span>
+                <span className="font-semibold tabular-nums">{money(q.total_cents)}</span>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  {deposit === "Paid" ? (
+                    <Check className="size-3.5 text-success" />
+                  ) : (
+                    <Clock3 className="size-3.5" />
+                  )}
+                  Deposit {deposit} · {money(q.deposit_cents)}
+                </span>
+                <span className={`flex items-center gap-1.5 ${balance.className}`}>
+                  <BalanceIcon className="size-3.5" />
+                  Balance {balance.label}
+                </span>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">Updated {timeAgo(q.updated_at)}</p>
+            </button>
+          );
+        })}
+      </div>
+      <div className="hidden max-h-[560px] overflow-auto md:block">
+        <table className="w-full min-w-[900px] border-collapse text-sm tabular-nums">
         <thead className="sticky top-0 z-10 bg-muted text-left text-xs text-muted-foreground">
           <tr>
             {[
@@ -80,7 +124,8 @@ export function BookingsGrid({ rows, onOpen }: { rows: Quote[]; onOpen: (id: str
             );
           })}
         </tbody>
-      </table>
+        </table>
+      </div>
     </div>
   );
 }

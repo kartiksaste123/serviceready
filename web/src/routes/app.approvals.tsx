@@ -47,6 +47,25 @@ function Approvals() {
           ))}
         </div>
       )}
+      {!isLoading && (
+        <div className="mt-5 grid gap-2 sm:grid-cols-3">
+          {[
+            "An assistant checks PayPal",
+            "It drafts a message for you",
+            "You approve & send, or don't send",
+          ].map((step, index) => (
+            <div
+              key={step}
+              className="glass-row flex items-start gap-3 p-3 text-sm leading-5"
+            >
+              <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border bg-background text-xs font-semibold">
+                {index + 1}
+              </span>
+              <span>{step}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }

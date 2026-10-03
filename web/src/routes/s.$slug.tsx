@@ -106,7 +106,7 @@ function Storefront() {
                       ))}
                     </ul>
                     <button
-                      className="btn-primary btn-sm mt-4 self-start"
+                      className="btn-primary btn-sm mt-auto self-start"
                       onClick={() => setPicked(s)}
                     >
                       Request quote <ArrowRight className="size-3.5" />
@@ -250,7 +250,7 @@ function AgentChat({ slug }: { slug: string }) {
     m.mutate(all);
   };
   return (
-    <aside className="glass-card flex h-[640px] flex-col overflow-hidden lg:sticky lg:top-6">
+    <aside className="glass-card flex h-[360px] min-h-0 flex-col overflow-hidden sm:h-[400px] lg:sticky lg:top-6 lg:h-full">
       <div className="flex items-center gap-3 border-b border-border px-5 py-4">
         <span className="icon-tile">
           <Bot className="size-4" />
@@ -262,16 +262,18 @@ function AgentChat({ slug }: { slug: string }) {
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {!items.length && (
-          <div className="space-y-2 pt-4">
+          <div className="space-y-2 pt-2 lg:pt-4">
             <p className="text-center text-sm text-muted-foreground">Ask like a client would:</p>
             {[
               "What services do you offer?",
               "I want a logo for my bakery, email me at sam@bakery.com",
+              "How much is the deposit for a brand kit?",
+              "How long does a landing page take?",
             ].map((s) => (
               <button
                 key={s}
                 onClick={() => send(s)}
-                className="glass-row block w-full p-3 text-left text-[13px] hover:bg-muted"
+                className="glass-row block w-full p-2.5 text-left text-[12px] hover:bg-muted sm:p-3 sm:text-[13px]"
               >
                 {s}
               </button>
