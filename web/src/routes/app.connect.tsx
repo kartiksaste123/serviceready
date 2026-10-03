@@ -31,7 +31,6 @@ const TOOLS = [
 ];
 
 const PROMPTS = [
-  "What services does Maya Rao Studio offer?",
   "Get me a quote for a logo for my bakery. My email is sam@bakery.com",
   "What's the status of my quote?",
 ];
@@ -42,24 +41,31 @@ const copy = (t: string) => {
 };
 
 function Connect() {
+  const { data: seller, isLoading: sellerLoading } = useQuery({
+    queryKey: ["seller"],
+    queryFn: api.getSeller,
+  });
   const { data, isLoading } = useQuery({
-    queryKey: ["public", "maya-rao-studio"],
-    queryFn: () => api.getPublicStore("maya-rao-studio"),
+    queryKey: ["public", seller?.slug],
+    queryFn: () => api.getPublicStore(seller!.slug),
+    enabled: Boolean(seller?.slug),
   });
   const url = data?.agent.mcp_url ?? "";
+  const slug = seller?.slug ?? "studio";
+  const prompts = [`What services does ${seller?.name ?? "my studio"} offer?`, ...PROMPTS];
   const claude = JSON.stringify(
-    { mcpServers: { "maya-rao-studio": { command: "npx", args: ["-y", "mcp-remote", url] } } },
+    { mcpServers: { [slug]: { command: "npx", args: ["-y", "mcp-remote", url] } } },
     null,
     2,
   );
-  const codex = `[mcp_servers.maya-rao-studio]\nurl = "${url}"`;
+  const codex = `[mcp_servers.${slug}]\nurl = "${url}"`;
   return (
     <>
       <PageHeader
         title="Connect AI assistants"
         sub="Give Claude, ChatGPT or a browser assistant access to your published services."
       />
-      {isLoading ? (
+      {sellerLoading || isLoading ? (
         <Skeleton className="h-96 rounded-2xl" />
       ) : (
         <div className="min-w-0 space-y-5">
@@ -110,7 +116,7 @@ function Connect() {
                     Copy a prompt into your connected assistant.
                   </p>
                   <div className="mt-3 space-y-2">
-                    {PROMPTS.map((prompt) => (
+                    {prompts.map((prompt) => (
                       <div
                         key={prompt}
                         className="glass-row flex min-w-0 items-center gap-2 p-3"

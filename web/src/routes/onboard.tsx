@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -18,6 +18,7 @@ import type { Flag, Service, ServiceDraft } from "@/lib/types";
 import { Wordmark } from "@/components/kit";
 import { money } from "@/lib/format";
 import { RATE_CARD_EXAMPLES } from "@/lib/examples";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/onboard")({
   head: () => ({
@@ -47,6 +48,14 @@ const flagFieldByDraftField: Partial<Record<keyof ServiceDraft, string>> = {
 };
 
 function Onboard() {
+  const navigate = useNavigate();
+  const pathname = useLocation().pathname;
+  const account = useQuery({ queryKey: ["me"], queryFn: api.auth.me });
+  const storefront = useQuery({
+    queryKey: ["public", account.data?.seller.slug],
+    queryFn: () => api.getPublicStore(account.data!.seller.slug),
+    enabled: Boolean(account.data?.seller.slug),
+  });
   const [raw, setRaw] = useState("");
   const [drafts, setDrafts] = useState<ServiceDraft[] | null>(null);
   const [flags, setFlags] = useState<Flag[]>([]);
@@ -69,6 +78,20 @@ function Onboard() {
   });
   const step = published ? 3 : drafts ? 2 : 1;
   const hasErrorFlags = flags.some((flag) => flag.severity === "error");
+  useEffect(() => {
+    if (!account.isLoading && !account.data) {
+      void navigate({ to: "/login", search: { redirect: pathname } });
+    }
+  }, [account.data, account.isLoading, navigate, pathname]);
+
+  if (account.isLoading || !account.data) {
+    return (
+      <main className="min-h-screen bg-muted p-6">
+        <Skeleton className="mx-auto mt-12 h-72 max-w-3xl rounded-2xl" />
+      </main>
+    );
+  }
+
   const upd = (id: string, patch: Partial<ServiceDraft>) => {
     setDrafts((d) => d?.map((x) => (x.tmp_id === id ? { ...x, ...patch } : x)) ?? null);
     const fields = Object.keys(patch)
@@ -348,12 +371,16 @@ function Onboard() {
             <p className="mt-3 text-muted-foreground">
               {published.length} services published. AI assistants can discover and quote them at:
             </p>
-            <div className="glass-row mx-auto mt-5 flex max-w-md items-center gap-2 p-2 pl-4 font-mono text-[13px]">
-              <span className="truncate">https://serviceready.app/mcp/maya-rao-studio</span>
+            <div className="glass-row mx-auto mt-5 flex max-w-md min-w-0 items-center gap-2 p-2 pl-4 font-mono text-[13px]">
+              <span className="min-w-0 flex-1 truncate">
+                {storefront.data?.agent.mcp_url ?? `${window.location.origin}/mcp`}
+              </span>
               <button
                 className="btn-glass btn-sm ml-auto"
                 onClick={() => {
-                  navigator.clipboard.writeText("https://serviceready.app/mcp/maya-rao-studio");
+                  navigator.clipboard.writeText(
+                    storefront.data?.agent.mcp_url ?? `${window.location.origin}/mcp`,
+                  );
                   toast.success("Copied");
                 }}
               >
@@ -361,7 +388,7 @@ function Onboard() {
               </button>
             </div>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Link to="/s/$slug" params={{ slug: "maya-rao-studio" }} className="btn-primary">
+              <Link to="/s/$slug" params={{ slug: account.data.seller.slug }} className="btn-primary">
                 View storefront <ArrowRight className="size-4" />
               </Link>
               <Link to="/app/connect" className="btn-glass">

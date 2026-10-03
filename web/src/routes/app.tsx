@@ -1,5 +1,5 @@
-import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   CheckSquare,
@@ -11,8 +11,9 @@ import {
   Settings,
   X,
 } from "lucide-react";
-import { useState } from "react";
-import { api, USE_MOCKS } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
 import { money } from "@/lib/format";
 import { Wordmark } from "@/components/kit";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,12 +42,40 @@ const NAV = [
 function AppLayout() {
   const [open, setOpen] = useState(false);
   const pathname = useLocation().pathname;
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const account = useQuery({ queryKey: ["me"], queryFn: api.auth.me });
   const showKpis = pathname === "/app" || pathname === "/app/collections";
   const pending = useQuery({
     queryKey: ["proposals", "pending"],
     queryFn: () => api.listProposals("pending"),
+    enabled: Boolean(account.data),
   });
   const count = pending.data?.length ?? 0;
+  useEffect(() => {
+    if (!account.isLoading && !account.data) {
+      void navigate({ to: "/login", search: { redirect: pathname } });
+    }
+  }, [account.data, account.isLoading, navigate, pathname]);
+
+  const logout = async () => {
+    try {
+      await api.auth.logout();
+      queryClient.clear();
+      await navigate({ to: "/login" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't log out.");
+    }
+  };
+
+  if (account.isLoading || !account.data) {
+    return (
+      <main className="min-h-screen bg-muted p-6">
+        <Skeleton className="mx-auto mt-12 h-72 max-w-3xl rounded-2xl" />
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-muted lg:grid lg:grid-cols-[250px_1fr]">
       <aside className="sticky top-0 z-30 border-b border-border bg-background lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r">
@@ -85,12 +114,26 @@ function AppLayout() {
               )}
             </Link>
           ))}
+          <div className="mt-3 border-t border-border px-3 pt-4 text-sm lg:hidden">
+            <p className="font-semibold">{account.data.seller.name}</p>
+            <p className="mt-1 break-all text-xs text-muted-foreground">{account.data.user.email}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {account.data.user.is_demo ? "Demo studio · PayPal sandbox" : "PayPal sandbox"}
+            </p>
+            <button className="mt-3 text-link underline underline-offset-4" onClick={() => void logout()}>
+              Log out
+            </button>
+          </div>
         </nav>
         <div className="mt-auto hidden border-t border-border px-5 pb-5 pt-4 text-sm lg:block">
-          <p className="font-semibold">Maya Rao Studio</p>
+          <p className="font-semibold">{account.data.seller.name}</p>
+          <p className="mt-1 break-all text-xs text-muted-foreground">{account.data.user.email}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {USE_MOCKS ? "Demo workspace · PayPal sandbox" : "PayPal sandbox"}
+            {account.data.user.is_demo ? "Demo studio · PayPal sandbox" : "PayPal sandbox"}
           </p>
+          <button className="mt-3 text-link underline underline-offset-4" onClick={() => void logout()}>
+            Log out
+          </button>
         </div>
       </aside>
       <div className="min-w-0">

@@ -1,4 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   ArrowRight,
   Bot,
@@ -11,6 +13,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Wordmark } from "@/components/kit";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -73,10 +77,26 @@ const steps = [
 ];
 
 function Home() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [demoPending, setDemoPending] = useState(false);
+  const tryDemo = async () => {
+    setDemoPending(true);
+    try {
+      await api.auth.demo();
+      queryClient.clear();
+      await navigate({ to: "/app" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't open the demo studio.");
+    } finally {
+      setDemoPending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-5 sm:px-8">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
@@ -91,16 +111,21 @@ function Home() {
               Your control
             </a>
           </nav>
-          <Link to="/onboard" className="btn-primary btn-sm">
+          <div className="flex shrink-0 items-center gap-2">
+            <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
+              Log in
+            </Link>
+            <Link to="/signup" className="btn-primary btn-sm">
             <span className="sm:hidden">Get started</span>
             <span className="hidden sm:inline">Make my services bookable</span>
             <ArrowRight className="size-4" />
-          </Link>
+            </Link>
+          </div>
         </div>
       </header>
       <main>
         <section className="border-b border-border">
-          <div className="mx-auto grid max-w-7xl items-center gap-14 px-5 py-11 sm:px-8 lg:grid-cols-[1.03fr_.97fr] lg:py-16">
+          <div className="mx-auto grid max-w-7xl items-center gap-10 px-5 py-8 sm:px-8 lg:grid-cols-[1.03fr_.97fr] lg:py-11">
             <div>
               <p className="eyebrow">The agent-ready service desk for freelancers</p>
               <h1 className="mt-5 max-w-3xl text-5xl font-semibold leading-[1.02] sm:text-6xl lg:text-7xl">
@@ -111,23 +136,26 @@ function Home() {
                 begins, and keep every client follow-up under your control.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link to="/onboard" className="btn-primary">
-                  Import your rate card <ArrowRight className="size-4" />
+                <Link to="/signup" className="btn-primary">
+                  Get started <ArrowRight className="size-4" />
                 </Link>
                 <Link to="/s/$slug" params={{ slug: "maya-rao-studio" }} className="btn-glass">
                   See Maya&apos;s storefront
                 </Link>
+                <button className="btn-glass" onClick={() => void tryDemo()} disabled={demoPending}>
+                  {demoPending ? "Opening demo…" : "Try the demo"}
+                </button>
               </div>
               <p className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
                 <Check className="size-4 text-success" />
-                No account needed for this interactive demo.
+                Maya Rao Studio is available as a one-click demo.
               </p>
             </div>
             <BookingProof />
           </div>
         </section>
         <section className="border-b border-border bg-muted">
-          <div className="mx-auto max-w-7xl px-5 py-7 sm:px-8">
+          <div className="mx-auto max-w-7xl px-5 py-5 sm:px-8">
             <p className="text-center text-xs font-semibold text-muted-foreground">Built on</p>
             <div className="mt-4 flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm font-semibold">
               {tools.map((tool) => (
@@ -136,7 +164,7 @@ function Home() {
             </div>
           </div>
         </section>
-        <section id="how" className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
+        <section id="how" className="mx-auto max-w-7xl px-5 py-9 sm:px-8">
           <div className="max-w-2xl">
             <p className="eyebrow">How it works</p>
             <h2 className="mt-3 text-3xl font-semibold sm:text-5xl">
@@ -162,7 +190,7 @@ function Home() {
           </div>
         </section>
         <section id="proof" className="border-y border-border bg-muted">
-          <div className="mx-auto grid max-w-7xl gap-12 px-5 py-14 sm:px-8 lg:grid-cols-[.8fr_1.2fr]">
+          <div className="mx-auto grid max-w-7xl gap-10 px-5 py-9 sm:px-8 lg:grid-cols-[.8fr_1.2fr]">
             <div>
               <p className="eyebrow">Why now</p>
               <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">Less chasing. More trust.</h2>
@@ -188,7 +216,7 @@ function Home() {
         </section>
         <section
           id="control"
-          className="mx-auto grid max-w-7xl gap-12 px-5 py-14 sm:px-8 lg:grid-cols-2"
+          className="mx-auto grid max-w-7xl gap-10 px-5 py-9 sm:px-8 lg:grid-cols-2"
         >
           <div>
             <p className="eyebrow">Human-in-the-loop by design</p>
@@ -239,7 +267,7 @@ function Home() {
           </ul>
         </section>
         <section className="border-y border-border bg-muted">
-          <div className="mx-auto max-w-3xl px-5 py-14 text-center sm:px-8">
+          <div className="mx-auto max-w-3xl px-5 py-9 text-center sm:px-8">
             <MessageSquareText className="mx-auto size-7" />
             <h2 className="mt-5 text-4xl font-semibold">
               Make your services ready for the next client.
@@ -247,8 +275,8 @@ function Home() {
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
               Paste the rate card you already have. Review the result before anything is published.
             </p>
-            <Link to="/onboard" className="btn-primary mt-8">
-              Import your rate card <ArrowRight className="size-4" />
+            <Link to="/signup" className="btn-primary mt-8">
+              Get started <ArrowRight className="size-4" />
             </Link>
           </div>
         </section>
@@ -261,7 +289,7 @@ function Home() {
             <a href="#how" className="hover:text-foreground">
               How it works
             </a>
-            <Link to="/app" className="hover:text-foreground">
+            <Link to="/login" className="hover:text-foreground">
               Seller console
             </Link>
           </div>

@@ -27,6 +27,7 @@ const PAGE = 10;
 function Bookings() {
   const nav = useNavigate();
   const { data, isLoading } = useQuery({ queryKey: ["quotes"], queryFn: api.listQuotes });
+  const services = useQuery({ queryKey: ["services"], queryFn: api.listServices });
   const [q, setQ] = useState("");
   const [st, setSt] = useState<QuoteStatus | "all">("all");
   const [page, setPage] = useState(0);
@@ -45,6 +46,19 @@ function Bookings() {
   return (
     <>
       <PageHeader title="Bookings" sub="Track each client from quote to final payment." />
+      {!services.isLoading && services.data?.length === 0 && (
+        <section className="glass-card mb-6 flex flex-wrap items-center justify-between gap-4 p-5">
+          <div>
+            <h2 className="font-semibold">Add your services to get your storefront link</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Publish a rate card so clients and assistants can find you.
+            </p>
+          </div>
+          <Link to="/onboard" className="btn-primary btn-sm">
+            Add services
+          </Link>
+        </section>
+      )}
       <section className="mb-8">
         <h2 className="mb-3 text-sm font-semibold">What needs you today</h2>
         <div className="grid gap-3 md:grid-cols-3">

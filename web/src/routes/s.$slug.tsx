@@ -20,13 +20,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 export const Route = createFileRoute("/s/$slug")({
   head: () => ({
     meta: [
-      { title: "Maya Rao Studio — Agent-ready storefront | ServiceReady" },
+      { title: "Storefront — ServiceReady" },
       {
         name: "description",
         content:
           "Brand design services you or your AI assistant can quote and book, with a PayPal deposit up front.",
       },
-      { property: "og:title", content: "Maya Rao Studio — Agent-ready storefront" },
+      { property: "og:title", content: "Storefront — ServiceReady" },
       {
         property: "og:description",
         content: "Quote and book brand design services directly or through an AI agent.",
@@ -121,7 +121,12 @@ function Storefront() {
           </>
         )}
       </main>
-      <QuoteDialog slug={slug} service={picked} onClose={() => setPicked(null)} />
+      <QuoteDialog
+        slug={slug}
+        service={picked}
+        sellerName={data?.seller.name ?? "your service provider"}
+        onClose={() => setPicked(null)}
+      />
     </div>
   );
 }
@@ -147,10 +152,12 @@ function AgentBadge({ mcp }: { mcp: string }) {
 function QuoteDialog({
   slug,
   service,
+  sellerName,
   onClose,
 }: {
   slug: string;
   service: Service | null;
+  sellerName: string;
   onClose: () => void;
 }) {
   const nav = useNavigate();
@@ -201,7 +208,7 @@ function QuoteDialog({
           <textarea
             className="field"
             rows={4}
-            placeholder="Tell Maya about the project"
+            placeholder={`Tell ${sellerName} about the project`}
             maxLength={2000}
             value={f.brief}
             onChange={(e) => setF({ ...f, brief: e.target.value })}

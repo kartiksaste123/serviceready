@@ -1,11 +1,27 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { Hono } from 'hono';
+import type { Context } from 'hono';
+import { getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { AIService, isDegenerateText, jsonSchemaTool } from './ai.js';
+import {
+  codeMatches,
+  createCode,
+  createSessionToken,
+  emailHint,
+  hashCode,
+  hashPassword,
+  hashSessionToken,
+  performDummyPasswordCheck,
+  verifyPassword
+} from './auth.js';
 import { ClientTools, toolSchemas } from './client-tools.js';
 import { calculateQuoteAmounts, computeServiceDrafts, isCompletedCapture } from './core.js';
 import { createEvent, createId, Store, timestamp } from './db.js';
+import type { AuthChallengeRecord, AuthPurpose, UserRecord } from './db.js';
+import { createMailer } from './mail.js';
+import type { Mailer } from './mail.js';
 import { createMcpServer } from './mcp.js';
 import { centsFromAmount, invoiceIdFrom, PayPalService, payerLink } from './paypal.js';
 import type {
@@ -194,8 +210,10 @@ function errorMessage(error: unknown): string {
 function detail(store: Store, quoteId: string): QuoteDetail {
   const quote = store.getQuote(quoteId);
   if (!quote) throw new HttpError(404, 'Quote not found.');
+  const seller = store.getSellerById(quote.seller_id);
   return {
     quote,
+    ...(seller ? { seller: { name: seller.name, slug: seller.slug } } : {}),
     payments: store.listPayments(quoteId),
     events: store.listEvents(quoteId),
     replies: store.listReplies(quoteId),
@@ -239,6 +257,7 @@ function seedDemoSamples(store: Store, baseUrl: string): void {
     const createdAt = new Date(Date.now() - sample.quoteAgeDays * 86_400_000).toISOString();
     const quote: Quote = {
       id: quoteId,
+      seller_id: 'seller_maya',
       service_id: service.id,
       service_title: service.title,
       client_name: sample.clientName,
@@ -355,6 +374,7 @@ export interface AppOptions {
   store?: Store;
   ai?: AIService;
   paypal?: PayPalService;
+  mailer?: Mailer;
   toolkitFactory?: () => ReturnType<PayPalService['toolkit']>;
   publicBaseUrl?: string;
 }
@@ -364,6 +384,7 @@ export function createApp(options: AppOptions = {}): Hono {
   const store = options.store ?? new Store();
   const ai = options.ai ?? new AIService();
   const paypal = options.paypal ?? new PayPalService();
+  const mailer = options.mailer ?? createMailer();
   const toolkitFactory = options.toolkitFactory ?? (() => paypal.toolkit());
   const baseUrl = options.publicBaseUrl ?? process.env.PUBLIC_BASE_URL ?? 'http://localhost:8080';
   const isDemoSampleQuote = (quoteId: string): boolean =>
@@ -374,6 +395,102 @@ export function createApp(options: AppOptions = {}): Hono {
     }
   };
   const rateLimit = new Map<string, number[]>();
+  const authRateLimit = new Map<string, number[]>();
+  const secureCookie = baseUrl.startsWith('https');
+  const getSessionContext = (c: Context): {
+    tokenHash: string;
+    user: UserRecord;
+    seller: NonNullable<ReturnType<Store['getSellerById']>>;
+  } | null => {
+    const token = getCookie(c, 'sr_session');
+    if (!token) return null;
+    const tokenHash = hashSessionToken(token);
+    const session = store.getSession(tokenHash);
+    if (!session) return null;
+    if (Date.parse(session.expires_at) <= Date.now()) {
+      store.deleteSession(tokenHash);
+      return null;
+    }
+    const user = store.getUserById(session.user_id);
+    const seller = user ? store.getSellerById(user.seller_id) : null;
+    if (!user || !seller) {
+      store.deleteSession(tokenHash);
+      return null;
+    }
+    return { tokenHash, user, seller };
+  };
+  const requireSeller = (c: Context) => {
+    const context = getSessionContext(c);
+    if (!context) throw new HttpError(401, 'Please log in.');
+    return context.seller;
+  };
+  const requireOwnedQuote = (c: Context, quoteId: string): Quote => {
+    const seller = requireSeller(c);
+    const quote = store.getQuote(quoteId);
+    if (!quote || quote.seller_id !== seller.id) throw new HttpError(404, 'Quote not found.');
+    return quote;
+  };
+  const createChallenge = async (user: UserRecord, purpose: AuthPurpose): Promise<AuthChallengeRecord> => {
+    const sentAt = timestamp();
+    const sendWindowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    if (store.countAuthSendsSince(user.id, sendWindowStart) >= 5) {
+      throw new HttpError(429, 'Too many codes requested. Try again in an hour.');
+    }
+    store.invalidateChallenges(user.id, purpose);
+    const challengeId = createId('auth');
+    const code = createCode();
+    const challenge: AuthChallengeRecord = {
+      id: challengeId,
+      user_id: user.id,
+      purpose,
+      code_hash: hashCode(challengeId, code),
+      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      attempts: 0,
+      sent_at: sentAt,
+      send_count: 1,
+      consumed_at: null,
+      created_at: sentAt
+    };
+    store.saveAuthChallenge(challenge);
+    store.recordAuthSend(user.id, sentAt);
+    try {
+      await mailer.sendCode(user.email, purpose, code);
+    } catch (error) {
+      store.deleteAuthChallenge(challenge.id);
+      const status = (error as { status?: unknown }).status;
+      if (status === 503) throw new HttpError(503, "Email sending isn't set up yet.");
+      throw new HttpError(502, "We couldn't send a code to this email. Check the address and try again.");
+    }
+    return challenge;
+  };
+  const challengeResponse = (challenge: AuthChallengeRecord, email: string) => ({
+    challenge_id: challenge.id,
+    purpose: challenge.purpose,
+    email_hint: emailHint(email)
+  });
+  const createSession = (c: Context, user: UserRecord) => {
+    const seller = store.getSellerById(user.seller_id);
+    if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
+    const token = createSessionToken();
+    const now = Date.now();
+    store.saveSession({
+      token_hash: hashSessionToken(token),
+      user_id: user.id,
+      expires_at: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      created_at: new Date(now).toISOString()
+    });
+    setCookie(c, 'sr_session', token, {
+      httpOnly: true,
+      sameSite: 'Lax',
+      path: '/',
+      maxAge: 30 * 24 * 60 * 60,
+      secure: secureCookie
+    });
+    return c.json({
+      user: { id: user.id, email: user.email, is_demo: user.id === 'user_demo' },
+      seller
+    });
+  };
 
   app.use('/api/*', async (c, next) => {
     const aiPath = /^\/api\/(catalog\/parse|public\/[^/]+\/quotes|quotes\/[^/]+\/replies|quotes\/[^/]+\/collections\/run|agent-sim\/chat|studio\/llm)$/.test(c.req.path);
@@ -400,7 +517,7 @@ export function createApp(options: AppOptions = {}): Hono {
     if (input.service.deposit_pct < 20 || input.service.deposit_pct > 100) {
       throw new HttpError(400, 'Service deposit percentage must be between 20% and 100%.');
     }
-    const seller = store.getSeller();
+    const seller = store.getSellerById(input.service.seller_id);
     if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
     const amounts = calculateQuoteAmounts(input.service.price_cents, input.service.deposit_pct);
     const id = createId('q');
@@ -408,6 +525,7 @@ export function createApp(options: AppOptions = {}): Hono {
     const now = timestamp();
     const quote: Quote = {
       id,
+      seller_id: seller.id,
       service_id: input.service.id,
       service_title: input.service.title,
       client_name: input.client_name,
@@ -440,7 +558,214 @@ export function createApp(options: AppOptions = {}): Hono {
 
   app.get('/api/health', (c) => c.json({ ok: true }));
 
+  app.use('/api/auth/*', async (c, next) => {
+    if (c.req.method !== 'POST') return next();
+    const ip = c.req.header('fly-client-ip')?.trim()
+      || c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+      || c.req.header('x-real-ip')?.trim()
+      || 'unknown';
+    const now = Date.now();
+    const requests = (authRateLimit.get(ip) ?? []).filter((started) => now - started < 60_000);
+    if (requests.length >= 10) return c.json({ error: 'Too many authentication requests; try again in a minute.' }, 429);
+    requests.push(now);
+    authRateLimit.set(ip, requests);
+    await next();
+  });
+
+  app.post('/api/auth/signup', async (c) => {
+    const input = parseBody(z.object({
+      studio_name: z.string().trim().min(1).max(80),
+      email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
+      password: z.string().min(8).max(128)
+    }).strict(), await c.req.json());
+    let user = store.getUserByEmail(input.email);
+    if (user?.email_verified_at) {
+      throw new HttpError(409, 'An account with this email already exists. Log in instead.');
+    }
+    const passwordHash = await hashPassword(input.password);
+    if (user) {
+      const seller = store.getSellerById(user.seller_id);
+      if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
+      seller.name = input.studio_name;
+      store.saveSeller(seller);
+      user.password_hash = passwordHash;
+      store.saveUser(user);
+    } else {
+      let slug = input.studio_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '');
+      if (!slug) slug = 'studio';
+      const baseSlug = slug;
+      let suffix = 2;
+      while (store.sellerSlugExists(slug)) {
+        const ending = `-${suffix}`;
+        slug = `${baseSlug.slice(0, 40 - ending.length).replace(/-+$/g, '')}${ending}`;
+        suffix += 1;
+      }
+      const seller = {
+        id: createId('seller'),
+        slug,
+        name: input.studio_name,
+        tagline: '',
+        email: input.email,
+        currency: 'USD' as const,
+        rules: {
+          default_deposit_pct: 50,
+          reminder_tone: 'friendly' as const,
+          max_reminders: 2,
+          wait_days_before_nudge: 3
+        }
+      };
+      store.saveSeller(seller);
+      user = {
+        id: createId('user'),
+        email: input.email,
+        password_hash: passwordHash,
+        seller_id: seller.id,
+        email_verified_at: null,
+        created_at: timestamp()
+      };
+      store.saveUser(user);
+    }
+    const challenge = await createChallenge(user, 'verify');
+    return c.json(challengeResponse(challenge, user.email), 201);
+  });
+
+  app.post('/api/auth/login', async (c) => {
+    const input = parseBody(z.object({
+      email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
+      password: z.string().min(1).max(128)
+    }).strict(), await c.req.json());
+    const user = store.getUserByEmail(input.email);
+    const matches = user?.password_hash
+      ? await verifyPassword(input.password, user.password_hash)
+      : (await performDummyPasswordCheck(input.password), false);
+    if (!user || !matches || !user.password_hash) {
+      throw new HttpError(401, 'Email or password is incorrect.');
+    }
+    const purpose: AuthPurpose = user.email_verified_at ? 'login' : 'verify';
+    const challenge = await createChallenge(user, purpose);
+    return c.json(challengeResponse(challenge, user.email));
+  });
+
+  app.post('/api/auth/verify', async (c) => {
+    const input = parseBody(z.object({
+      challenge_id: z.string().min(1).max(120),
+      code: z.string().regex(/^\d{6}$/),
+      new_password: z.string().optional()
+    }).strict(), await c.req.json());
+    const challenge = store.getAuthChallenge(input.challenge_id);
+    if (!challenge || challenge.consumed_at || Date.parse(challenge.expires_at) <= Date.now()) {
+      throw new HttpError(400, 'This code has expired. Request a new one.');
+    }
+    if (challenge.attempts >= 5) {
+      throw new HttpError(400, 'This code has expired. Request a new one.');
+    }
+    if (!codeMatches(challenge.id, input.code, challenge.code_hash)) {
+      challenge.attempts += 1;
+      if (challenge.attempts >= 5) {
+        challenge.consumed_at = timestamp();
+        store.saveAuthChallenge(challenge);
+        throw new HttpError(400, 'Too many wrong codes. Request a new code.');
+      }
+      store.saveAuthChallenge(challenge);
+      throw new HttpError(400, `That code isn't right. ${5 - challenge.attempts} tries left.`);
+    }
+    const user = store.getUserById(challenge.user_id);
+    if (!user) throw new HttpError(400, 'This code has expired. Request a new one.');
+    if (challenge.purpose === 'reset') {
+      const password = z.string().min(8).max(128).safeParse(input.new_password);
+      if (!password.success) throw new HttpError(400, 'Password must be 8–128 characters.');
+      user.password_hash = await hashPassword(password.data);
+      store.deleteSessions(user.id);
+    }
+    challenge.consumed_at = timestamp();
+    store.saveAuthChallenge(challenge);
+    if (challenge.purpose === 'verify') user.email_verified_at = timestamp();
+    store.saveUser(user);
+    return createSession(c, user);
+  });
+
+  app.post('/api/auth/resend', async (c) => {
+    const input = parseBody(z.object({ challenge_id: z.string().min(1).max(120) }).strict(), await c.req.json());
+    const challenge = store.getAuthChallenge(input.challenge_id);
+    if (!challenge || challenge.consumed_at || Date.parse(challenge.expires_at) <= Date.now()) {
+      throw new HttpError(400, 'This code has expired. Request a new one.');
+    }
+    const secondsLeft = Math.ceil((Date.parse(challenge.sent_at) + 60_000 - Date.now()) / 1000);
+    if (secondsLeft > 0) {
+      throw new HttpError(429, `Please wait ${secondsLeft} seconds before asking for another code.`);
+    }
+    const sendWindowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    if (store.countAuthSendsSince(challenge.user_id, sendWindowStart) >= 5) {
+      throw new HttpError(429, 'Too many codes requested. Try again in an hour.');
+    }
+    const user = store.getUserById(challenge.user_id);
+    if (!user) throw new HttpError(400, 'This code has expired. Request a new one.');
+    const sentAt = timestamp();
+    const code = createCode();
+    challenge.code_hash = hashCode(challenge.id, code);
+    challenge.expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    challenge.attempts = 0;
+    challenge.sent_at = sentAt;
+    challenge.send_count += 1;
+    store.saveAuthChallenge(challenge);
+    store.recordAuthSend(user.id, sentAt);
+    try {
+      await mailer.sendCode(user.email, challenge.purpose, code);
+    } catch (error) {
+      store.deleteAuthChallenge(challenge.id);
+      const status = (error as { status?: unknown }).status;
+      if (status === 503) throw new HttpError(503, "Email sending isn't set up yet.");
+      throw new HttpError(502, "We couldn't send a code to this email. Check the address and try again.");
+    }
+    return c.json(challengeResponse(challenge, user.email));
+  });
+
+  app.post('/api/auth/forgot', async (c) => {
+    const input = parseBody(z.object({
+      email: z.string().trim().email().max(254).transform((email) => email.toLowerCase())
+    }).strict(), await c.req.json());
+    const user = store.getUserByEmail(input.email);
+    if (user?.email_verified_at) {
+      const challenge = await createChallenge(user, 'reset');
+      return c.json(challengeResponse(challenge, user.email));
+    }
+    return c.json({
+      challenge_id: createId('auth'),
+      purpose: 'reset' as const,
+      email_hint: emailHint(input.email)
+    });
+  });
+
+  app.post('/api/auth/demo', (c) => {
+    const user = store.getUserById('user_demo');
+    if (!user) throw new HttpError(500, 'Demo account is missing.');
+    return createSession(c, user);
+  });
+
+  app.post('/api/auth/logout', (c) => {
+    const token = getCookie(c, 'sr_session');
+    if (token) store.deleteSession(hashSessionToken(token));
+    setCookie(c, 'sr_session', '', {
+      httpOnly: true,
+      sameSite: 'Lax',
+      path: '/',
+      maxAge: 0,
+      secure: secureCookie
+    });
+    return c.json({ ok: true as const });
+  });
+
+  app.get('/api/auth/me', (c) => {
+    const context = getSessionContext(c);
+    if (!context) throw new HttpError(401, 'Please log in.');
+    return c.json({
+      user: { id: context.user.id, email: context.user.email, is_demo: context.user.id === 'user_demo' },
+      seller: context.seller
+    });
+  });
+
   app.post('/api/studio/llm', async (c) => {
+    requireSeller(c);
     const input = parseBody(studioLlmSchema, await readLimitedJson(c.req.raw, STUDIO_LLM_MAX_BODY_BYTES));
     const completion = await ai.chatCompletion(
       input.messages as ChatCompletionMessageParam[],
@@ -451,25 +776,28 @@ export function createApp(options: AppOptions = {}): Hono {
   });
 
   app.get('/api/seller', (c) => {
-    const seller = store.getSeller();
-    if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
-    return c.json(seller);
+    return c.json(requireSeller(c));
   });
 
   app.put('/api/seller/rules', async (c) => {
+    const seller = requireSeller(c);
     const rules = parseBody(rulesSchema, await c.req.json()) as SellerRules;
-    const seller = store.getSeller();
-    if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
     seller.rules = rules;
     store.saveSeller(seller);
-    saveEvent(store, createEvent('seller', 'approval', null, { text: 'Seller rules updated.', input: rules }));
+    saveEvent(store, createEvent('seller', 'approval', null, {
+      seller_id: seller.id,
+      text: 'Seller rules updated.',
+      input: rules
+    }));
     return c.json(seller);
   });
 
   app.post('/api/catalog/parse', async (c) => {
+    const seller = requireSeller(c);
     const input = parseBody(z.object({ raw_text: z.string().trim().min(1).max(20_000) }).strict(), await c.req.json());
     const result = await ai.parseCatalog(input.raw_text);
     saveEvent(store, createEvent('seller_agent', 'tool_call', null, {
+      seller_id: seller.id,
       tool: 'submit_services',
       input: { raw_text: input.raw_text },
       output: result
@@ -478,11 +806,13 @@ export function createApp(options: AppOptions = {}): Hono {
   });
 
   app.post('/api/catalog/publish', async (c) => {
+    const seller = requireSeller(c);
     const input = parseBody(z.object({ services: z.array(publishDraftSchema).min(1).max(100) }).strict(), await c.req.json());
     const services: Service[] = input.services.map((draft: ServiceDraft) => {
       if (draft.price_cents <= 0) throw new HttpError(400, `Service "${draft.title}" must have a positive price.`);
       return {
         id: createId('svc'),
+        seller_id: seller.id,
         title: draft.title,
         description: draft.description,
         deliverables: draft.deliverables,
@@ -492,19 +822,25 @@ export function createApp(options: AppOptions = {}): Hono {
         status: draft.lead_time_days === null ? 'draft' : 'published'
       };
     });
-    store.replaceServices(services);
-    saveEvent(store, createEvent('seller', 'approval', null, { text: `${services.length} services published.` }));
+    store.replaceServices(seller.id, services);
+    saveEvent(store, createEvent('seller', 'approval', null, {
+      seller_id: seller.id,
+      text: `${services.length} services published.`
+    }));
     return c.json(services);
   });
 
-  app.get('/api/services', (c) => c.json(store.listServices()));
+  app.get('/api/services', (c) => {
+    const seller = requireSeller(c);
+    return c.json(store.listServices(seller.id));
+  });
 
   app.get('/api/public/:slug', (c) => {
-    const seller = store.getSeller();
-    if (!seller || seller.slug !== c.req.param('slug')) throw new HttpError(404, 'Store not found.');
+    const seller = store.getSellerBySlug(c.req.param('slug'));
+    if (!seller) throw new HttpError(404, 'Store not found.');
     const publicStore: PublicStore = {
       seller: { name: seller.name, slug: seller.slug, tagline: seller.tagline },
-      services: store.listServices('published'),
+      services: store.listServices(seller.id, 'published'),
       agent: {
         mcp_url: `${baseUrl.replace(/\/+$/, '')}/mcp`,
         webmcp_tools: ['list_services', 'get_service', 'request_quote', 'get_quote_status']
@@ -515,16 +851,18 @@ export function createApp(options: AppOptions = {}): Hono {
 
   app.post('/api/public/:slug/quotes', async (c) => {
     const input = parseBody(quoteInput, await c.req.json());
-    const seller = store.getSeller();
-    if (!seller || seller.slug !== c.req.param('slug')) throw new HttpError(404, 'Store not found.');
+    const seller = store.getSellerBySlug(c.req.param('slug'));
+    if (!seller) throw new HttpError(404, 'Store not found.');
     const service = store.getService(input.service_id);
-    if (!service || service.status !== 'published') throw new HttpError(404, 'Service not found.');
+    if (!service || service.seller_id !== seller.id || service.status !== 'published') {
+      throw new HttpError(404, 'Service not found.');
+    }
     const quote = await createQuote({ ...input, service, source: input.source ?? 'web' });
     saveEvent(store, createEvent('client', 'message', quote.id, { text: `Quote requested by ${quote.client_name}.` }));
     return c.json(quote, 201);
   });
 
-  app.get('/api/quotes', (c) => c.json(store.listQuotes()));
+  app.get('/api/quotes', (c) => c.json(store.listQuotes(requireSeller(c).id)));
 
   const reconcileOrder = async (quote: Quote, orderId: string): Promise<boolean> => {
     const order = getNestedOrder(await paypal.getOrder(orderId));
@@ -623,7 +961,7 @@ export function createApp(options: AppOptions = {}): Hono {
     if (quote.status !== 'quoted') throw new HttpError(409, 'A deposit order can only be created for a quoted request.');
     const existing = store.getPayment(quote.id, 'deposit');
     if (existing?.paypal_order_id) return c.json({ order_id: existing.paypal_order_id });
-    const seller = store.getSeller();
+    const seller = store.getSellerById(quote.seller_id);
     if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
     saveEvent(store, createEvent('paypal', 'tool_call', quote.id, {
       tool: 'create_order',
@@ -683,12 +1021,11 @@ export function createApp(options: AppOptions = {}): Hono {
   });
 
   app.post('/api/quotes/:id/deliver', async (c) => {
-    const quote = store.getQuote(c.req.param('id'));
-    if (!quote) throw new HttpError(404, 'Quote not found.');
+    const quote = requireOwnedQuote(c, c.req.param('id'));
     assertNotDemoSampleQuote(quote.id);
     if (quote.status === 'balance_invoiced' || quote.status === 'paid') return c.json(detail(store, quote.id));
     if (quote.status !== 'deposit_paid') throw new HttpError(409, 'Delivery is only available after the deposit has been paid.');
-    const seller = store.getSeller();
+    const seller = store.getSellerById(quote.seller_id);
     if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
     let payment = store.getPayment(quote.id, 'balance');
     if (!payment?.paypal_invoice_id) {
@@ -846,7 +1183,7 @@ export function createApp(options: AppOptions = {}): Hono {
     if (quote.status !== 'balance_invoiced') throw new HttpError(409, 'Collections runs require an outstanding balance invoice.');
     const payment = store.getPayment(quote.id, 'balance');
     if (!payment?.paypal_invoice_id) throw new HttpError(409, 'Quote has no PayPal balance invoice.');
-    const seller = store.getSeller();
+    const seller = store.getSellerById(quote.seller_id);
     if (!seller) throw new HttpError(500, 'Seller configuration is missing.');
     const replies = store.listReplies(quote.id);
     const eventStart = store.listEvents(quote.id).length;
@@ -1045,12 +1382,19 @@ export function createApp(options: AppOptions = {}): Hono {
     };
   };
 
-  app.post('/api/quotes/:id/collections/run', async (c) => c.json(await runCollections(c.req.param('id'))));
+  app.post('/api/quotes/:id/collections/run', async (c) => {
+    requireOwnedQuote(c, c.req.param('id'));
+    return c.json(await runCollections(c.req.param('id')));
+  });
 
   app.post('/api/quotes/:id/replies', async (c) => {
     const input = parseBody(replySchema, await c.req.json());
     const quote = store.getQuote(c.req.param('id'));
     if (!quote) throw new HttpError(404, 'Quote not found.');
+    if (input.from === 'seller') {
+      const seller = requireSeller(c);
+      if (quote.seller_id !== seller.id) throw new HttpError(404, 'Quote not found.');
+    }
     if (quote.status === 'balance_invoiced') assertNotDemoSampleQuote(quote.id);
     const reply = {
       id: createId('reply'),
@@ -1066,18 +1410,20 @@ export function createApp(options: AppOptions = {}): Hono {
   });
 
   app.get('/api/proposals', (c) => {
+    const seller = requireSeller(c);
     const statusQuery = c.req.query('status');
     const status = statusQuery ? parseBody(z.enum(['pending', 'approved', 'rejected', 'executed', 'failed']), statusQuery) : undefined;
-    return c.json(store.listProposals(undefined, status));
+    return c.json(store.listProposals(undefined, status, seller.id));
   });
 
   app.post('/api/proposals/:id/approve', async (c) => {
+    const seller = requireSeller(c);
     const input = parseBody(approveSchema, await c.req.json());
     const proposal = store.getProposal(c.req.param('id'));
     if (!proposal) throw new HttpError(404, 'Proposal not found.');
-    if (proposal.status !== 'pending') throw new HttpError(409, 'Proposal is no longer pending.');
     const quote = store.getQuote(proposal.quote_id);
-    if (!quote) throw new HttpError(404, 'Quote not found.');
+    if (!quote || quote.seller_id !== seller.id) throw new HttpError(404, 'Proposal not found.');
+    if (proposal.status !== 'pending') throw new HttpError(409, 'Proposal is no longer pending.');
     assertNotDemoSampleQuote(quote.id);
     const payment = store.getPayment(quote.id, 'balance');
     if (!payment?.paypal_invoice_id && proposal.action !== 'wait' && proposal.action !== 'escalate') {
@@ -1169,8 +1515,11 @@ export function createApp(options: AppOptions = {}): Hono {
   });
 
   app.post('/api/proposals/:id/reject', (c) => {
+    const seller = requireSeller(c);
     const proposal = store.getProposal(c.req.param('id'));
     if (!proposal) throw new HttpError(404, 'Proposal not found.');
+    const quote = store.getQuote(proposal.quote_id);
+    if (!quote || quote.seller_id !== seller.id) throw new HttpError(404, 'Proposal not found.');
     if (proposal.status !== 'pending') throw new HttpError(409, 'Proposal is no longer pending.');
     proposal.status = 'rejected';
     store.saveProposal(proposal);
@@ -1182,13 +1531,14 @@ export function createApp(options: AppOptions = {}): Hono {
   });
 
   app.get('/api/events', (c) => {
+    const seller = requireSeller(c);
     const actorQuery = c.req.query('actor');
     const actor = actorQuery ? parseBody(actorSchema, actorQuery) : undefined;
-    return c.json(store.listEvents(undefined, actor));
+    return c.json(store.listEvents(undefined, actor, seller.id));
   });
 
   app.get('/api/stats', (c) => {
-    const quotes = store.listQuotes();
+    const quotes = store.listQuotes(requireSeller(c).id);
     const byStatus: Record<QuoteStatus, number> = {
       quoted: 0, deposit_paid: 0, delivered: 0, balance_invoiced: 0, paid: 0, cancelled: 0
     };
@@ -1224,8 +1574,8 @@ export function createApp(options: AppOptions = {}): Hono {
 
   app.post('/api/agent-sim/chat', async (c) => {
     const input = parseBody(agentSimSchema, await c.req.json());
-    const seller = store.getSeller();
-    if (!seller || seller.slug !== input.slug) throw new HttpError(404, 'Store not found.');
+    const seller = store.getSellerBySlug(input.slug);
+    if (!seller) throw new HttpError(404, 'Store not found.');
     const schemas = [
       jsonSchemaTool('list_services', 'List published services for a seller.', {
         type: 'object', properties: { seller_slug: { type: 'string' } }, required: ['seller_slug'], additionalProperties: false
@@ -1269,6 +1619,14 @@ export function createApp(options: AppOptions = {}): Hono {
         } catch {
           args = {};
         }
+        if (
+          ['list_services', 'get_service', 'request_quote'].includes(call.function.name) &&
+          typeof args === 'object' &&
+          args !== null &&
+          !Array.isArray(args)
+        ) {
+          args = { ...asObject(args), seller_slug: seller.slug };
+        }
         if (call.function.name === 'request_quote') {
           const checked = toolSchemas.request_quote.safeParse(args);
           if (!checked.success || !userSuppliedDetails(input.messages, checked.data)) {
@@ -1307,11 +1665,13 @@ export function createApp(options: AppOptions = {}): Hono {
   app.get('/api/paypal/config', (c) => c.json({ client_id: process.env.PAYPAL_CLIENT_ID ?? '', env: 'sandbox' as const }));
 
   app.post('/api/demo/reset', (c) => {
+    const seller = requireSeller(c);
+    if (seller.id !== 'seller_maya') throw new HttpError(403, 'Only the demo studio can be reset.');
     const withSamples = c.req.query('with_samples') === '1';
     if (withSamples && process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_SAMPLES !== '1') {
       throw new HttpError(403, 'Development sample data is disabled in production.');
     }
-    store.reset();
+    store.resetDemoStudio();
     if (withSamples) seedDemoSamples(store, baseUrl);
     return c.json({ ok: true as const });
   });

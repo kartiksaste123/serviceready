@@ -31,9 +31,11 @@ function Catalog() {
   return (
     <>
       <PageHeader title="Services & prices" sub="What AI assistants and clients can book.">
-        <Link to="/s/$slug" params={{ slug: "maya-rao-studio" }} className="btn-glass btn-sm">
-          View storefront
-        </Link>
+        {seller && (
+          <Link to="/s/$slug" params={{ slug: seller.slug }} className="btn-glass btn-sm">
+            View storefront
+          </Link>
+        )}
         <Link to="/onboard" className="btn-primary btn-sm">
           <Upload className="size-3.5" />
           Import rate card

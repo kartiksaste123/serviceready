@@ -23,12 +23,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 export const Route = createFileRoute("/q/$id")({
   head: () => ({
     meta: [
-      { title: "Your quote — Maya Rao Studio | ServiceReady" },
+      { title: "Your quote — ServiceReady" },
       {
         name: "description",
         content: "Review your quote and pay the deposit securely with PayPal.",
       },
-      { property: "og:title", content: "Your quote from Maya Rao Studio" },
+      { property: "og:title", content: "Your quote — ServiceReady" },
       {
         property: "og:description",
         content: "Review scope, totals and pay the deposit with PayPal.",
@@ -99,7 +99,9 @@ function QuotePage() {
                     <div className="border-b border-dashed border-border p-6 sm:p-8">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="eyebrow">Quote from Maya Rao Studio</p>
+                          <p className="eyebrow">
+                            Quote from {data.seller?.name ?? "your service provider"}
+                          </p>
                           <h1 className="mt-2 text-2xl font-bold tracking-tight">
                             {q.service_title}
                           </h1>
@@ -212,7 +214,7 @@ function QuotePage() {
                       {q.status === "deposit_paid" && (
                         <p className="flex items-center justify-center gap-2 text-center text-sm text-success">
                           <Check className="size-4" />
-                          Deposit received — Maya is on it.
+                          Deposit received — {data.seller?.name ?? "your provider"} is on it.
                         </p>
                       )}
                       {q.status === "paid" && (
@@ -244,7 +246,7 @@ function QuotePage() {
                       )}
                     </section>
                     <section className="glass-card p-5">
-                      <h2 className="font-semibold">Message Maya</h2>
+                      <h2 className="font-semibold">Message {data.seller?.name ?? "your provider"}</h2>
                       {isSample ? (
                         <p className="mt-3 text-sm text-muted-foreground">
                           Sample data — client messages are disabled.
@@ -252,7 +254,7 @@ function QuotePage() {
                       ) : (
                         <>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            Already paid or have a question? Tell Maya here.
+                            Already paid or have a question? Send a message here.
                           </p>
                           <textarea
                             className="field mt-3"
@@ -280,7 +282,8 @@ function QuotePage() {
                               <div>
                                 <p className="text-muted-foreground">{run.summary}</p>
                                 <p className="mt-1 text-muted-foreground">
-                                  Maya reviews every reply before anything is sent.
+                                  {data.seller?.name ?? "Your provider"} reviews every reply before
+                                  anything is sent.
                                 </p>
                               </div>
                             </div>

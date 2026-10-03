@@ -122,6 +122,7 @@ function makeQuote(overrides: Partial<Quote> = {}): Quote {
   const now = timestamp();
   return {
     id: 'quote-test',
+    seller_id: 'seller_maya',
     service_id: 'svc_logo_design',
     service_title: 'Logo design',
     client_name: 'Casey Client',
@@ -200,6 +201,22 @@ function appWith(store: Store, ai = new StubAI(), paypal = new StubPayPal(), too
     paypal,
     toolkitFactory: () => toolkit as unknown as ReturnType<PayPalService['toolkit']>
   });
+  const request = app.request.bind(app);
+  let demoCookie: Promise<string> | undefined;
+  app.request = (async (input: string, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    if (!input.startsWith('/api/auth/') && !headers.has('cookie')) {
+      demoCookie ??= Promise.resolve(request('/api/auth/demo', { method: 'POST' })).then((response) => {
+        const setCookie = response.headers.get('set-cookie');
+        if (!setCookie) throw new Error('Demo auth response did not set a session cookie.');
+        const cookie = setCookie.split(';', 1)[0];
+        if (!cookie) throw new Error('Demo auth response did not set a session cookie.');
+        return cookie;
+      });
+      headers.set('cookie', await demoCookie);
+    }
+    return request(input, { ...init, headers });
+  }) as typeof app.request;
   return { app, ai, paypal, toolkit };
 }
 
@@ -354,7 +371,7 @@ describe('quotes and deposit state machine', () => {
 
     expect(response.status).toBe(200);
     const payload = paypal.invoiceCreatePayload as { invoicer?: Record<string, unknown> };
-    expect(payload.invoicer).toEqual({ business_name: store.getSeller()?.name });
+    expect(payload.invoicer).toEqual({ business_name: store.getSellerById('seller_maya')?.name });
     expect(payload.invoicer).not.toHaveProperty('email_address');
     store.close();
   });
@@ -385,7 +402,7 @@ describe('quotes and deposit state machine', () => {
     const orderResponse = await app.request(`/api/quotes/${quote.id}/deposit/order`, { method: 'POST' });
     expect(orderResponse.status).toBe(200);
     expect(await orderResponse.json()).toEqual({ order_id: 'ORDER12345678901234' });
-    expect(paypal.orderBrandName).toBe(store.getSeller()?.name);
+    expect(paypal.orderBrandName).toBe(store.getSellerById('seller_maya')?.name);
 
     const capture = {
       id: 'CAPTURE12345678901',
@@ -764,7 +781,7 @@ describe('collections safeguards', () => {
     const { app } = appWith(store, ai, new StubPayPal(), toolkit);
     const quote = makeQuote();
     saveBalanceInvoice(store, quote);
-    const seller = store.getSeller()!;
+    const seller = store.getSellerById('seller_maya')!;
     seller.rules.wait_days_before_nudge = 0;
     store.saveSeller(seller);
     store.saveProposal(makeReminderProposal(quote));
@@ -938,7 +955,7 @@ describe('collections safeguards', () => {
     const { app } = appWith(store, ai, new StubPayPal(), toolkit);
     const quote = makeQuote({ client_name: 'Casey' });
     saveBalanceInvoice(store, quote);
-    const seller = store.getSeller()!;
+    const seller = store.getSellerById('seller_maya')!;
     seller.rules.wait_days_before_nudge = 0;
     store.saveSeller(seller);
 
@@ -1060,6 +1077,7 @@ describe('MCP client tools', () => {
         const amounts = calculateQuoteAmounts(service.price_cents, service.deposit_pct);
         const quote: Quote = {
           id: createId('q'),
+          seller_id: service.seller_id,
           service_id: service.id,
           service_title: service.title,
           client_name,

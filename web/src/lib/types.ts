@@ -12,7 +12,7 @@ export interface AgentEvent { id: string; quote_id: string | null; actor: 'selle
 export interface Proposal { id: string; quote_id: string; client_name: string; action: 'wait' | 'send_reminder' | 'thank_and_close' | 'escalate'; reason: string; evidence: string; draft_message: string; status: 'pending' | 'approved' | 'rejected' | 'executed' | 'failed'; created_at: string }
 export interface Reply { id: string; quote_id: string; from: 'client' | 'seller'; text: string; created_at: string }
 export interface AgentRun { id: string; quote_id: string; summary: string; steps: AgentEvent[]; proposal: Proposal | null }
-export interface QuoteDetail { quote: Quote; payments: Payment[]; events: AgentEvent[]; replies: Reply[]; proposals: Proposal[] }
+export interface QuoteDetail { quote: Quote; payments: Payment[]; events: AgentEvent[]; replies: Reply[]; proposals: Proposal[]; seller?: { name: string; slug: string } }
 export interface Stats { deposits_collected_cents: number; outstanding_cents: number; paid_cents: number; avg_days_to_pay: number | null; by_status: Record<QuoteStatus, number>; owed_by_client: { client_name: string; quote_id: string; outstanding_cents: number; days_since_invoice: number }[] }
 export interface PublicStore { seller: Pick<Seller, 'name' | 'slug' | 'tagline'>; services: Service[]; agent: { mcp_url: string; webmcp_tools: string[] } }
 export interface ChatMsg { role: 'user' | 'assistant'; content: string }

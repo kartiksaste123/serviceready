@@ -12,6 +12,10 @@ describe.skipIf(!live)('live sandbox and AI gateway', () => {
     const store = new Store(':memory:');
     const paypal = new PayPalService();
     const app = createApp({ store, paypal, ai: new AIService() });
+    const demoAuth = await app.request('/api/auth/demo', { method: 'POST' });
+    expect(demoAuth.status).toBe(200);
+    const demoCookie = demoAuth.headers.get('set-cookie')?.split(';', 1)[0];
+    expect(demoCookie).toBeTruthy();
     let invoiceId: string | undefined;
     let testError: unknown;
     try {
@@ -38,7 +42,10 @@ describe.skipIf(!live)('live sandbox and AI gateway', () => {
       quote.status = 'deposit_paid';
       quote.updated_at = timestamp();
       store.saveQuote(quote);
-      const deliveryResponse = await app.request(`/api/quotes/${quote.id}/deliver`, { method: 'POST' });
+      const deliveryResponse = await app.request(`/api/quotes/${quote.id}/deliver`, {
+        method: 'POST',
+        headers: { cookie: demoCookie! },
+      });
       expect(deliveryResponse.status).toBe(200);
       invoiceId = store.getPayment(quote.id, 'balance')?.paypal_invoice_id ?? undefined;
       expect(invoiceId).toBeTruthy();
@@ -61,7 +68,7 @@ describe.skipIf(!live)('live sandbox and AI gateway', () => {
 
       const catalogResponse = await app.request('/api/catalog/parse', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: demoCookie! },
         body: JSON.stringify({
           raw_text: 'logo 450 (2 rounds) | brand kit w/ logo+colors+fonts 1200, half upfront | social templates x10 (package price $15) | rush +30% | website landing pg 900 2wks'
         })
@@ -75,7 +82,10 @@ describe.skipIf(!live)('live sandbox and AI gateway', () => {
       expect(lowPrice).toBeTruthy();
       expect(catalog.flags.some((flag) => flag.tmp_id === lowPrice?.tmp_id && flag.field === 'price_cents')).toBe(true);
 
-      const collections = await app.request(`/api/quotes/${quote.id}/collections/run`, { method: 'POST' });
+      const collections = await app.request(`/api/quotes/${quote.id}/collections/run`, {
+        method: 'POST',
+        headers: { cookie: demoCookie! },
+      });
       expect(collections.status).toBe(200);
 
       await paypal.request(`/v2/invoicing/invoices/${encodeURIComponent(invoiceId!)}/cancel`, {

@@ -33,6 +33,7 @@ const reminderExamples: Record<SellerRules["reminder_tone"], string> = {
 function SettingsPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["seller"], queryFn: api.getSeller });
+  const { data: account } = useQuery({ queryKey: ["me"], queryFn: api.auth.me });
   const [r, setR] = useState<SellerRules | null>(null);
   useEffect(() => {
     if (data) setR(data.rules);
@@ -141,22 +142,24 @@ function SettingsPage() {
           </aside>
         </div>
       )}
-      <section className="glass-card mt-6 flex flex-wrap items-center justify-between gap-4 p-6">
-        <div>
-          <h2 className="font-semibold">Reset demo data</h2>
-          <p className="text-sm text-muted-foreground">
-            Restores Maya's services, bookings and proposals.
-          </p>
-        </div>
-        <button className="btn-glass" disabled={reset.isPending} onClick={() => reset.mutate()}>
-          {reset.isPending ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RotateCcw className="size-4" />
-          )}
-          Reset
-        </button>
-      </section>
+      {account?.user.is_demo && (
+        <section className="glass-card mt-6 flex flex-wrap items-center justify-between gap-4 p-6">
+          <div>
+            <h2 className="font-semibold">Reset demo data</h2>
+            <p className="text-sm text-muted-foreground">
+              Restores Maya's services, bookings and proposals.
+            </p>
+          </div>
+          <button className="btn-glass" disabled={reset.isPending} onClick={() => reset.mutate()}>
+            {reset.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RotateCcw className="size-4" />
+            )}
+            Reset
+          </button>
+        </section>
+      )}
     </>
   );
 }

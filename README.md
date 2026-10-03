@@ -10,17 +10,30 @@
 
 1. Open [`/s/maya-rao-studio`](https://serviceready.fly.dev/s/maya-rao-studio). Ask the in-page agent for a logo quote; it needs your name, email, and project brief. Or choose **Request quote** on the Logo design service.
 2. Open the quote link and pay its deposit with a PayPal sandbox personal account: **`SANDBOX_BUYER_EMAIL` / password: see Devpost “Testing instructions”.** Sandbox card guest checkout is also available through the card button.
-3. Open [`/app`](https://serviceready.fly.dev/app), open the booking, and choose **Mark delivered & send balance invoice**.
+3. Choose **Try the demo studio** on the login page to enter Maya Rao Studio, then open the booking and choose **Mark delivered & send balance invoice**.
 4. In the booking’s **Paste client reply** box, enter `I already paid` and send it to the agent. The collections agent checks the invoice with PayPal’s `get_invoice` tool and records a proposal.
 5. Open [`/app/approvals`](https://serviceready.fly.dev/app/approvals) and review the proposal. If it is a `send_reminder` action, approve it to run PayPal Toolkit’s `send_invoice_reminder`. If PayPal confirms the invoice is paid, the server forces a `thank_and_close` action instead.
 6. Explore the friendly collections dashboard at [`/app/collections`](https://serviceready.fly.dev/app/collections) and the audit log at [`/app/log`](https://serviceready.fly.dev/app/log).
-7. Reset the single-seller demo data with:
+7. Use the authenticated demo reset endpoint only while signed in to Maya Rao Studio. It resets Maya’s studio data without affecting other accounts. Development-only sample quotes can be seeded with `POST /api/demo/reset?with_samples=1`.
 
-   ```sh
-   curl -X POST https://serviceready.fly.dev/api/demo/reset
-   ```
+## Accounts & login
 
-   This wipes and reseeds the demo’s application data. Development-only sample quotes can be seeded with `POST /api/demo/reset?with_samples=1`.
+Create an account with a studio name, email address, and password. ServiceReady emails a six-digit verification code before opening the new studio. Each account owns a separate catalog, quotes, events, and collection proposals. Returning users enter their email and password, then confirm a fresh six-digit code by email. Use **Forgot password?** on the login page to receive a reset code and set a new password.
+
+The landing page, signup page, and login page each offer **Try the demo studio**, which signs in to the pre-seeded Maya Rao Studio without a password. Demo data can be reset only from the demo account; other studios are not modified.
+
+Configure one email provider on the server:
+
+| Variable | Purpose |
+| --- | --- |
+| `RESEND_API_KEY` | Resend API key; used when `SMTP_USER` is not set |
+| `MAIL_FROM` | Optional sender address; defaults to `ServiceReady <onboarding@resend.dev>` |
+| `SMTP_HOST` | SMTP server; defaults to `smtp.gmail.com` |
+| `SMTP_PORT` | SMTP port; defaults to `465` |
+| `SMTP_USER` | SMTP login; when set, SMTP is preferred over Resend |
+| `SMTP_PASS` | SMTP password |
+
+Outside production, if neither SMTP nor Resend is configured, verification codes are printed to the server console for local development. In production, email delivery must be configured. Without a verified sending domain, Resend only delivers to the account owner’s address; sending codes to other recipients returns an email-delivery error. All studios currently share the same PayPal sandbox merchant; the studio name is used as the PayPal brand name.
 
 ## Connect an AI agent with MCP
 
@@ -82,7 +95,7 @@ Requests go through the **Cloudflare AI Gateway** to Workers AI using the OpenAI
 - A quote uses the published service price. An agent cannot capture a deposit or send a collection reminder.
 - The seller reviews and approves a pending collections proposal. Only an approved `send_reminder` calls the PayPal reminder tool.
 - Events record agent/tool activity, PayPal events, decisions, replies, and seller approvals; the seller can inspect them at `/app/log`.
-- AI endpoints have an in-memory limit of **20 requests per minute per IP address**. This covers catalog parsing, public quote creation, collection runs and replies, agent simulation, and the Studio LLM proxy.
+- AI endpoints have an in-memory limit of **20 requests per minute per IP address**. This covers catalog parsing, public quote creation, collection runs and replies, agent simulation, and the Studio LLM proxy. Authentication POST endpoints have a separate **10 requests per minute per IP address** limit.
 - PayPal client secrets and Cloudflare API tokens stay on the server. The browser receives the PayPal client ID, which is a public identifier. The optional Studio license key is a build-time browser setting, not a server credential.
 
 ## Architecture
@@ -184,10 +197,9 @@ Set `VITE_AG_STUDIO_LICENSE_KEY` in the web build environment to enable the Stud
 
 ## Known limitations
 
-- This is a single-seller demo seeded for Maya Rao Studio; it is not a multi-tenant service.
-- USD and the PayPal sandbox are hardcoded. No real-money transaction is supported.
+- Each account has an isolated studio. Maya Rao Studio remains as the pre-seeded one-click demo account.
+- USD and the PayPal sandbox are hardcoded. All studios share the sandbox merchant; no real-money transaction is supported.
 - **WebMCP is not implemented.** The storefront lists the proposed tools and checks whether `navigator.modelContext` exists, but the code does not register tools with that browser API. Use the working `/mcp` endpoint for agent access.
-- The demo has no seller authentication. `POST /api/demo/reset` is unauthenticated and resets the single-seller application data; do not use this prototype for private production data.
 - **Dependency audit.** `npm audit --omit=dev` reports 9 remaining advisories (4 high, 2 moderate, 3 low), all inside `@paypal/agent-toolkit@1.11.0` (the latest release). npm's only suggested fix is a downgrade to 1.3.5, which we don't take. ServiceReady imports only `@paypal/agent-toolkit/openai`; at runtime that entry point loads `mathjs` but none of the flagged packages (`@langchain/core`, `langsmith`, `ai`, `@ai-sdk/*`, `jsondiffpatch`, the toolkit's `uuid`). We pin `mathjs` to 15.2.0 through `overrides`, which clears its advisory. The toolkit only calls `mathjs.round`.
 
 ## License

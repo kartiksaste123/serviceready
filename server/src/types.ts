@@ -23,6 +23,7 @@ export interface Seller {
 }
 export interface Service {
   id: string;
+  seller_id: string;
   title: string;
   description: string;
   deliverables: string[];
@@ -52,6 +53,7 @@ export interface LineItem {
 }
 export interface Quote {
   id: string;
+  seller_id: string;
   service_id: string;
   service_title: string;
   client_name: string;
@@ -81,6 +83,7 @@ export interface Payment {
 }
 export interface AgentEvent {
   id: string;
+  seller_id?: string;
   quote_id: string | null;
   actor: 'seller_agent' | 'client_agent' | 'collections_agent' | 'system' | 'seller' | 'client' | 'paypal';
   kind: 'tool_call' | 'message' | 'webhook' | 'decision' | 'approval';
@@ -118,6 +121,7 @@ export interface AgentRun {
 }
 export interface QuoteDetail {
   quote: Quote;
+  seller?: { name: string; slug: string };
   payments: Payment[];
   events: AgentEvent[];
   replies: Reply[];

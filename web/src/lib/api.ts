@@ -6,6 +6,23 @@ import type {
 
 export const USE_MOCKS = import.meta.env['VITE_USE_MOCKS'] !== 'false';
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  is_demo: boolean;
+}
+
+export interface AuthSession {
+  user: AuthUser;
+  seller: Seller;
+}
+
+export interface AuthChallenge {
+  challenge_id: string;
+  purpose: 'verify' | 'login' | 'reset';
+  email_hint: string;
+}
+
 export interface StudioLlmMessage {
   role: 'system' | 'developer' | 'user' | 'assistant' | 'tool';
   content?: string | null;
@@ -54,7 +71,131 @@ const m = <T,>(mockFn: () => Promise<T>, method: string, path: string, body?: un
   USE_MOCKS ? mockFn() : http<T>(method, path, body);
 const enc = encodeURIComponent;
 
+let mockAuthUser: AuthUser | null = {
+  id: 'user_demo',
+  email: 'demo@serviceready.local',
+  is_demo: true,
+};
+let mockAuthEmail = 'demo@serviceready.local';
+let mockAuthChallenge: AuthChallenge = {
+  challenge_id: 'mock',
+  purpose: 'login',
+  email_hint: 'de***@serviceready.local',
+};
+
+async function mockAuthSession(): Promise<AuthSession | null> {
+  if (!mockAuthUser) return null;
+  return { user: mockAuthUser, seller: await mock.getSeller() };
+}
+
+async function me(): Promise<AuthSession | null> {
+  if (USE_MOCKS) return mockAuthSession();
+  const response = await fetch('/api/auth/me', { credentials: 'include' });
+  if (response.status === 401) return null;
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json() as { error?: string };
+      message = body.error ?? message;
+    } catch {
+    }
+    throw new Error(message);
+  }
+  return response.json() as Promise<AuthSession>;
+}
+
+async function mockChallenge(
+  purpose: AuthChallenge['purpose'],
+  email: string,
+): Promise<AuthChallenge> {
+  mockAuthEmail = email.trim().toLowerCase();
+  const [local, domain] = mockAuthEmail.split('@');
+  mockAuthChallenge = {
+    challenge_id: 'mock',
+    purpose,
+    email_hint: `${(local ?? '').slice(0, 2)}***@${domain ?? ''}`,
+  };
+  return mockAuthChallenge;
+}
+
+export function safeRedirect(value: unknown): string | null {
+  if (typeof value !== 'string' || value.startsWith('//') || value.includes('\\')) return null;
+  const path = value.split(/[?#]/, 1)[0] ?? '';
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(path);
+  } catch {
+    return null;
+  }
+  if (decodedPath.includes('\\') || decodedPath.split('/').some((segment) => segment === '.' || segment === '..')) {
+    return null;
+  }
+  if (
+    path !== '/app' &&
+    !path.startsWith('/app/') &&
+    path !== '/onboard' &&
+    !path.startsWith('/onboard/')
+  ) return null;
+  return value;
+}
+
 export const api = {
+  auth: {
+    me,
+    signup: (input: { studio_name: string; email: string; password: string }) =>
+      m(
+        () => mockChallenge('verify', input.email),
+        'POST',
+        '/api/auth/signup',
+        input,
+      ),
+    login: (input: { email: string; password: string }) =>
+      m(
+        () => mockChallenge('login', input.email),
+        'POST',
+        '/api/auth/login',
+        input,
+      ),
+    verify: async (input: { challenge_id: string; code: string; new_password?: string }) => {
+      if (!USE_MOCKS) return http<AuthSession>('POST', '/api/auth/verify', input);
+      if (input.code !== '123456') throw new Error("That code isn't right.");
+      mockAuthUser = {
+        id: 'mock_user',
+        email: mockAuthEmail,
+        is_demo: false,
+      };
+      return (await mockAuthSession()) as AuthSession;
+    },
+    resend: (input: { challenge_id: string }) =>
+      m(
+        async () => mockAuthChallenge,
+        'POST',
+        '/api/auth/resend',
+        input,
+      ),
+    forgot: (input: { email: string }) =>
+      m(
+        () => mockChallenge('reset', input.email),
+        'POST',
+        '/api/auth/forgot',
+        input,
+      ),
+    demo: async () => {
+      if (!USE_MOCKS) return http<AuthSession>('POST', '/api/auth/demo');
+      mockAuthUser = {
+        id: 'user_demo',
+        email: 'demo@serviceready.local',
+        is_demo: true,
+      };
+      mockAuthEmail = mockAuthUser.email;
+      return (await mockAuthSession()) as AuthSession;
+    },
+    logout: async () => {
+      if (!USE_MOCKS) return http<{ ok: true }>('POST', '/api/auth/logout');
+      mockAuthUser = null;
+      return { ok: true as const };
+    },
+  },
   getSeller: () => m<Seller>(() => mock.getSeller(), 'GET', '/api/seller'),
   updateRules: (rules: SellerRules) => m<Seller>(() => mock.putRules(rules), 'PUT', '/api/seller/rules', rules),
   parseCatalog: (raw_text: string) => m<{ services: ServiceDraft[]; flags: Flag[] }>(() => mock.parseCatalog(raw_text), 'POST', '/api/catalog/parse', { raw_text }),
