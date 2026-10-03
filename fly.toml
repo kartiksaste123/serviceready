@@ -1,6 +1,12 @@
 app = "serviceready"
 primary_region = "iad"
 
+[env]
+  DATABASE_PATH = "/data/serviceready.db"
+  PUBLIC_BASE_URL = "https://serviceready.fly.dev"
+  AI_GATEWAY = "paypal-hackathon"
+  PORT = "8080"
+
 [build]
   dockerfile = "Dockerfile"
 

@@ -7,6 +7,7 @@
     "dev": "tsx watch server/src/index.ts",
     "start": "node dist/server/src/index.js",
     "build": "tsc",
+    "build:web": "npm --prefix web run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

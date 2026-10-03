@@ -177,7 +177,10 @@ export function createApp(options: AppOptions = {}): Hono {
     const aiPath = /^\/api\/(catalog\/parse|public\/[^/]+\/quotes|quotes\/[^/]+\/replies|quotes\/[^/]+\/collections\/run|agent-sim\/chat)$/.test(c.req.path);
     if (!aiPath) return next();
     const now = Date.now();
-    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? 'unknown';
+    const ip = c.req.header('fly-client-ip')?.trim()
+      || c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+      || c.req.header('x-real-ip')?.trim()
+      || 'unknown';
     const requests = (rateLimit.get(ip) ?? []).filter((started) => now - started < 60_000);
     if (requests.length >= 20) return c.json({ error: 'Too many AI requests; try again in a minute.' }, 429);
     requests.push(now);
@@ -726,8 +729,8 @@ export function createApp(options: AppOptions = {}): Hono {
         draft_message: ''
       };
     }
-    const priorReminders = store.listEvents(quote.id).filter((event) => (
-      event.tool === 'send_invoice_reminder' && event.actor === 'paypal'
+    const priorReminders = store.listProposals(quote.id).filter((proposal) => (
+      proposal.action === 'send_reminder' && proposal.status === 'executed'
     )).length;
     if (proposed.action === 'send_reminder' && priorReminders >= seller.rules.max_reminders) {
       proposed = {
@@ -1024,7 +1027,7 @@ export function createApp(options: AppOptions = {}): Hono {
   app.post('/api/*', (c) => c.json({ error: 'Not found.' }, 404));
   app.put('/api/*', (c) => c.json({ error: 'Not found.' }, 404));
 
-  const webDist = resolve(process.cwd(), 'web/dist');
+  const webDist = resolve(process.cwd(), process.env.WEB_DIST || 'web/dist/client');
   app.get('*', (c) => {
     if (!existsSync(webDist)) return c.text('ServiceReady API is running.');
     const requested = c.req.path === '/' ? '/index.html' : c.req.path;
@@ -1041,7 +1044,11 @@ export function createApp(options: AppOptions = {}): Hono {
       '.png': 'image/png',
       '.jpg': 'image/jpeg',
       '.webp': 'image/webp',
-      '.ico': 'image/x-icon'
+      '.ico': 'image/x-icon',
+      '.woff2': 'font/woff2',
+      '.json': 'application/json; charset=utf-8',
+      '.txt': 'text/plain; charset=utf-8',
+      '.map': 'application/json; charset=utf-8'
     };
     return new Response(readFileSync(safePath), {
       headers: { 'Content-Type': mime[extname(safePath)] ?? 'application/octet-stream' }

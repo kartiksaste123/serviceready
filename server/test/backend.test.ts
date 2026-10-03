@@ -101,6 +101,20 @@ function makeQuote(overrides: Partial<Quote> = {}): Quote {
   };
 }
 
+function makeReminderProposal(quote: Quote): Proposal {
+  return {
+    id: createId('prop'),
+    quote_id: quote.id,
+    client_name: quote.client_name,
+    action: 'send_reminder',
+    reason: 'Reminder approved and sent.',
+    evidence: 'PayPal invoice INV-TEST status: UNPAID.',
+    draft_message: 'A friendly reminder.',
+    status: 'executed',
+    created_at: timestamp()
+  };
+}
+
 function saveBalanceInvoice(store: Store, quote: Quote, invoiceId = 'INV-TEST'): void {
   quote.status = 'balance_invoiced';
   quote.updated_at = timestamp();
@@ -283,15 +297,33 @@ describe('collections safeguards', () => {
     const { app } = appWith(store, ai, new StubPayPal(), toolkit);
     const quote = makeQuote();
     saveBalanceInvoice(store, quote);
-    for (let i = 0; i < 2; i += 1) {
-      store.saveEvent(createEvent('paypal', 'tool_call', quote.id, { tool: 'send_invoice_reminder' }));
-    }
+    store.saveProposal(makeReminderProposal(quote));
+    store.saveProposal(makeReminderProposal(quote));
     const response = await app.request(`/api/quotes/${quote.id}/collections/run`, { method: 'POST' });
     expect(response.status).toBe(200);
     const run = await response.json() as { proposal: Proposal };
     expect(toolkit.calls).toContain('get_invoice');
     expect(run.proposal.action).toBe('escalate');
     expect(run.proposal.evidence).toContain('status: UNPAID');
+    store.close();
+  });
+
+  it('allows a reminder when only one of two allowed reminders has executed', async () => {
+    const store = new Store(':memory:');
+    const ai = new StubAI();
+    const toolkit = new StubToolkit();
+    ai.completionQueue.push(toolCall('get_invoice', { invoice_id: 'INV-TEST' }));
+    ai.completionQueue.push(toolCall('propose_action', {
+      action: 'send_reminder', reason: 'A reminder is appropriate.', draft_message: 'A friendly reminder.'
+    }));
+    const { app } = appWith(store, ai, new StubPayPal(), toolkit);
+    const quote = makeQuote();
+    saveBalanceInvoice(store, quote);
+    store.saveProposal(makeReminderProposal(quote));
+    const response = await app.request(`/api/quotes/${quote.id}/collections/run`, { method: 'POST' });
+    expect(response.status).toBe(200);
+    const run = await response.json() as { proposal: Proposal };
+    expect(run.proposal.action).toBe('send_reminder');
     store.close();
   });
 });
