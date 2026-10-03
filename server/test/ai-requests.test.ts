@@ -6,7 +6,7 @@ import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionTool
 } from 'openai/resources';
-import { AIService } from '../src/ai.js';
+import { AIService, normalizeCatalogOutput } from '../src/ai.js';
 
 interface CapturedCall {
   body: ChatCompletionCreateParamsNonStreaming;
@@ -156,4 +156,108 @@ describe('AI request retry limits', () => {
     expect(chat.calls[0]?.body.max_tokens).toBe(1024);
     expect(chat.calls[0]?.options?.timeout).toBe(15_000);
   });
+});
+
+describe('catalog output normalization', () => {
+  it('fills absent non-money fields and keeps required money fields absent', () => {
+    const normalized = normalizeCatalogOutput({
+      services: [{ title: 'Logo design', price_usd: 150, deposit_pct: 50 }]
+    });
+
+    expect(normalized).toEqual({
+      services: [{
+        tmp_id: 'svc_1',
+        title: 'Logo design',
+        description: '',
+        deliverables: [],
+        price_usd: 150,
+        price_currency: null,
+        deposit_pct: 50,
+        lead_time_days: null
+      }]
+    });
+  });
+
+  it('de-duplicates service ids, drops unknown keys, and leaves malformed roots unchanged', () => {
+    const malformed = { services: 'not-an-array' };
+    const normalized = normalizeCatalogOutput({
+      services: [
+        { tmp_id: 'logo', title: 'Logo', price_usd: 150, deposit_pct: 50, ignored: true },
+        { tmp_id: 'logo', title: 'Brand kit', price_usd: 300, deposit_pct: 50, extra: 'drop' }
+      ]
+    }) as { services: Array<Record<string, unknown>> };
+
+    expect(normalized.services.map((service) => service.tmp_id)).toEqual(['logo', 'svc_2']);
+    expect(Object.keys(normalized.services[0] ?? {}).sort()).toEqual([
+      'deliverables',
+      'deposit_pct',
+      'description',
+      'lead_time_days',
+      'price_currency',
+      'price_usd',
+      'title',
+      'tmp_id'
+    ]);
+    expect(normalized.services[0]).not.toHaveProperty('ignored');
+    expect(normalizeCatalogOutput(malformed)).toBe(malformed);
+  });
+
+  it('accepts a catalog missing deliverables on its first model call', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { client, calls } = createFakeClient([
+      completion('tool_calls', JSON.stringify({
+        services: [{ title: 'Logo design', price_usd: 150, deposit_pct: 50 }]
+      }), 'submit_services')
+    ]);
+    const ai = new AIService(client, 'workers-ai/primary-test', 'workers-ai/fallback-test');
+
+    const parsed = await ai.parseCatalog('A logo design rate card.');
+
+    expect(calls).toHaveLength(1);
+    expect(parsed.services).toMatchObject([{
+      tmp_id: 'svc_1',
+      title: 'Logo design',
+      description: '',
+      deliverables: [],
+      price_cents: 15000,
+      lead_time_days: null
+    }]);
+  });
+
+  it.each(['price_usd', 'deposit_pct'] as const)(
+    'retries catalog output that is missing required %s',
+    async (missingField) => {
+      vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const incomplete: Record<string, unknown> = {
+        tmp_id: 'logo',
+        title: 'Logo design',
+        description: '',
+        deliverables: ['Final logo files'],
+        price_usd: 150,
+        price_currency: 'USD',
+        deposit_pct: 50,
+        lead_time_days: 7
+      };
+      delete incomplete[missingField];
+      const complete = {
+        ...incomplete,
+        [missingField]: missingField === 'price_usd' ? 150 : 50
+      };
+      const { client, calls } = createFakeClient([
+        completion('tool_calls', JSON.stringify({ services: [incomplete] }), 'submit_services'),
+        completion('tool_calls', JSON.stringify({ services: [complete] }), 'submit_services')
+      ]);
+      const ai = new AIService(client, 'workers-ai/primary-test', 'workers-ai/fallback-test');
+
+      await expect(ai.parseCatalog('A logo design rate card.')).resolves.toMatchObject({
+        services: [expect.objectContaining({ title: 'Logo design' })]
+      });
+
+      expect(calls).toHaveLength(2);
+      expect(calls.map((call) => call.body.model)).toEqual([
+        'workers-ai/primary-test',
+        'workers-ai/primary-test'
+      ]);
+    }
+  );
 });

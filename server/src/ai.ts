@@ -83,6 +83,61 @@ export function isDegenerateText(text: string): boolean {
   return /(.)\1{15,}/.test(trimmed) || (trimmed.length >= 10 && letterCount < 3);
 }
 
+const catalogServiceKeys = [
+  'tmp_id',
+  'title',
+  'description',
+  'deliverables',
+  'price_usd',
+  'price_currency',
+  'deposit_pct',
+  'lead_time_days'
+] as const;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function fallbackTmpId(index: number, usedIds: Set<string>): string {
+  const base = `svc_${index + 1}`;
+  if (!usedIds.has(base)) return base;
+  let suffix = 2;
+  while (usedIds.has(`${base}_${suffix}`)) suffix += 1;
+  return `${base}_${suffix}`;
+}
+
+export function normalizeCatalogOutput(value: unknown): unknown {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    !Array.isArray((value as { services?: unknown }).services)
+  ) {
+    return value;
+  }
+  const usedIds = new Set<string>();
+  const services = (value as { services: unknown[] }).services.map((service, index) => {
+    if (!isPlainObject(service)) return service;
+    const normalized: Record<string, unknown> = {};
+    for (const key of catalogServiceKeys) {
+      if (Object.prototype.hasOwnProperty.call(service, key)) normalized[key] = service[key];
+    }
+    const tmpId = normalized.tmp_id;
+    if (tmpId === undefined || tmpId === '' || (typeof tmpId === 'string' && usedIds.has(tmpId))) {
+      normalized.tmp_id = fallbackTmpId(index, usedIds);
+    }
+    if (normalized.deliverables === undefined) normalized.deliverables = [];
+    if (normalized.description === undefined) normalized.description = '';
+    if (normalized.price_currency === undefined) normalized.price_currency = null;
+    if (normalized.lead_time_days === undefined) normalized.lead_time_days = null;
+    if (typeof normalized.tmp_id === 'string') usedIds.add(normalized.tmp_id);
+    return normalized;
+  });
+  return { ...value, services };
+}
+
 export class AIService {
   private readonly client: OpenAI;
   private readonly primaryModel: string;
@@ -150,7 +205,7 @@ export class AIService {
         system,
         rawText,
         tool,
-        (value) => z.object({ services: z.array(serviceDraftInput) }).strict().parse(value),
+        (value) => z.object({ services: z.array(serviceDraftInput) }).strict().parse(normalizeCatalogOutput(value)),
         { maxTokens: 4096, timeoutMs: 30_000 }
       );
       return computeServiceDrafts(result.services);
