@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import { ArrowRight, Bot, Clock, Loader2, Send, Wrench, Zap } from "lucide-react";
 import { api } from "@/lib/api";
@@ -45,6 +45,9 @@ function Storefront() {
     queryFn: () => api.getPublicStore(slug),
   });
   const [picked, setPicked] = useState<Service | null>(null);
+  const [chatVisible, setChatVisible] = useState(false);
+  const chatRef = useRef<HTMLElement | null>(null);
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
   const initials = data?.seller.name
     .trim()
     .split(/\s+/)
@@ -54,16 +57,27 @@ function Storefront() {
     .join("")
     .toUpperCase() || "?";
 
+  useEffect(() => {
+    const chat = chatRef.current;
+    if (!data || !chat || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setChatVisible(Boolean(entry?.isIntersecting)),
+      { threshold: 0.15 },
+    );
+    observer.observe(chat);
+    return () => observer.disconnect();
+  }, [data]);
+
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen lg:flex lg:h-dvh lg:flex-col lg:overflow-hidden">
       <div className="grain pointer-events-none absolute inset-x-0 top-0 h-[420px]" />
-      <header className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8">
+      <header className="relative mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6 lg:px-8">
         <Link to="/">
           <Wordmark />
         </Link>
         <span className="text-[12px] text-muted-foreground">Powered by ServiceReady</span>
       </header>
-      <main className="relative mx-auto max-w-7xl px-6 pb-20 lg:px-8">
+      <main className="relative mx-auto flex w-full max-w-7xl flex-col px-6 pb-20 lg:min-h-0 lg:flex-1 lg:pb-6 lg:px-8">
         {isLoading ? (
           <div className="space-y-4 py-10">
             <Skeleton className="h-10 w-72" />
@@ -75,7 +89,7 @@ function Storefront() {
           </div>
         ) : (
           <>
-            <section className="flex flex-wrap items-end justify-between gap-6 py-10">
+            <section className="flex flex-wrap items-end justify-between gap-6 py-10 lg:py-5">
               <div className="flex items-center gap-4">
                 <span className="grid size-16 place-items-center rounded-2xl bg-muted text-xl font-bold text-foreground softcard">
                   {initials}
@@ -87,8 +101,8 @@ function Storefront() {
               </div>
               <AgentBadge mcp={data.agent.mcp_url} />
             </section>
-            <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
-              <div className="grid content-start gap-4 sm:grid-cols-2">
+            <div className="grid gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[1fr_420px]">
+              <div className="grid content-start gap-4 sm:grid-cols-2 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-2 lg:pt-1 lg:pb-4">
                 {data.services.map((s) => (
                   <article key={s.id} className="glass-card flex flex-col p-5">
                     <div className="flex items-start justify-between gap-3">
@@ -124,11 +138,23 @@ function Storefront() {
                   </article>
                 ))}
               </div>
-              <AgentChat slug={slug} />
+              <AgentChat slug={slug} chatRef={chatRef} inputRef={chatInputRef} />
             </div>
           </>
         )}
       </main>
+      {data && !isLoading && !isError && !chatVisible && !picked && (
+        <button
+          className="btn-primary fixed bottom-4 right-4 z-40 shadow-lg lg:hidden"
+          onClick={() => {
+            chatRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            chatInputRef.current?.focus({ preventScroll: true });
+          }}
+        >
+          <Bot className="size-4" />
+          Ask the AI assistant
+        </button>
+      )}
       <QuoteDialog
         slug={slug}
         service={picked}
@@ -235,10 +261,18 @@ type Item =
   | { kind: "tool"; trace: ToolTrace }
   | { kind: "quote"; quote: Quote };
 
-function AgentChat({ slug }: { slug: string }) {
+function AgentChat({
+  slug,
+  chatRef,
+  inputRef,
+}: {
+  slug: string;
+  chatRef: RefObject<HTMLElement | null>;
+  inputRef: RefObject<HTMLInputElement | null>;
+}) {
   const [items, setItems] = useState<Item[]>([]);
   const [text, setText] = useState("");
-  const end = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const msgs = items
     .filter((i): i is Extract<Item, { kind: "msg" }> => i.kind === "msg")
     .map((i) => i.msg);
@@ -254,10 +288,10 @@ function AgentChat({ slug }: { slug: string }) {
       ]);
     },
   });
-  useEffect(
-    () => end.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
-    [items, m.isPending],
-  );
+  useEffect(() => {
+    const messages = messagesRef.current;
+    if (messages) messages.scrollTop = messages.scrollHeight;
+  }, [items, m.isPending]);
   const send = (t: string) => {
     if (!t.trim() || m.isPending) return;
     const all = [...msgs, { role: "user" as const, content: t.trim() }];
@@ -267,7 +301,11 @@ function AgentChat({ slug }: { slug: string }) {
     m.mutate(all);
   };
   return (
-    <aside className="glass-card flex h-[360px] min-h-0 flex-col overflow-hidden sm:h-[400px] lg:sticky lg:top-6 lg:h-full">
+    <aside
+      ref={chatRef}
+      id="storefront-chat"
+      className="glass-card flex h-[360px] min-h-0 flex-col overflow-hidden sm:h-[400px] lg:h-full"
+    >
       <div className="flex items-center gap-3 border-b border-border px-5 py-4">
         <span className="icon-tile">
           <Bot className="size-4" />
@@ -277,7 +315,7 @@ function AgentChat({ slug }: { slug: string }) {
           <p className="text-[12px] text-muted-foreground">See which storefront tools it uses</p>
         </div>
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div ref={messagesRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {!items.length && (
           <div className="space-y-2 pt-2 lg:pt-4">
             <p className="text-center text-sm text-muted-foreground">Ask like a client would:</p>
@@ -347,7 +385,6 @@ function AgentChat({ slug }: { slug: string }) {
             Agent is calling tools…
           </div>
         )}
-        <div ref={end} />
       </div>
       <form
         className="flex gap-2 border-t border-border p-3"
@@ -357,6 +394,7 @@ function AgentChat({ slug }: { slug: string }) {
         }}
       >
         <input
+          ref={inputRef}
           className="field"
           placeholder="Message the agent…"
           value={text}

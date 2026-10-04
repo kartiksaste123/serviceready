@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AuthCode } from "@/components/AuthCode";
 import { AuthShell } from "@/components/AuthShell";
 import { api, type AuthChallenge } from "@/lib/api";
+import { setTourStage } from "@/lib/tour";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({ meta: [{ title: "Create your studio — ServiceReady" }] }),
@@ -68,7 +69,11 @@ function Signup() {
             <AuthCode
               challenge={challenge}
               onSubmit={async (code) => {
-                await api.auth.verify({ challenge_id: challenge.challenge_id, code });
+                const session = await api.auth.verify({
+                  challenge_id: challenge.challenge_id,
+                  code,
+                });
+                setTourStage(session.user.id, "onboard");
                 queryClient.clear();
                 await navigate({ to: "/onboard" });
               }}

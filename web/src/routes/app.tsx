@@ -1,9 +1,11 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   CheckSquare,
   Coins,
+  GraduationCap,
   LayoutList,
   Menu,
   Plug,
@@ -11,10 +13,11 @@ import {
   Settings,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import type { Driver } from "driver.js";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { money } from "@/lib/format";
+import { getTourStage, setTourStage, startStudioTour } from "@/lib/tour";
 import { Wordmark } from "@/components/kit";
 import { Skeleton } from "@/components/ui/skeleton";
 export const Route = createFileRoute("/app")({
@@ -31,16 +34,18 @@ export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
 const NAV = [
-  { to: "/app", l: "Bookings", i: LayoutList, exact: true },
-  { to: "/app/approvals", l: "Needs your approval", i: CheckSquare },
-  { to: "/app/collections", l: "Who owes what", i: Coins },
-  { to: "/app/log", l: "Activity log", i: ScrollText },
-  { to: "/app/connect", l: "Connect AI assistants", i: Plug },
-  { to: "/app/catalog", l: "Services & prices", i: BookOpen },
-  { to: "/app/settings", l: "Settings", i: Settings },
+  { key: "bookings", to: "/app", l: "Bookings", i: LayoutList, exact: true },
+  { key: "approvals", to: "/app/approvals", l: "Needs your approval", i: CheckSquare },
+  { key: "collections", to: "/app/collections", l: "Who owes what", i: Coins },
+  { key: "log", to: "/app/log", l: "Activity log", i: ScrollText },
+  { key: "connect", to: "/app/connect", l: "Connect AI assistants", i: Plug },
+  { key: "services", to: "/app/catalog", l: "Services & prices", i: BookOpen },
+  { key: "settings", to: "/app/settings", l: "Settings", i: Settings },
 ] as const;
 function AppLayout() {
   const [open, setOpen] = useState(false);
+  const activeTour = useRef<Driver | null>(null);
+  const didAutoStartTour = useRef(false);
   const pathname = useLocation().pathname;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -52,6 +57,43 @@ function AppLayout() {
     enabled: Boolean(account.data),
   });
   const count = pending.data?.length ?? 0;
+  const showStudioTour = useCallback((closeMenuOnDone = true) => {
+    const userId = account.data!.user.id;
+    activeTour.current = startStudioTour({
+      onDone: () => {
+        setTourStage(userId, "done");
+        if (closeMenuOnDone && window.matchMedia("(max-width: 1023px)").matches) {
+          setOpen(false);
+        }
+      },
+    });
+  }, [account.data]);
+
+  useEffect(() => {
+    const current = account.data;
+    if (!current || current.user.is_demo || didAutoStartTour.current) return;
+    const stage = getTourStage(current.user.id);
+    if (stage !== "studio" && stage !== "onboard") return;
+    didAutoStartTour.current = true;
+    const mobile = window.matchMedia("(max-width: 1023px)").matches;
+    const start = () => showStudioTour(mobile);
+    if (mobile) {
+      setOpen(true);
+      const timer = window.setTimeout(start, 0);
+      return () => window.clearTimeout(timer);
+    }
+    start();
+    return undefined;
+  }, [account.data, showStudioTour]);
+
+  useEffect(
+    () => () => {
+      activeTour.current?.destroy();
+      activeTour.current = null;
+    },
+    [],
+  );
+
   useEffect(() => {
     if (account.data === null) {
       void navigate({ to: "/login", search: { redirect: pathname } });
@@ -111,6 +153,7 @@ function AppLayout() {
             <Link
               key={n.to}
               to={n.to}
+              data-tour={`nav-${n.key}`}
               activeOptions={{ exact: "exact" in n }}
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -135,6 +178,14 @@ function AppLayout() {
             <p className="mt-1 text-xs text-muted-foreground">
               {account.data.user.is_demo ? "Demo studio · PayPal sandbox" : "PayPal sandbox"}
             </p>
+            <button
+              data-tour="tour-button"
+              className="mt-3 flex items-center gap-2 text-link"
+              onClick={() => showStudioTour()}
+            >
+              <GraduationCap className="size-4" />
+              Show tutorial
+            </button>
             <button className="mt-3 text-link underline underline-offset-4" onClick={() => void logout()}>
               Log out
             </button>
@@ -148,6 +199,14 @@ function AppLayout() {
           <p className="mt-1 text-xs text-muted-foreground">
             {account.data.user.is_demo ? "Demo studio · PayPal sandbox" : "PayPal sandbox"}
           </p>
+          <button
+            data-tour="tour-button"
+            className="mt-3 flex items-center gap-2 text-link"
+            onClick={() => showStudioTour()}
+          >
+            <GraduationCap className="size-4" />
+            Show tutorial
+          </button>
           <button className="mt-3 text-link underline underline-offset-4" onClick={() => void logout()}>
             Log out
           </button>

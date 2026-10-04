@@ -11,6 +11,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
+import "driver.js/dist/driver.css";
 import appCss from "../styles.css?url";
 import { reportClientError } from "../lib/api";
 import { reportLovableError } from "../lib/lovable-error-reporting";

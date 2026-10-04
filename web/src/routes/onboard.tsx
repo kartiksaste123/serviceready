@@ -19,6 +19,8 @@ import { Wordmark } from "@/components/kit";
 import { money } from "@/lib/format";
 import { RATE_CARD_EXAMPLES } from "@/lib/examples";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getTourStage, setTourStage, startOnboardTour } from "@/lib/tour";
+import type { Driver } from "driver.js";
 
 export const Route = createFileRoute("/onboard")({
   head: () => ({
@@ -62,6 +64,8 @@ function Onboard() {
   const [published, setPublished] = useState<Service[] | null>(null);
   const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null);
   const examplePanelRef = useRef<HTMLDivElement>(null);
+  const tourStarted = useRef(false);
+  const activeTour = useRef<Driver | null>(null);
   const parse = useMutation({
     mutationFn: () => api.parseCatalog(raw),
     onSuccess: (r) => {
@@ -78,6 +82,24 @@ function Onboard() {
   });
   const step = published ? 3 : drafts ? 2 : 1;
   const hasErrorFlags = flags.some((flag) => flag.severity === "error");
+  useEffect(() => {
+    const userId = account.data?.user.id;
+    if (!userId || step !== 1 || tourStarted.current || getTourStage(userId) !== "onboard") return;
+    tourStarted.current = true;
+    const timer = window.setTimeout(() => {
+      activeTour.current = startOnboardTour(() => setTourStage(userId, "studio"));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [account.data?.user.id, step]);
+
+  useEffect(
+    () => () => {
+      activeTour.current?.destroy();
+      activeTour.current = null;
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!account.isLoading && !account.data) {
       void navigate({ to: "/login", search: { redirect: pathname } });
@@ -140,6 +162,7 @@ function Onboard() {
                 looks off.
               </p>
               <textarea
+                data-tour="ratecard"
                 value={raw}
                 onChange={(e) => {
                   setRaw(e.target.value);
@@ -151,6 +174,7 @@ function Onboard() {
               />
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
+                  data-tour="structure"
                   className="btn-primary"
                   disabled={!raw.trim() || parse.isPending}
                   onClick={() => parse.mutate()}
@@ -176,6 +200,7 @@ function Onboard() {
               ref={examplePanelRef}
               className="glass-card scroll-mt-6 p-5 sm:p-6 lg:row-span-2"
               id="rate-card-examples"
+              data-tour="examples"
             >
               <h2 className="text-lg font-semibold">Try an example</h2>
               <p className="mt-1 text-sm text-muted-foreground">
