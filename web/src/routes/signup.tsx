@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { AuthCode } from "@/components/AuthCode";
 import { AuthShell } from "@/components/AuthShell";
 import { api, type AuthChallenge } from "@/lib/api";
@@ -14,6 +14,7 @@ export const Route = createFileRoute("/signup")({
 function Signup() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const account = useQuery({ queryKey: ["me"], queryFn: api.auth.me });
   const [studioName, setStudioName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,6 +22,12 @@ function Signup() {
   const [challenge, setChallenge] = useState<AuthChallenge | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (account.data && !challenge) {
+      void navigate({ to: "/app", replace: true });
+    }
+  }, [account.data, challenge, navigate]);
 
   const startSignup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

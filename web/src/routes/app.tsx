@@ -53,10 +53,10 @@ function AppLayout() {
   });
   const count = pending.data?.length ?? 0;
   useEffect(() => {
-    if (!account.isLoading && !account.data) {
+    if (account.data === null) {
       void navigate({ to: "/login", search: { redirect: pathname } });
     }
-  }, [account.data, account.isLoading, navigate, pathname]);
+  }, [account.data, navigate, pathname]);
 
   const logout = async () => {
     try {
@@ -67,6 +67,19 @@ function AppLayout() {
       toast.error(error instanceof Error ? error.message : "Couldn't log out.");
     }
   };
+
+  if (account.isError) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-muted p-6">
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">We couldn&apos;t check your login.</p>
+          <button className="btn-glass mt-3" onClick={() => void account.refetch()}>
+            Try again
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   if (account.isLoading || !account.data) {
     return (

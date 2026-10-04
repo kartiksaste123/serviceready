@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -79,6 +79,7 @@ const steps = [
 function Home() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const account = useQuery({ queryKey: ["me"], queryFn: api.auth.me });
   const [demoPending, setDemoPending] = useState(false);
   const tryDemo = async () => {
     setDemoPending(true);
@@ -112,14 +113,24 @@ function Home() {
             </a>
           </nav>
           <div className="flex shrink-0 items-center gap-2">
-            <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
-              Log in
-            </Link>
-            <Link to="/signup" className="btn-primary btn-sm">
-            <span className="sm:hidden">Get started</span>
-            <span className="hidden sm:inline">Make my services bookable</span>
-            <ArrowRight className="size-4" />
-            </Link>
+            {account.data ? (
+              <Link to="/app" className="btn-primary btn-sm">
+                <span className="sm:hidden">My studio</span>
+                <span className="hidden sm:inline">Open my studio</span>
+                <ArrowRight className="size-4" />
+              </Link>
+            ) : (
+              <>
+                <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
+                  Log in
+                </Link>
+                <Link to="/signup" className="btn-primary btn-sm">
+                  <span className="sm:hidden">Get started</span>
+                  <span className="hidden sm:inline">Make my services bookable</span>
+                  <ArrowRight className="size-4" />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -136,8 +147,8 @@ function Home() {
                 begins, and keep every client follow-up under your control.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link to="/signup" className="btn-primary">
-                  Get started <ArrowRight className="size-4" />
+                <Link to={account.data ? "/app" : "/signup"} className="btn-primary">
+                  {account.data ? "Open my studio" : "Get started"} <ArrowRight className="size-4" />
                 </Link>
                 <Link to="/s/$slug" params={{ slug: "maya-rao-studio" }} className="btn-glass">
                   See Maya&apos;s storefront
@@ -275,8 +286,8 @@ function Home() {
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
               Paste the rate card you already have. Review the result before anything is published.
             </p>
-            <Link to="/signup" className="btn-primary mt-8">
-              Get started <ArrowRight className="size-4" />
+            <Link to={account.data ? "/app" : "/signup"} className="btn-primary mt-8">
+              {account.data ? "Open my studio" : "Get started"} <ArrowRight className="size-4" />
             </Link>
           </div>
         </section>
@@ -289,8 +300,8 @@ function Home() {
             <a href="#how" className="hover:text-foreground">
               How it works
             </a>
-            <Link to="/login" className="hover:text-foreground">
-              Seller console
+            <Link to={account.data ? "/app" : "/login"} className="hover:text-foreground">
+              {account.data ? "Open my studio" : "Seller console"}
             </Link>
           </div>
         </div>

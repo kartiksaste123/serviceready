@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type FormEvent } from "react";
 import { AuthCode } from "@/components/AuthCode";
 import { AuthShell } from "@/components/AuthShell";
 import { api, safeRedirect, type AuthChallenge } from "@/lib/api";
@@ -20,6 +20,7 @@ function Login() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { redirect } = Route.useSearch();
+  const account = useQuery({ queryKey: ["me"], queryFn: api.auth.me });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -28,6 +29,12 @@ function Login() {
   const [mode, setMode] = useState<"login" | "forgot">("login");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (account.data && !challenge) {
+      void navigate({ to: safeRedirect(redirect) ?? "/app", replace: true });
+    }
+  }, [account.data, challenge, navigate, redirect]);
 
   const finishAuth = async () => {
     queryClient.clear();
