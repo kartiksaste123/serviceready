@@ -23,6 +23,7 @@ import type { AuthChallengeRecord, AuthPurpose, UserRecord } from './db.js';
 import { createMailer } from './mail.js';
 import type { Mailer } from './mail.js';
 import { createMcpServer } from './mcp.js';
+import { authenticateSellerAccessToken, registerOAuthRoutes, sellerOAuthChallenge, sellerOAuthResource } from './oauth.js';
 import { centsFromAmount, invoiceIdFrom, PayPalService, payerLink } from './paypal.js';
 import type {
   ChatCompletionMessageParam,
@@ -154,13 +155,18 @@ function parseBody<T>(schema: z.ZodType<T>, value: unknown): T {
   return result.data;
 }
 
-function consumeRateLimitSlot(limits: Map<string, number[]>, c: Context, maxRequests: number): boolean {
+function consumeRateLimitSlot(
+  limits: Map<string, number[]>,
+  c: Context,
+  maxRequests: number,
+  windowMs = 60_000
+): boolean {
   const ip = c.req.header('fly-client-ip')?.trim()
     || c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
     || c.req.header('x-real-ip')?.trim()
     || 'unknown';
   const now = Date.now();
-  const requests = (limits.get(ip) ?? []).filter((started) => now - started < 60_000);
+  const requests = (limits.get(ip) ?? []).filter((started) => now - started < windowMs);
   if (requests.length >= maxRequests) {
     limits.set(ip, requests);
     return false;
@@ -400,6 +406,7 @@ export interface AppOptions {
   mailer?: Mailer;
   toolkitFactory?: () => ReturnType<PayPalService['toolkit']>;
   publicBaseUrl?: string;
+  fetchClientMetadata?: (url: string) => Promise<unknown>;
 }
 
 export function createApp(options: AppOptions = {}): Hono {
@@ -420,12 +427,20 @@ export function createApp(options: AppOptions = {}): Hono {
   const rateLimit = new Map<string, number[]>();
   const authRateLimit = new Map<string, number[]>();
   const clientErrorRateLimit = new Map<string, number[]>();
+  const oauthRegistrationRateLimit = new Map<string, number[]>();
+  const oauthTokenRateLimit = new Map<string, number[]>();
   const secureCookie = baseUrl.startsWith('https');
   const getSessionContext = (c: Context): {
     tokenHash: string;
     user: UserRecord;
     seller: NonNullable<ReturnType<Store['getSellerById']>>;
   } | null => {
+    const serviceReadyMcpUserId = (c.env as { serviceReadyMcpUserId?: unknown } | undefined)?.serviceReadyMcpUserId;
+    if (typeof serviceReadyMcpUserId === 'string' && serviceReadyMcpUserId) {
+      const user = store.getUserById(serviceReadyMcpUserId);
+      const seller = user ? store.getSellerById(user.seller_id) : null;
+      return user && seller ? { tokenHash: '', user, seller } : null;
+    }
     const token = getCookie(c, 'sr_session');
     if (!token) return null;
     const tokenHash = hashSessionToken(token);
@@ -443,6 +458,18 @@ export function createApp(options: AppOptions = {}): Hono {
     }
     return { tokenHash, user, seller };
   };
+  registerOAuthRoutes(app, {
+    store,
+    baseUrl,
+    getSessionContext,
+    ...(options.fetchClientMetadata ? { fetchClientMetadata: options.fetchClientMetadata } : {}),
+    rateLimit: (c, maxRequests, windowMs) => consumeRateLimitSlot(
+      windowMs >= 60 * 60_000 ? oauthRegistrationRateLimit : oauthTokenRateLimit,
+      c,
+      maxRequests,
+      windowMs
+    )
+  });
   const requireSeller = (c: Context) => {
     const context = getSessionContext(c);
     if (!context) throw new HttpError(401, 'Please log in.');
@@ -1735,6 +1762,81 @@ export function createApp(options: AppOptions = {}): Hono {
   app.all('/mcp', async (c) => {
     const { WebStandardStreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js');
     const mcp = createMcpServer(clientTools);
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true
+    });
+    await mcp.connect(transport);
+    try {
+      return await transport.handleRequest(c.req.raw);
+    } finally {
+      await mcp.close();
+    }
+  });
+
+  app.all('/mcp/seller', async (c) => {
+    const authorization = c.req.header('authorization') ?? '';
+    const bearer = /^Bearer\s+([^\s]+)$/i.exec(authorization)?.[1];
+    const principal = bearer
+      ? authenticateSellerAccessToken(store, bearer, sellerOAuthResource(baseUrl))
+      : null;
+    if (!principal) {
+      return new Response('Unauthorized', {
+        status: 401,
+        headers: { 'www-authenticate': sellerOAuthChallenge(baseUrl, Boolean(authorization)) }
+      });
+    }
+    store.updateOAuthGrantLastUsed(principal.grant.id, timestamp());
+    const { createSellerMcpServer } = await import('./seller-mcp.js');
+    const mcp = createSellerMcpServer(async (method, path, body) => {
+      const response = await app.request(path, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
+      }, { serviceReadyMcpUserId: principal.user.id });
+      if (response.ok && method.toUpperCase() !== 'GET' && !path.startsWith('/api/catalog/parse')) {
+        const normalizedPath = path.split('?', 1)[0] ?? path;
+        const quoteMatch = /^\/api\/quotes\/([^/]+)/.exec(normalizedPath);
+        const proposalMatch = /^\/api\/proposals\/([^/]+)/.exec(normalizedPath);
+        let quoteId = quoteMatch?.[1] ? decodeURIComponent(quoteMatch[1]) : null;
+        if (!quoteId && proposalMatch?.[1]) {
+          quoteId = store.getProposal(decodeURIComponent(proposalMatch[1]))?.quote_id ?? null;
+        }
+        let action = 'updated studio data';
+        let kind: AgentEvent['kind'] = 'approval';
+        if (normalizedPath.includes('/replies')) {
+          action = 'recorded a client reply';
+          kind = 'message';
+        } else if (normalizedPath.includes('/collections/run')) {
+          action = 'ran a collections check';
+          kind = 'tool_call';
+        } else if (normalizedPath.includes('/deliver')) {
+          action = 'marked work delivered and sent the balance invoice';
+        } else if (normalizedPath.includes('/proposals/') && normalizedPath.endsWith('/approve')) {
+          action = 'approved a suggestion';
+        } else if (normalizedPath.includes('/proposals/') && normalizedPath.endsWith('/reject')) {
+          action = 'rejected a suggestion';
+        } else if (normalizedPath.endsWith('/catalog/publish')) {
+          action = 'published services';
+        } else if (normalizedPath.endsWith('/seller/rules')) {
+          action = 'updated studio rules';
+        } else if (/\/api\/public\/[^/]+\/quotes$/.test(normalizedPath)) {
+          action = 'created a quote';
+          try {
+            const createdQuote = await response.clone().json() as { id?: unknown };
+            quoteId = typeof createdQuote.id === 'string' ? createdQuote.id : quoteId;
+          } catch {
+          }
+        }
+        saveEvent(store, createEvent('seller', kind, quoteId, {
+          seller_id: principal.seller.id,
+          text: `Via Claude: ${action}.`
+        }));
+      }
+      return response;
+    });
+    const { WebStandardStreamableHTTPServerTransport } =
+      await import('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js');
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true

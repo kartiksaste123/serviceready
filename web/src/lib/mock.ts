@@ -10,7 +10,7 @@ let seq = 1000;
 const uid = (p: string) => `${p}_${(seq++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const ago = (days: number, hours = 0) => new Date(Date.now() - days * 864e5 - hours * 36e5).toISOString();
 const now = () => new Date().toISOString();
-const MCP_URL = 'https://serviceready.app/mcp/maya-rao-studio';
+const MCP_URL = 'https://serviceready.fly.dev/mcp';
 const WEBMCP_TOOLS = ['list_services', 'get_service', 'request_quote', 'get_quote_status'];
 
 interface DB {
@@ -305,3 +305,23 @@ export async function agentChat(slug: string, messages: ChatMsg[]): Promise<{ me
 }
 export async function paypalConfig() { await wait(100); return { client_id: 'sb-mock-client-id', env: 'sandbox' as const }; }
 export async function reset() { await wait(); db = seed(); return { ok: true as const }; }
+export async function getOAuthRequest(_id: string) {
+  await wait(100);
+  return {
+    client_name: 'Claude',
+    redirect_host: 'claude.ai',
+    studio_name: db.seller.name,
+    scopes: ['studio', 'offline_access']
+  };
+}
+export async function decideOAuthRequest(_id: string, _allow: boolean) {
+  await wait(100);
+  return { redirect_url: 'https://claude.ai/api/mcp/auth_callback?code=mock-code' };
+}
+export async function listOAuthGrants() {
+  await wait(100);
+  return [] as { id: string; client_name: string; created_at: string; last_used_at: string | null }[];
+}
+export async function revokeOAuthGrant(_id: string): Promise<void> {
+  await wait(100);
+}

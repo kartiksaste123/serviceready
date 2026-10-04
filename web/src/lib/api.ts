@@ -23,6 +23,20 @@ export interface AuthChallenge {
   email_hint: string;
 }
 
+export interface OAuthRequest {
+  client_name: string;
+  redirect_host: string;
+  studio_name: string;
+  scopes: string[];
+}
+
+export interface OAuthGrant {
+  id: string;
+  client_name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
 export interface ClientErrorPayload {
   message: string;
   stack?: string;
@@ -73,6 +87,7 @@ async function http<T>(method: string, path: string, body?: unknown, signal?: Ab
     try { const j = await res.json(); msg = j.error ?? j.message ?? msg; } catch { /* ignore */ }
     throw new Error(msg);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 const m = <T,>(mockFn: () => Promise<T>, method: string, path: string, body?: unknown) =>
@@ -142,7 +157,9 @@ export function safeRedirect(value: unknown): string | null {
     path !== '/app' &&
     !path.startsWith('/app/') &&
     path !== '/onboard' &&
-    !path.startsWith('/onboard/')
+    !path.startsWith('/onboard/') &&
+    path !== '/authorize' &&
+    !path.startsWith('/authorize/')
   ) return null;
   return value;
 }
@@ -217,6 +234,24 @@ export const api = {
       mockAuthUser = null;
       return { ok: true as const };
     },
+  },
+  oauth: {
+    getRequest: (id: string) =>
+      m<OAuthRequest>(
+        () => mock.getOAuthRequest(id),
+        'GET',
+        `/api/oauth/requests/${enc(id)}`,
+      ),
+    decideRequest: (id: string, allow: boolean) =>
+      m<{ redirect_url: string }>(
+        () => mock.decideOAuthRequest(id, allow),
+        'POST',
+        `/api/oauth/requests/${enc(id)}/decision`,
+        { allow },
+      ),
+    listGrants: () => m<OAuthGrant[]>(() => mock.listOAuthGrants(), 'GET', '/api/oauth/grants'),
+    revokeGrant: (id: string) =>
+      m<void>(() => mock.revokeOAuthGrant(id), 'DELETE', `/api/oauth/grants/${enc(id)}`),
   },
   getSeller: () => m<Seller>(() => mock.getSeller(), 'GET', '/api/seller'),
   updateRules: (rules: SellerRules) => m<Seller>(() => mock.putRules(rules), 'PUT', '/api/seller/rules', rules),

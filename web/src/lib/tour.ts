@@ -83,7 +83,7 @@ const studioSteps: DriveStep[] = [
     popover: {
       title: "Connect AI assistants",
       description:
-        "Let ChatGPT, Claude and other assistants find your services and request quotes. They can't pay or approve anything.",
+        "Connect Claude to manage your studio (you sign in once), or share the public link so clients' assistants can find you and request quotes.",
     },
   },
   {

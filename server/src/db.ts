@@ -63,6 +63,49 @@ export class Store {
         user_id TEXT NOT NULL,
         sent_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS oauth_clients (
+        client_id TEXT PRIMARY KEY,
+        metadata TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS oauth_requests (
+        id TEXT PRIMARY KEY,
+        payload TEXT NOT NULL,
+        expires_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS oauth_codes (
+        code_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        seller_id TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        redirect_uri TEXT NOT NULL,
+        code_challenge TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS oauth_grants (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        seller_id TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT,
+        UNIQUE(user_id, client_id)
+      );
+      CREATE TABLE IF NOT EXISTS oauth_tokens (
+        token_hash TEXT PRIMARY KEY,
+        grant_id TEXT NOT NULL REFERENCES oauth_grants(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
     `);
     this.migrateSellerColumns();
     if (!this.getSellerById('seller_maya')) this.seed();
@@ -243,9 +286,139 @@ export class Store {
     this.raw.transaction(() => {
       this.raw.prepare('DELETE FROM auth_challenges WHERE user_id = ?').run(userId);
       this.raw.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+      this.raw.prepare('DELETE FROM oauth_grants WHERE user_id = ?').run(userId);
+      this.raw.prepare('DELETE FROM oauth_codes WHERE user_id = ?').run(userId);
       this.raw.prepare('DELETE FROM auth_code_sends WHERE user_id = ?').run(userId);
       this.raw.prepare('DELETE FROM users WHERE id = ?').run(userId);
       this.raw.prepare('DELETE FROM sellers WHERE id = ?').run(sellerId);
+    })();
+  }
+
+  saveOAuthClient(clientId: string, metadata: Record<string, unknown>, createdAt: string): void {
+    this.raw.prepare('INSERT INTO oauth_clients(client_id,metadata,created_at) VALUES(?,?,?)')
+      .run(clientId, JSON.stringify(metadata), createdAt);
+  }
+
+  getOAuthClient(clientId: string): OAuthClientRecord | null {
+    const row = this.raw.prepare('SELECT * FROM oauth_clients WHERE client_id = ?').get(clientId) as
+      | { client_id: string; metadata: string; created_at: string }
+      | undefined;
+    return row ? { ...row, metadata: JSON.parse(row.metadata) as Record<string, unknown> } : null;
+  }
+
+  saveOAuthRequest(request: OAuthRequestRecord): void {
+    this.raw.prepare('INSERT OR REPLACE INTO oauth_requests(id,payload,expires_at) VALUES(?,?,?)')
+      .run(request.id, JSON.stringify(request.payload), request.expires_at);
+  }
+
+  getOAuthRequest(id: string): OAuthRequestRecord | null {
+    const row = this.raw.prepare('SELECT * FROM oauth_requests WHERE id = ?').get(id) as
+      | { id: string; payload: string; expires_at: string }
+      | undefined;
+    return row ? { id: row.id, payload: JSON.parse(row.payload) as OAuthRequestPayload, expires_at: row.expires_at } : null;
+  }
+
+  deleteOAuthRequest(id: string): void {
+    this.raw.prepare('DELETE FROM oauth_requests WHERE id = ?').run(id);
+  }
+
+  saveOAuthCode(code: OAuthCodeRecord): void {
+    this.raw.prepare(`
+      INSERT INTO oauth_codes(
+        code_hash,user_id,seller_id,client_id,client_name,redirect_uri,code_challenge,scope,resource,expires_at,created_at
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+    `).run(
+      code.code_hash,
+      code.user_id,
+      code.seller_id,
+      code.client_id,
+      code.client_name,
+      code.redirect_uri,
+      code.code_challenge,
+      code.scope,
+      code.resource,
+      code.expires_at,
+      code.created_at
+    );
+  }
+
+  getOAuthCode(codeHash: string): OAuthCodeRecord | null {
+    const row = this.raw.prepare('SELECT * FROM oauth_codes WHERE code_hash = ?').get(codeHash) as OAuthCodeRecord | undefined;
+    return row ?? null;
+  }
+
+  deleteOAuthCode(codeHash: string): void {
+    this.raw.prepare('DELETE FROM oauth_codes WHERE code_hash = ?').run(codeHash);
+  }
+
+  getOAuthGrant(id: string): OAuthGrantRecord | null {
+    const row = this.raw.prepare('SELECT * FROM oauth_grants WHERE id = ?').get(id) as OAuthGrantRecord | undefined;
+    return row ?? null;
+  }
+
+  getOAuthGrantForClient(userId: string, clientId: string): OAuthGrantRecord | null {
+    const row = this.raw.prepare('SELECT * FROM oauth_grants WHERE user_id = ? AND client_id = ?')
+      .get(userId, clientId) as OAuthGrantRecord | undefined;
+    return row ?? null;
+  }
+
+  saveOAuthGrant(grant: OAuthGrantRecord): OAuthGrantRecord {
+    this.raw.prepare(`
+      INSERT INTO oauth_grants(id,user_id,seller_id,client_id,client_name,scope,created_at,last_used_at)
+      VALUES(?,?,?,?,?,?,?,?)
+      ON CONFLICT(user_id,client_id) DO UPDATE SET
+        seller_id = excluded.seller_id,
+        client_name = excluded.client_name,
+        scope = excluded.scope
+    `).run(
+      grant.id,
+      grant.user_id,
+      grant.seller_id,
+      grant.client_id,
+      grant.client_name,
+      grant.scope,
+      grant.created_at,
+      grant.last_used_at
+    );
+    return this.getOAuthGrantForClient(grant.user_id, grant.client_id)!;
+  }
+
+  listOAuthGrants(userId: string): OAuthGrantRecord[] {
+    return this.raw.prepare('SELECT * FROM oauth_grants WHERE user_id = ? ORDER BY created_at DESC')
+      .all(userId) as OAuthGrantRecord[];
+  }
+
+  updateOAuthGrantLastUsed(id: string, lastUsedAt: string): void {
+    this.raw.prepare('UPDATE oauth_grants SET last_used_at = ? WHERE id = ?').run(lastUsedAt, id);
+  }
+
+  deleteOAuthGrant(id: string, userId?: string): boolean {
+    const result = userId
+      ? this.raw.prepare('DELETE FROM oauth_grants WHERE id = ? AND user_id = ?').run(id, userId)
+      : this.raw.prepare('DELETE FROM oauth_grants WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  saveOAuthToken(token: OAuthTokenRecord): void {
+    this.raw.prepare(`
+      INSERT INTO oauth_tokens(token_hash,grant_id,kind,resource,expires_at,status,created_at)
+      VALUES(?,?,?,?,?,?,?)
+    `).run(token.token_hash, token.grant_id, token.kind, token.resource, token.expires_at, token.status, token.created_at);
+  }
+
+  getOAuthToken(tokenHash: string): OAuthTokenRecord | null {
+    const row = this.raw.prepare('SELECT * FROM oauth_tokens WHERE token_hash = ?').get(tokenHash) as OAuthTokenRecord | undefined;
+    return row ?? null;
+  }
+
+  setOAuthTokenStatus(tokenHash: string, status: OAuthTokenRecord['status']): void {
+    this.raw.prepare('UPDATE oauth_tokens SET status = ? WHERE token_hash = ?').run(status, tokenHash);
+  }
+
+  revokeOAuthGrantsForUser(userId: string): void {
+    this.raw.transaction(() => {
+      this.raw.prepare('DELETE FROM oauth_grants WHERE user_id = ?').run(userId);
+      this.raw.prepare('DELETE FROM oauth_codes WHERE user_id = ?').run(userId);
     })();
   }
 
@@ -311,7 +484,11 @@ export class Store {
   }
 
   deleteSessions(userId: string): void {
-    this.raw.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+    this.raw.transaction(() => {
+      this.raw.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+      this.raw.prepare('DELETE FROM oauth_grants WHERE user_id = ?').run(userId);
+      this.raw.prepare('DELETE FROM oauth_codes WHERE user_id = ?').run(userId);
+    })();
   }
 
   hasWebhookEvent(eventId: string): boolean {
@@ -456,6 +633,63 @@ export interface SessionRecord {
   token_hash: string;
   user_id: string;
   expires_at: string;
+  created_at: string;
+}
+
+export interface OAuthClientRecord {
+  client_id: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface OAuthRequestPayload {
+  client_id: string;
+  client_name: string;
+  redirect_uri: string;
+  code_challenge: string;
+  state?: string;
+  scope: string;
+  resource: string;
+}
+
+export interface OAuthRequestRecord {
+  id: string;
+  payload: OAuthRequestPayload;
+  expires_at: string;
+}
+
+export interface OAuthCodeRecord {
+  code_hash: string;
+  user_id: string;
+  seller_id: string;
+  client_id: string;
+  client_name: string;
+  redirect_uri: string;
+  code_challenge: string;
+  scope: string;
+  resource: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface OAuthGrantRecord {
+  id: string;
+  user_id: string;
+  seller_id: string;
+  client_id: string;
+  client_name: string;
+  scope: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface OAuthTokenRecord {
+  token_hash: string;
+  grant_id: string;
+  kind: 'access_token' | 'refresh_token';
+  resource: string;
+  expires_at: string;
+  status: 'active' | 'rotated' | 'revoked';
   created_at: string;
 }
 
