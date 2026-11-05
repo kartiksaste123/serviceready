@@ -1,41 +1,111 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Clock, Upload } from "lucide-react";
+import { Clock, ExternalLink, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import { money0 } from "@/lib/format";
-import { Empty, PageHeader } from "@/components/kit";
+import { depositOf } from "@/lib/validation";
+import { Empty, ErrorState, PageHeader } from "@/components/kit";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/app/catalog")({
-  head: () => ({ meta: [{ title: "Catalog — ServiceReady" }, { name: "description", content: "Your published, agent-ready services." }, { property: "og:title", content: "Catalog — ServiceReady" }, { property: "og:description", content: "Published services." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
+  head: () => ({
+    meta: [
+      { title: "Services & prices — ServiceReady" },
+      { name: "description", content: "Your published, agent-ready services." },
+      { property: "og:title", content: "Services & prices — ServiceReady" },
+      { property: "og:description", content: "Published services." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Catalog,
 });
 
 function Catalog() {
-  const { data, isLoading } = useQuery({ queryKey: ["services"], queryFn: api.listServices });
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["services"],
+    queryFn: api.listServices,
+  });
+  const seller = useQuery({ queryKey: ["seller"], queryFn: api.getSeller });
+  const slug = seller.data?.slug ?? "maya-rao-studio";
+  const published = data?.filter((s) => s.status === "published").length ?? 0;
   return (
     <>
-       <PageHeader title="Services & prices" sub="What AI assistants and clients can book.">
-        <Link to="/s/$slug" params={{ slug: "maya-rao-studio" }} className="btn-glass btn-sm">View storefront</Link>
-        <Link to="/onboard" className="btn-mint btn-sm"><Upload className="size-3.5" />Import rate card</Link>
+      <PageHeader
+        title="Services & prices"
+        sub={
+          data
+            ? `${published} published service${published === 1 ? "" : "s"} that AI assistants and clients can quote and book.`
+            : "What AI assistants and clients can book."
+        }
+      >
+        <Link to="/s/$slug" params={{ slug }} className="btn-glass btn-sm">
+          <ExternalLink className="size-3.5" aria-hidden="true" />
+          View storefront
+        </Link>
+        <Link to="/onboard" className="btn-mint btn-sm">
+          <Upload className="size-3.5" aria-hidden="true" />
+          Import rate card
+        </Link>
       </PageHeader>
-      {isLoading ? <div className="grid gap-4 sm:grid-cols-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}</div>
-        : !data?.length ? <Empty title="No services yet"><Link to="/onboard" className="text-link">Import your rate card</Link> to get started.</Empty>
-        : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {data.map((s) => (
-              <div key={s.id} className="glass-card p-5">
-                <div className="flex justify-between gap-3"><h2 className="font-semibold">{s.title}</h2><span className="font-bold tabular-nums">{money0(s.price_cents)}</span></div>
-                <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-sm">
-                  <span className="rounded-md bg-success-bg px-2 py-0.5 text-link">{s.deposit_pct}% deposit</span>
-                  <span className="flex items-center gap-1 rounded-md bg-muted px-2 py-0.5"><Clock className="size-3" />{s.lead_time_days}d</span>
-                  <span className="rounded-md bg-muted px-2 py-0.5 capitalize">{s.status}</span>
-                </div>
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-44 rounded-2xl" />
+          ))}
+        </div>
+      ) : isError ? (
+        <ErrorState title="Couldn't load your services" onRetry={() => refetch()} />
+      ) : !data?.length ? (
+        <Empty title="No services yet">
+          <Link to="/onboard" className="text-link">
+            Import your rate card
+          </Link>{" "}
+          to publish your first services.
+        </Empty>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {data.map((s) => (
+            <article key={s.id} className="glass-card flex flex-col p-5">
+              <div className="flex justify-between gap-3">
+                <h2 className="font-semibold">{s.title}</h2>
+                <span className="font-bold tabular-nums">{money0(s.price_cents)}</span>
               </div>
-            ))}
-          </div>
-        )}
+              <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
+              {s.deliverables.length > 0 && (
+                <ul className="mt-3 flex flex-wrap gap-1.5">
+                  {s.deliverables.map((d) => (
+                    <li
+                      key={d}
+                      className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
+                    >
+                      {d}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-auto flex flex-wrap gap-2 pt-4 text-sm">
+                <span className="rounded-md bg-success-bg px-2 py-0.5 font-medium text-success tabular-nums">
+                  {s.deposit_pct}% deposit · {money0(depositOf(s.price_cents, s.deposit_pct))}
+                </span>
+                <span className="flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
+                  <Clock className="size-3" aria-hidden="true" />
+                  {s.lead_time_days} day{s.lead_time_days === 1 ? "" : "s"}
+                </span>
+                <span
+                  className={`rounded-md px-2 py-0.5 capitalize ${s.status === "published" ? "bg-muted" : "bg-warning-bg text-warning"}`}
+                >
+                  {s.status}
+                </span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+      <p className="mt-6 text-sm text-muted-foreground">
+        To change a price, import an updated rate card — services with the same name are updated
+        instead of duplicated.
+      </p>
     </>
   );
 }

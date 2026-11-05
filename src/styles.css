@@ -86,26 +86,46 @@
 }
 
 @layer base {
-  * { border-color: var(--border); }
-  html { color-scheme: light; }
+  * {
+    border-color: var(--border);
+  }
+  html {
+    color-scheme: light;
+  }
   body {
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
     font-size: 16px;
-    font-feature-settings: "ss01" 1, "cv11" 1;
+    font-feature-settings:
+      "ss01" 1,
+      "cv11" 1;
     -webkit-font-smoothing: antialiased;
   }
-  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
     outline: 3px solid color-mix(in oklab, var(--ring) 38%, transparent);
     outline-offset: 2px;
   }
 }
 
-@utility ringline { box-shadow: inset 0 0 0 1px var(--border); }
-@utility softcard { box-shadow: 0 4px 16px color-mix(in oklab, var(--foreground) 6%, transparent); }
-@utility dash-shadow { box-shadow: 0 8px 28px color-mix(in oklab, var(--foreground) 7%, transparent); }
-@utility display { letter-spacing: 0; line-height: 1.06; font-weight: 600; }
+@utility ringline {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+@utility softcard {
+  box-shadow: 0 4px 16px color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+@utility dash-shadow {
+  box-shadow: 0 8px 28px color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+@utility display {
+  letter-spacing: 0;
+  line-height: 1.06;
+  font-weight: 600;
+}
 
 @layer components {
   .btn-mint {
@@ -114,15 +134,31 @@
   .btn-glass {
     @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-foreground bg-background px-5 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-50;
   }
-  .btn-sm { @apply min-h-9 px-3.5 py-1.5 text-sm; }
-  .glass-card { @apply rounded-xl border border-border bg-card shadow-sm; }
-  .glass-row { @apply rounded-lg border border-border bg-muted; }
-  .eyebrow { @apply text-sm font-semibold text-foreground; }
-  .icon-tile { @apply grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-foreground; }
+  .btn-sm {
+    @apply min-h-9 px-3.5 py-1.5 text-sm;
+  }
+  .glass-card {
+    @apply rounded-xl border border-border bg-card shadow-sm;
+  }
+  .glass-row {
+    @apply rounded-lg border border-border bg-muted;
+  }
+  .eyebrow {
+    @apply text-sm font-semibold text-foreground;
+  }
+  .icon-tile {
+    @apply grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-foreground;
+  }
   .field {
     @apply w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20;
   }
-  .text-link { @apply font-medium text-link underline underline-offset-4 hover:no-underline; }
-  .code-box { @apply rounded-lg border border-border bg-muted p-4 font-mono text-sm text-foreground; }
-  .surface-band { @apply bg-accent; }
+  .text-link {
+    @apply font-medium text-link underline underline-offset-4 hover:no-underline;
+  }
+  .code-box {
+    @apply rounded-lg border border-border bg-muted p-4 font-mono text-sm text-foreground;
+  }
+  .surface-band {
+    @apply bg-accent;
+  }
 }

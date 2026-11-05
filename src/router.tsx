@@ -3,11 +3,17 @@ import { createRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { routeTree } from "./routeTree.gen";
 
-const onError = (e: unknown) => toast.error(e instanceof Error ? e.message : "Something went wrong");
+const onError = (e: unknown) =>
+  toast.error(e instanceof Error ? e.message : "Something went wrong");
 
 export const getRouter = () => {
   const queryClient = new QueryClient({
-    queryCache: new QueryCache({ onError }),
+    queryCache: new QueryCache({
+      // Pages with their own error UI opt out of the global toast via meta.silent.
+      onError: (e, query) => {
+        if (!query.meta?.["silent"]) onError(e);
+      },
+    }),
     mutationCache: new MutationCache({ onError }),
     defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
   });
