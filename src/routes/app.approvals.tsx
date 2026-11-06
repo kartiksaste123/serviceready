@@ -40,8 +40,8 @@ function Approvals() {
   return (
     <>
       <PageHeader
-        title="Needs your approval"
-        sub="Nothing is sent without you. Assistants check PayPal first, then wait for your decision."
+        title="Approvals"
+        sub="Messages your assistant drafted. Nothing goes out until you approve it."
       />
       <div
         role="tablist"

@@ -55,8 +55,8 @@ function Connect() {
   return (
     <>
       <PageHeader
-        title="Connect AI assistants"
-        sub="Give Claude, ChatGPT or a browser assistant read access to your published services so they can prepare quotes for clients."
+        title="AI assistants"
+        sub="Let Claude, ChatGPT or a browser assistant quote your services for clients."
       />
       {isLoading || seller.isLoading ? (
         <Skeleton className="h-96 rounded-2xl" />

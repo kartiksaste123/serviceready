@@ -59,7 +59,7 @@ await step("quote dialog validation", async () => {
   await page.getByLabel("About the project").fill("Logo for my tea shop, minimal style.");
   await page.getByRole("button", { name: "Get my quote" }).click();
   await page.waitForURL(/\/q\//);
-  await page.getByText("Secure PayPal checkout").waitFor();
+  await page.getByText(/^(Pay|Hold) your deposit$/).waitFor();
   await shot("03-quote");
 });
 let quoteUrl = page.url();
@@ -90,10 +90,13 @@ await step("filter + search", async () => {
   await page.getByText("Showing 1–1 of 1").waitFor();
 });
 await step("open booking + deliver", async () => {
-  await page.getByRole("row", { name: /Riya Patel/ }).click();
+  await page
+    .getByRole("row", { name: /Riya Patel/ })
+    .first()
+    .click();
   await page.waitForURL(/\/app\/quotes\//);
   await page.getByRole("button", { name: "Mark delivered & invoice balance" }).click();
-  await page.getByRole("button", { name: "Send invoice" }).click();
+  await page.getByRole("button", { name: /^Send .*invoice$/ }).click();
   await page.getByText("Simulate balance payment").waitFor({ timeout: 8000 });
   await shot("05-detail");
 });
@@ -129,7 +132,7 @@ await step("approvals hannah", async () => {
 });
 await step("collections", async () => {
   await go("/app/collections");
-  await page.getByText("Oldest first", { exact: true }).waitFor();
+  await page.getByText("Who to follow up with", { exact: true }).waitFor();
   await shot("07-collections");
 });
 await step("log", async () => {
@@ -177,7 +180,7 @@ await step("agent chat", async () => {
   await page.getByRole("link", { name: /Review & pay deposit/ }).waitFor({ timeout: 8000 });
   await shot("13-chat");
   await page.getByRole("link", { name: /Review & pay deposit/ }).click();
-  await page.getByText("Secure PayPal checkout").waitFor();
+  await page.getByText(/^(Pay|Hold) your deposit$/).waitFor();
 });
 await step("404 quote", async () => {
   await go("/q/nope");

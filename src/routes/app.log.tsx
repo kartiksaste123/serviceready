@@ -52,10 +52,7 @@ function Log() {
   }, [data, q]);
   return (
     <>
-      <PageHeader
-        title="Activity log"
-        sub="A complete record of what assistants, clients, PayPal and you did — newest first. Technical details stay folded away."
-      />
+      <PageHeader title="Activity log" sub="Everything that happened, newest first." />
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative lg:w-72">
           <Search
@@ -88,7 +85,7 @@ function Log() {
                 setActor(a);
                 setLimit(STEP);
               }}
-              className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-sm ${actor === a ? "border-foreground bg-primary text-primary-foreground" : "border-input bg-background text-muted-foreground hover:text-foreground"}`}
+              className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-sm ${actor === a ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background text-muted-foreground hover:text-foreground"}`}
             >
               {a ? actorLabel[a] : "Everyone"}
             </button>

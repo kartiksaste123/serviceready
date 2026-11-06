@@ -112,7 +112,7 @@ function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" sub="Rules your assistants follow. They can't override them." />
+      <PageHeader title="Settings" sub="Your business rules. Assistants always follow them." />
       {isLoading ? (
         <Skeleton className="h-80 rounded-2xl" />
       ) : isError || !d ? (
@@ -164,7 +164,7 @@ function SettingsPage() {
                       aria-checked={d.reminder_tone === t}
                       key={t}
                       onClick={() => set({ reminder_tone: t })}
-                      className={`min-h-11 rounded-lg border px-3 py-2.5 text-left text-sm ${d.reminder_tone === t ? "border-foreground bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
+                      className={`min-h-11 rounded-lg border px-3 py-2.5 text-left text-sm ${d.reminder_tone === t ? "border-primary bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
                     >
                       <span className="block font-semibold">{l}</span>
                       <span className="block text-xs opacity-80">{desc}</span>

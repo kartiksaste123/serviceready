@@ -172,7 +172,8 @@ function QuotePage() {
             const q = data.quote;
             const bal = data.payments.find((p) => p.kind === "balance");
             const dep = data.payments.find(
-              (p) => p.kind === "deposit" && (p.status === "COMPLETED" || p.status === "AUTHORIZED"),
+              (p) =>
+                p.kind === "deposit" && (p.status === "COMPLETED" || p.status === "AUTHORIZED"),
             );
             return (
               <>
@@ -236,7 +237,9 @@ function QuotePage() {
                       <dl className="mt-5 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-border bg-border text-sm tabular-nums">
                         <div className="min-w-0 bg-card p-2.5 sm:p-4">
                           <dt className="text-[11px] text-muted-foreground sm:text-xs">Total</dt>
-                          <dd className="mt-1 text-base font-semibold sm:text-lg">{money(q.total_cents)}</dd>
+                          <dd className="mt-1 text-base font-semibold sm:text-lg">
+                            {money(q.total_cents)}
+                          </dd>
                         </div>
                         <div className="min-w-0 bg-card p-2.5 sm:p-4">
                           <dt className="text-[11px] text-muted-foreground sm:text-xs">
@@ -254,7 +257,9 @@ function QuotePage() {
                               </>
                             )}
                           </dt>
-                          <dd className="mt-1 text-base font-bold sm:text-lg">{money(q.deposit_cents)}</dd>
+                          <dd className="mt-1 text-base font-bold sm:text-lg">
+                            {money(q.deposit_cents)}
+                          </dd>
                         </div>
                         <div className="min-w-0 bg-card p-2.5 sm:p-4">
                           <dt className="text-[11px] text-muted-foreground sm:text-xs">
@@ -270,7 +275,9 @@ function QuotePage() {
                               </>
                             )}
                           </dt>
-                          <dd className="mt-1 text-base font-semibold sm:text-lg">{money(q.balance_cents)}</dd>
+                          <dd className="mt-1 text-base font-semibold sm:text-lg">
+                            {money(q.balance_cents)}
+                          </dd>
                         </div>
                       </dl>
                       {(q.tip_cents ?? 0) > 0 && (
@@ -290,28 +297,37 @@ function QuotePage() {
                         {describeCancelPolicy(normalizePolicy(q.cancel_policy))}
                       </p>
                       <p className="mt-2 text-xs text-muted-foreground">
-                        Enforced automatically with PayPal (void, partial capture or refund) — and the
-                        amounts on this quote are signed, so they can't be changed after you see them.
+                        Enforced automatically with PayPal (void, partial capture or refund) — and
+                        the amounts on this quote are signed, so they can't be changed after you see
+                        them.
                       </p>
                     </div>
                   </article>
 
                   {/* Payment — first on mobile */}
                   <aside className="order-1 space-y-5 lg:sticky lg:top-5 lg:order-2">
-                    <section className="glass-card p-5" aria-labelledby="pay-h">
+                    <section
+                      className={`glass-card p-5 sm:p-6 ${q.status === "quoted" || q.status === "balance_invoiced" ? "border-primary/40 shadow-[0_0_0_3px_var(--accent)]" : ""}`}
+                      aria-labelledby="pay-h"
+                    >
                       <h2 id="pay-h" className="font-semibold">
                         {q.status === "quoted"
-                          ? "Secure PayPal checkout"
+                          ? q.deposit_intent === "AUTHORIZE"
+                            ? "Hold your deposit"
+                            : "Pay your deposit"
                           : q.status === "balance_invoiced"
                             ? "Pay the balance"
                             : "Payment"}
                       </h2>
                       {q.status === "quoted" && (
                         <>
-                          <p className="mb-4 mt-1 text-sm text-muted-foreground">
+                          <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">
+                            {money(q.deposit_cents)}
+                          </p>
+                          <p className="mb-5 mt-1 text-sm text-muted-foreground">
                             {q.deposit_intent === "AUTHORIZE"
-                              ? `Authorize ${money(q.deposit_cents)} to confirm this booking. PayPal holds it and it's only captured when work starts — cancel before then and you're never charged. The remaining ${money(q.balance_cents)} is invoiced on delivery.`
-                              : `Pay ${money(q.deposit_cents)} to confirm this booking. The remaining ${money(q.balance_cents)} is invoiced when the work is delivered.`}
+                              ? `Held by PayPal to confirm your booking — only charged when work starts. Cancel before then and you pay nothing. The remaining ${money(q.balance_cents)} is billed on delivery.`
+                              : `Due now to confirm your booking. The remaining ${money(q.balance_cents)} is billed when the work is delivered.`}
                           </p>
                           <PayPalDepositButton
                             quoteId={q.id}
@@ -362,7 +378,9 @@ function QuotePage() {
                         ))}
                       {q.status === "deposit_paid" && (
                         <Notice>
-                          {data.payments.some((p) => p.kind === "deposit" && p.status === "AUTHORIZED")
+                          {data.payments.some(
+                            (p) => p.kind === "deposit" && p.status === "AUTHORIZED",
+                          )
                             ? "Deposit authorized — PayPal is holding it until work starts. You'll get the balance invoice on delivery."
                             : "Deposit received — Maya is working on it. You'll get the balance invoice on delivery."}
                         </Notice>
@@ -405,7 +423,11 @@ function QuotePage() {
                           Optional. It's added as its own line on the PayPal invoice with the{" "}
                           {money(q.balance_cents)} balance.
                         </p>
-                        <div className="mt-3 grid grid-cols-4 gap-2" role="radiogroup" aria-label="Tip">
+                        <div
+                          className="mt-3 grid grid-cols-4 gap-2"
+                          role="radiogroup"
+                          aria-label="Tip"
+                        >
                           {TIP_PRESETS_PCT.map((pct) => {
                             const cents = tipFromPct(q.total_cents, pct);
                             const active = (q.tip_cents ?? 0) === cents;
@@ -417,11 +439,13 @@ function QuotePage() {
                                 aria-checked={active}
                                 disabled={tipM.isPending}
                                 onClick={() => tipM.mutate({ tip_pct: pct })}
-                                className={`rounded-lg border px-2 py-2 text-xs font-semibold tabular-nums ${active ? "border-foreground bg-primary text-primary-foreground" : "border-input hover:bg-muted"}`}
+                                className={`rounded-lg border px-2 py-2 text-xs font-semibold tabular-nums ${active ? "border-primary bg-primary text-primary-foreground" : "border-input hover:bg-muted"}`}
                               >
                                 {pct === 0 ? "No tip" : `${pct}%`}
                                 {pct > 0 && (
-                                  <span className="block font-normal opacity-80">{money(cents)}</span>
+                                  <span className="block font-normal opacity-80">
+                                    {money(cents)}
+                                  </span>
                                 )}
                               </button>
                             );

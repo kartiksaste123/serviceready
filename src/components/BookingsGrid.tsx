@@ -3,7 +3,7 @@ import type { Quote } from "@/lib/types";
 import { money, timeAgo } from "@/lib/format";
 import { riskForQuote, type CollectionsRisk } from "@/lib/risk";
 import { RiskPill } from "./RiskPill";
-import { Check, ChevronRight, Clock3, Minus } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
 import {
   AllCommunityModule,
@@ -12,7 +12,7 @@ import {
   type ColDef,
   type ICellRendererParams,
 } from "ag-grid-community";
-import { SourceBadge, StatusBadge } from "./kit";
+import { StatusBadge } from "./kit";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -22,7 +22,7 @@ const gridTheme = themeQuartz.withParams({
   fontSize: 14,
   backgroundColor: "var(--background)",
   foregroundColor: "var(--foreground)",
-  headerBackgroundColor: "var(--muted)",
+  headerBackgroundColor: "var(--background)",
   headerTextColor: "var(--muted-foreground)",
   headerFontWeight: 600,
   borderColor: "var(--border)",
@@ -30,8 +30,9 @@ const gridTheme = themeQuartz.withParams({
   accentColor: "var(--primary)",
   wrapperBorderRadius: 0,
   wrapperBorder: false,
-  rowHeight: 60,
+  rowHeight: 64,
   headerHeight: 40,
+  headerFontSize: 12,
   cellHorizontalPadding: 16,
 });
 
@@ -49,20 +50,40 @@ const balanceState = (q: Quote): PayState =>
           ? "—"
           : "Not due";
 
-function PayCell({ state, cents }: { state: PayState; cents: number }) {
-  const Icon = state === "Paid" ? Check : state === "—" ? Minus : Clock3;
-  const tone =
-    state === "Paid" ? "text-success" : state === "Due" ? "text-warning" : "text-muted-foreground";
+type Row = Quote & { risk: CollectionsRisk | null };
+
+const sourceShort: Record<Quote["source"], string> = {
+  web: "storefront",
+  mcp: "AI assistant",
+  webmcp: "browser assistant",
+  agent_sim: "demo assistant",
+};
+const paidCents = (q: Quote) =>
+  (depositState(q) === "Paid" ? q.deposit_cents : 0) +
+  (balanceState(q) === "Paid" && q.status === "paid" ? q.balance_cents : 0);
+
+function PaidCell({ q }: { q: Quote }) {
+  if (q.status === "cancelled") return <span className="text-muted-foreground">—</span>;
+  const paid = paidCents(q);
+  const pct = q.total_cents ? Math.min(100, Math.round((paid / q.total_cents) * 100)) : 0;
   return (
-    <span className="flex items-center gap-1.5 whitespace-nowrap">
-      <Icon className={`size-3.5 ${tone}`} aria-hidden="true" />
-      <span className="tabular-nums">{money(cents)}</span>
-      <span className={`text-xs ${tone}`}>{state === "—" ? "n/a" : state.toLowerCase()}</span>
+    <span className="flex h-full flex-col justify-center gap-1.5 leading-none">
+      <span className="text-sm tabular-nums">
+        <span className="font-medium">{money(paid)}</span>
+        <span className="text-muted-foreground"> of {money(q.total_cents)}</span>
+      </span>
+      <span
+        className="h-1.5 w-full max-w-[120px] overflow-hidden rounded-full bg-muted"
+        aria-hidden="true"
+      >
+        <span
+          className={`block h-full rounded-full ${pct >= 100 ? "bg-success" : "bg-primary"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </span>
     </span>
   );
 }
-
-type Row = Quote & { risk: CollectionsRisk | null };
 
 export function BookingsGrid({
   rows,
@@ -87,60 +108,60 @@ export function BookingsGrid({
       {
         headerName: "Client",
         field: "client_name",
-        flex: 1.4,
-        minWidth: 170,
+        flex: 1.3,
+        minWidth: 180,
         cellRenderer: (p: ICellRendererParams<Row>) =>
           p.data ? (
             <div className="flex h-full flex-col justify-center leading-tight">
-              <div className="font-medium">{p.data.client_name}</div>
-              <div className="text-xs text-muted-foreground">{p.data.client_email}</div>
+              <div className="truncate font-medium">{p.data.client_name}</div>
+              <div className="truncate text-xs text-muted-foreground">{p.data.client_email}</div>
             </div>
           ) : null,
       },
-      { headerName: "Service", field: "service_title", flex: 1.1, minWidth: 130 },
       {
-        headerName: "Booked through",
-        field: "source",
-        width: 140,
+        headerName: "Service",
+        field: "service_title",
+        flex: 1.2,
+        minWidth: 160,
         cellRenderer: (p: ICellRendererParams<Row>) =>
-          p.data ? <SourceBadge source={p.data.source} /> : null,
+          p.data ? (
+            <div className="flex h-full flex-col justify-center leading-tight">
+              <div className="truncate">{p.data.service_title}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                via {sourceShort[p.data.source]}
+              </div>
+            </div>
+          ) : null,
       },
       {
-        headerName: "Total",
+        headerName: "Amount",
         field: "total_cents",
-        width: 110,
+        width: 120,
         type: "rightAligned",
         valueFormatter: (p) => money(Number(p.value ?? 0)),
         cellClass: "font-semibold tabular-nums",
       },
       {
-        headerName: "Deposit",
-        field: "deposit_cents",
-        width: 140,
-        cellRenderer: (p: ICellRendererParams<Row>) =>
-          p.data ? <PayCell state={depositState(p.data)} cents={p.data.deposit_cents} /> : null,
-      },
-      {
-        headerName: "Balance",
-        field: "balance_cents",
-        width: 140,
-        cellRenderer: (p: ICellRendererParams<Row>) =>
-          p.data ? <PayCell state={balanceState(p.data)} cents={p.data.balance_cents} /> : null,
+        headerName: "Paid so far",
+        colId: "paid",
+        width: 160,
+        headerTooltip: "Deposit and balance, as PayPal reports them",
+        valueGetter: (p) => (p.data ? paidCents(p.data) : 0),
+        cellRenderer: (p: ICellRendererParams<Row>) => (p.data ? <PaidCell q={p.data} /> : null),
       },
       {
         headerName: "Status",
         field: "status",
-        width: 150,
+        flex: 1,
+        minWidth: 230,
+        headerTooltip: "Risk badge = how likely the balance needs a nudge",
         cellRenderer: (p: ICellRendererParams<Row>) =>
-          p.data ? <StatusBadge status={p.data.status} /> : null,
-      },
-      {
-        headerName: "Risk",
-        colId: "risk",
-        width: 110,
-        valueGetter: (p) => p.data?.risk?.score ?? -1,
-        cellRenderer: (p: ICellRendererParams<Row>) => <RiskPill risk={p.data?.risk} />,
-        headerTooltip: "Collections risk: days overdue × amount × client pay history",
+          p.data ? (
+            <span className="flex h-full items-center gap-1.5">
+              <StatusBadge status={p.data.status} />
+              {p.data.risk && <RiskPill risk={p.data.risk} />}
+            </span>
+          ) : null,
       },
       {
         headerName: "Updated",
@@ -192,7 +213,12 @@ export function BookingsGrid({
         ))}
       </ul>
       {/* Desktop: AG Grid Community (sortable, resizable columns; row click opens the booking) */}
-      <div className="hidden md:block" data-testid="bookings-ag-grid" aria-label="Bookings" role="region">
+      <div
+        className="hidden md:block"
+        data-testid="bookings-ag-grid"
+        aria-label="Bookings"
+        role="region"
+      >
         {mounted && (
           <AgGridReact<Row>
             theme={gridTheme}

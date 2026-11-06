@@ -1,10 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, FlaskConical, Loader2, LockKeyhole } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, FlaskConical, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { api, USE_MOCKS } from "@/lib/api";
-import { DEMO_LOGIN } from "@/lib/supabase";
 import { Wordmark } from "@/components/kit";
 import { LOGIN_DEMO } from "@/lib/login-demo-assets";
 
@@ -72,14 +71,6 @@ function LoginPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.demo, auth.ready]);
-
-  const subtitle = useMemo(
-    () =>
-      tab === "signin"
-        ? "Bookings, deposits and approvals"
-        : "Publish services AI assistants can book",
-    [tab],
-  );
 
   async function afterAuth(fullName?: string) {
     try {
@@ -161,24 +152,18 @@ function LoginPage() {
         <main className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto py-3">
           <div className="my-auto w-full max-w-[400px]">
             <div className="mb-4 text-center max-sm:mb-3">
-              <h1 className="text-[1.35rem] font-semibold leading-[1.15] tracking-tight sm:text-[2rem] xl:text-[2.25rem]">
-                Let AI assistants book
-                <br className="hidden sm:block" /> your services
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]">
+                {tab === "signin" ? "Welcome back" : "Create your free account"}
               </h1>
-              <p className="mt-2 text-sm text-muted-foreground max-sm:hidden [@media(max-height:760px)]:hidden">
-                Quotes, deposits and invoices — paid through PayPal while you sleep.
+              <p className="mt-2 text-sm text-muted-foreground">
+                {tab === "signin"
+                  ? "Sign in to manage bookings, deposits and invoices."
+                  : "Set up your storefront and start taking PayPal deposits."}
               </p>
             </div>
 
-            <div className="glass-card rounded-2xl p-4 sm:p-5 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)]">
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <LockKeyhole className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="shrink-0 font-semibold uppercase tracking-wide">Seller desk</span>
-                <span aria-hidden="true">·</span>
-                <span className="truncate">{subtitle}</span>
-              </p>
-
-              <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="tablist">
+            <div className="glass-card rounded-2xl p-5 shadow-[0_12px_40px_-16px_rgba(16,24,40,0.18)] sm:p-6">
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="tablist">
                 <button
                   type="button"
                   role="tab"
@@ -199,10 +184,10 @@ function LoginPage() {
                 </button>
               </div>
 
-              <form className="mt-3 space-y-2.5" onSubmit={onSubmit}>
+              <form className="mt-5 space-y-4" onSubmit={onSubmit}>
                 {tab === "signup" && (
                   <div>
-                    <label htmlFor="name" className="text-xs font-medium">
+                    <label htmlFor="name" className="mb-1.5 block text-sm font-medium">
                       Studio / business name
                     </label>
                     <input
@@ -217,7 +202,7 @@ function LoginPage() {
                   </div>
                 )}
                 <div>
-                  <label htmlFor="email" className="text-xs font-medium">
+                  <label htmlFor="email" className="mb-1.5 block text-sm font-medium">
                     Email
                   </label>
                   <input
@@ -232,7 +217,7 @@ function LoginPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="password" className="text-xs font-medium">
+                  <label htmlFor="password" className="mb-1.5 block text-sm font-medium">
                     Password
                   </label>
                   <input
@@ -255,23 +240,19 @@ function LoginPage() {
                     {error}
                   </p>
                 )}
-                <button
-                  type="submit"
-                  className="btn-mint w-full"
-                  disabled={busy !== null}
-                >
+                <button type="submit" className="btn-mint w-full" disabled={busy !== null}>
                   {busy === "form" ? (
                     <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                   ) : (
                     <ArrowRight className="size-4" aria-hidden="true" />
                   )}
-                  {tab === "signin" ? "Sign in to desk" : "Create account & open desk"}
+                  {tab === "signin" ? "Sign in" : "Create account"}
                 </button>
               </form>
 
-              <div className="my-3 flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
                 <div className="h-px flex-1 bg-border" aria-hidden="true" />
-                or for judges
+                or
                 <div className="h-px flex-1 bg-border" aria-hidden="true" />
               </div>
 
@@ -286,11 +267,10 @@ function LoginPage() {
                 ) : (
                   <FlaskConical className="size-4" aria-hidden="true" />
                 )}
-                <span className="truncate">Continue as demo</span>
+                <span className="truncate">Explore the demo workspace</span>
               </button>
               <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                Demo login: <span className="font-mono">{DEMO_LOGIN.email}</span> — password in
-                README
+                No sign-up needed · sample data · PayPal sandbox
               </p>
             </div>
           </div>

@@ -15,7 +15,10 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
       ...r,
       risk:
         r.risk ??
-        collectionsRisk({ outstanding_cents: r.outstanding_cents, days_overdue: r.days_since_invoice }),
+        collectionsRisk({
+          outstanding_cents: r.outstanding_cents,
+          days_overdue: r.days_since_invoice,
+        }),
     }))
     .sort((a, b) => b.risk.score - a.risk.score || b.days_since_invoice - a.days_since_invoice);
   if (!rows.length)
@@ -29,19 +32,21 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
   const overdueCents = overdue.reduce((s, r) => s + r.outstanding_cents, 0);
   return (
     <div className="space-y-5">
-      <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
-        <div className="bg-card p-4">
-          <p className="text-xs font-medium text-muted-foreground">Open balances</p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="glass-card p-4 sm:p-5">
+          <p className="text-xs font-medium text-muted-foreground">Total unpaid</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">
             {money(stats.outstanding_cents)}
           </p>
         </div>
-        <div className="bg-card p-4">
-          <p className="text-xs font-medium text-muted-foreground">Clients waiting to pay</p>
+        <div className="glass-card p-4 sm:p-5">
+          <p className="text-xs font-medium text-muted-foreground">Clients to follow up</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">{rows.length}</p>
         </div>
-        <div className="bg-card p-4">
-          <p className="text-xs font-medium text-muted-foreground">Over {OVERDUE_DAYS} days old</p>
+        <div className="glass-card p-4 sm:p-5">
+          <p className="text-xs font-medium text-muted-foreground">
+            Overdue ({OVERDUE_DAYS}+ days)
+          </p>
           <p
             className={`mt-1 text-xl font-semibold tabular-nums ${overdue.length ? "text-danger" : ""}`}
           >
@@ -51,10 +56,10 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
         </div>
       </div>
       <div className="glass-card w-full overflow-hidden">
-        <div className="flex items-baseline justify-between border-b border-border p-5">
-          <h2 className="font-semibold">Highest risk first</h2>
+        <div className="flex flex-col gap-1 border-b border-border p-5 sm:flex-row sm:items-baseline sm:justify-between">
+          <h2 className="font-semibold">Who to follow up with</h2>
           <span className="text-sm text-muted-foreground">
-            Risk = days overdue × amount × pay history · tone hint drives the draft
+            Ordered by how overdue, how much, and past payment habits
           </span>
         </div>
         <ol className="divide-y divide-border">

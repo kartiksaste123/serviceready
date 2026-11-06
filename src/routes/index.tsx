@@ -2,9 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   Bot,
+  CalendarX2,
   Check,
   CircleDollarSign,
-  FileCheck2,
+  Gavel,
   LockKeyhole,
   MessageSquareText,
   ReceiptText,
@@ -47,290 +48,324 @@ export const Route = createFileRoute("/")({
 });
 
 const tools = [
-  "PayPal Agent Toolkit",
-  "PayPal Orders v2",
+  "PayPal Orders",
   "PayPal Invoicing",
-  "PayPal Webhooks",
-  "MCP mandates",
+  "PayPal Agent Toolkit",
+  "MCP",
   "xAI Grok",
   "Render",
 ];
+
 const steps = [
   {
-    n: "01",
     icon: Sparkles,
-    title: "Paste your messy rate card",
-    text: "ServiceReady turns it into clear service packages and flags prices that need your review.",
+    title: "Add your services",
+    text: "Paste your rate card. We turn it into clear packages with prices and deposits — you review before anything goes live.",
   },
   {
-    n: "02",
     icon: Bot,
-    title: "Let AI assistants book you",
-    text: "Claude, ChatGPT and browser assistants can discover your services, prepare a quote and send the client to pay.",
+    title: "Clients book you",
+    text: "From your booking page, or through Claude, ChatGPT and other AI assistants. Each gets an exact quote.",
   },
   {
-    n: "03",
     icon: CircleDollarSign,
-    title: "Collect a deposit first",
-    text: "The booking is confirmed only after the client pays the PayPal deposit you set.",
-  },
-  {
-    n: "04",
-    icon: FileCheck2,
-    title: "Deliver, invoice and follow up",
-    text: "Send the balance invoice at delivery. Follow-ups check PayPal first and wait for your approval.",
+    title: "Get paid through PayPal",
+    text: "A deposit confirms the booking. When the work is done, the final bill goes out automatically.",
   },
 ];
+
+const features = [
+  {
+    icon: LockKeyhole,
+    title: "AI never sets your prices",
+    text: "Quotes come from your price list only. Odd prices are flagged for you to check.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Deposit before work",
+    text: "Nothing starts until PayPal confirms the deposit. No more working on trust.",
+  },
+  {
+    icon: MessageSquareText,
+    title: "You approve every message",
+    text: "Reminders and follow-ups are drafted for you, and only sent when you say yes.",
+  },
+  {
+    icon: Check,
+    title: "PayPal is the source of truth",
+    text: "“I already paid” is checked against PayPal before anyone gets chased.",
+  },
+  {
+    icon: CalendarX2,
+    title: "Fair cancellation rules",
+    text: "Set your policy once. Refunds and kept fees are handled automatically.",
+  },
+  {
+    icon: ReceiptText,
+    title: "A clear record",
+    text: "See every quote, payment and message in one simple timeline.",
+  },
+];
+
+const container = "mx-auto w-full max-w-6xl px-5 sm:px-8";
+
+function SectionHead({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
+  return (
+    <div className="mx-auto max-w-2xl text-center">
+      <p className="eyebrow">{eyebrow}</p>
+      <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
+      {sub && <p className="mt-4 text-lg leading-8 text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
 
 function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+        <div className={`${container} flex h-16 items-center justify-between`}>
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
-          <nav className="hidden items-center gap-7 text-sm md:flex">
+          <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
             <a href="#how" className="text-muted-foreground hover:text-foreground">
               How it works
             </a>
-            <a href="#proof" className="text-muted-foreground hover:text-foreground">
-              Why now
+            <a href="#features" className="text-muted-foreground hover:text-foreground">
+              Features
             </a>
-            <a href="#control" className="text-muted-foreground hover:text-foreground">
-              Your control
-            </a>
+            <Link
+              to="/s/$slug"
+              params={{ slug: "maya-rao-studio" }}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Live demo
+            </Link>
           </nav>
-          <div className="flex items-center gap-2">
-            <Link to="/login" className="btn-glass btn-sm hidden sm:inline-flex">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              to="/login"
+              className="hidden px-2 text-sm font-medium text-muted-foreground hover:text-foreground sm:inline"
+            >
               Sign in
             </Link>
             <Link to="/onboard" className="btn-mint btn-sm">
-              <span className="sm:hidden">Get started</span>
-              <span className="hidden sm:inline">Make my services bookable</span>{" "}
-              <ArrowRight className="size-4" aria-hidden="true" />
+              Get started
             </Link>
           </div>
         </div>
       </header>
       <main id="main">
-        <section className="border-b border-border">
-          <div className="mx-auto grid max-w-7xl items-start gap-8 px-4 py-8 sm:gap-10 sm:px-8 sm:py-10 lg:grid-cols-[1.03fr_.97fr] lg:gap-12 lg:py-14">
-            <div>
-              <p className="eyebrow">Deposit-before-work merchant storefront</p>
-              <h1 className="mt-3 max-w-3xl text-[1.85rem] font-semibold leading-[1.08] sm:text-5xl lg:text-6xl">
-                Get booked by AI agents. Get paid before you start.
-              </h1>
-              <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-                Agent-ready storefront with PayPal deposits before work.{" "}
-                <span className="font-medium text-foreground">
-                  PayPal evidence beats client claims
-                </span>
-                — AI never sets your prices, and every reminder stays human-approved.
-              </p>
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Link
-                  to="/s/$slug"
-                  params={{ slug: "maya-rao-studio" }}
-                  search={{ judge: "1" }}
-                  className="btn-mint w-full sm:w-auto"
-                >
-                  Judge demo · 3 min <ArrowRight className="size-4" />
-                </Link>
-                <Link to="/onboard" className="btn-glass w-full sm:w-auto">
-                  Import your rate card
-                </Link>
-                <Link
-                  to="/login"
-                  search={{ demo: "1", next: "/app" }}
-                  className="btn-glass w-full sm:w-auto"
-                >
-                  Open demo workspace
-                </Link>
-              </div>
-              <a href="/judges" className="mt-3 inline-block text-sm text-link">
-                Judges: step-by-step path, Claude MCP snippet &amp; “make it $1” tamper test →
-              </a>
-              <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                <ShieldCheck className="size-4" />
-                Demo signs you into Maya Rao Studio — create your own account anytime.
-              </p>
+        <section className="relative overflow-hidden">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[520px] bg-gradient-to-b from-accent to-transparent"
+          />
+          <div className={`${container} relative pb-12 pt-14 text-center sm:pb-16 sm:pt-20`}>
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs">
+              <span className="size-1.5 rounded-full bg-brand" aria-hidden="true" />
+              Bookings and payments, powered by PayPal + AI
+            </span>
+            <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-6xl">
+              Get booked online. Get paid before you start.
+            </h1>
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
+              A booking page that clients — and their AI assistants — can use. They pay a PayPal
+              deposit up front, and you approve every reminder.
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link to="/onboard" className="btn-mint w-full px-6 sm:w-auto">
+                Create your storefront <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+              <Link
+                to="/s/$slug"
+                params={{ slug: "maya-rao-studio" }}
+                search={{ judge: "1" }}
+                className="btn-glass w-full px-6 sm:w-auto"
+              >
+                See a live example
+              </Link>
             </div>
-            <div className="relative">
-              <img
-                src="/images/hero.webp"
-                alt="ServiceReady — AI agents booking freelancers with PayPal deposits"
-                className="aspect-[16/11] max-h-[360px] w-full rounded-2xl object-cover"
-                width={960}
-                height={600}
-                loading="eager"
-              />
-              <div className="absolute bottom-4 left-4 right-4">
+            <p className="mt-4 text-sm text-muted-foreground">
+              Free to try · No card needed ·{" "}
+              <Link
+                to="/login"
+                search={{ demo: "1", next: "/app" }}
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                Explore the demo dashboard
+              </Link>
+            </p>
+            <div className="relative mx-auto mt-12 max-w-5xl">
+              <div className="overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-[0_24px_60px_-24px_rgba(16,24,40,0.25)]">
+                <img
+                  src="/images/hero.webp"
+                  alt="A freelancer's ServiceReady booking with a PayPal deposit paid"
+                  className="aspect-[4/3] w-full rounded-xl object-cover sm:aspect-[16/8]"
+                  width={960}
+                  height={600}
+                  loading="eager"
+                />
+              </div>
+              <div className="mx-auto -mt-16 w-[min(92%,380px)] text-left sm:absolute sm:bottom-6 sm:right-6 sm:mt-0">
                 <BookingProof />
               </div>
             </div>
           </div>
         </section>
-        <section className="border-b border-border bg-muted">
-          <div className="mx-auto max-w-7xl px-5 py-7 sm:px-8">
-            <p className="text-center text-xs font-semibold uppercase text-muted-foreground">
+
+        <section className="border-y border-border bg-muted">
+          <div
+            className={`${container} flex flex-col items-center gap-4 py-7 sm:flex-row sm:justify-center sm:gap-10`}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Built on
             </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm font-semibold">
+            <div className="flex flex-wrap justify-center gap-x-8 gap-y-2 text-sm font-semibold text-muted-foreground">
               {tools.map((x) => (
                 <span key={x}>{x}</span>
               ))}
             </div>
           </div>
         </section>
-        <section id="how" className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-16">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
-            <div className="min-w-0 flex-1">
-              <p className="eyebrow">How it works</p>
-              <h2 className="mt-3 text-2xl font-semibold sm:text-5xl">
-                From loose notes to a paid booking.
-              </h2>
-            </div>
-            <p className="max-w-md text-lg text-muted-foreground sm:pb-1 sm:text-right">
-              The assistant handles the repetitive steps. You keep the decisions.
-            </p>
-          </div>
-          <div className="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-2 lg:grid-cols-4">
-            {steps.map((s) => (
-              <article key={s.n} className="bg-card p-6">
-                <div className="flex items-center justify-between">
+
+        <section id="how" className={`${container} scroll-mt-20 py-20 sm:py-24`}>
+          <SectionHead
+            eyebrow="How it works"
+            title="From price list to paid booking in three steps"
+            sub="Set it up once. ServiceReady handles the busywork; you keep every decision."
+          />
+          <ol className="mt-14 grid gap-6 md:grid-cols-3">
+            {steps.map((s, i) => (
+              <li key={s.title} className="glass-card p-6 sm:p-7">
+                <div className="flex items-center gap-3">
                   <span className="icon-tile">
-                    <s.icon className="size-4" />
+                    <s.icon className="size-4" aria-hidden="true" />
                   </span>
-                  <span className="text-xs font-semibold text-muted-foreground">{s.n}</span>
+                  <span className="text-sm font-semibold text-muted-foreground">Step {i + 1}</span>
                 </div>
                 <h3 className="mt-5 text-lg font-semibold">{s.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{s.text}</p>
-              </article>
+                <p className="mt-2 leading-7 text-muted-foreground">{s.text}</p>
+              </li>
             ))}
+          </ol>
+        </section>
+
+        <section id="features" className="scroll-mt-20 border-y border-border bg-muted">
+          <div className={`${container} py-20 sm:py-24`}>
+            <SectionHead
+              eyebrow="Why ServiceReady"
+              title="Less chasing. More trust."
+              sub="The safety rails a real business needs — built in, not bolted on."
+            />
+            <ul className="mt-14 grid gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+              {features.map((f) => (
+                <li key={f.title}>
+                  <span className="icon-tile">
+                    <f.icon className="size-4" aria-hidden="true" />
+                  </span>
+                  <h3 className="mt-4 font-semibold">{f.title}</h3>
+                  <p className="mt-1.5 leading-7 text-muted-foreground">{f.text}</p>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
-        <section id="proof" className="border-y border-border bg-muted">
-          <div className="mx-auto grid max-w-7xl gap-8 px-5 py-14 sm:px-8 sm:py-16 lg:grid-cols-[.8fr_1.2fr]">
+
+        <section className={`${container} py-20 sm:py-24`}>
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div>
-              <p className="eyebrow">Why now</p>
-              <h2 className="mt-3 text-2xl font-semibold sm:text-4xl">Less chasing. More trust.</h2>
-              <p className="mt-4 leading-7 text-muted-foreground">
-                Freelancers lose hours chasing invoices and start work on trust. Industry surveys
-                (e.g. FreshBooks / Intuit small-business reports) routinely find a large share of
-                invoices paid late — illustrative framing, not ServiceReady traction. Meanwhile
-                clients ask AI assistants who to hire.
+              <p className="eyebrow">Real PayPal checkout</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                Clients pay the way they already trust.
+              </h2>
+              <p className="mt-4 text-lg leading-8 text-muted-foreground">
+                The deposit is held or captured through PayPal before work begins. The final bill is
+                a PayPal invoice, sent the moment you mark the job delivered.
               </p>
+              <ul className="mt-6 space-y-3">
+                {[
+                  "Pay with PayPal or a debit / credit card",
+                  "Prices are signed, so they can’t be changed at checkout",
+                  "Saved payment for repeat clients (with their permission)",
+                ].map((x) => (
+                  <li key={x} className="flex items-start gap-3">
+                    <Check className="mt-1 size-4 shrink-0 text-primary" aria-hidden="true" />
+                    <span>{x}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
-              {[
-                ["$0", "work starts before PayPal confirms the deposit", "Deposit-before-work"],
-                ["0", "reminders sent without your approval", "Human gate on every send"],
-                ["MCP", "mandates with spend limits + revoke", "Agentic commerce guardrails"],
-              ].map(([v, c, s]) => (
-                <article key={v} className="bg-card p-6">
-                  <div className="text-4xl font-semibold tabular-nums">{v}</div>
-                  <p className="mt-3 text-sm leading-6">{c}</p>
-                  <p className="mt-4 text-xs text-muted-foreground">{s}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-          <div className="mx-auto max-w-7xl px-5 pb-14 sm:px-8 sm:pb-16">
-            <div className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-[0_24px_60px_-28px_rgba(16,24,40,0.25)]">
               <img
                 src="/images/paypal-success.webp"
                 alt="PayPal deposit paid confirmation for a ServiceReady booking"
-                className="aspect-[21/9] max-h-[280px] w-full object-cover"
+                className="aspect-[4/3] w-full rounded-xl object-cover"
                 width={1200}
-                height={514}
+                height={900}
                 loading="lazy"
               />
-              <div className="border-t border-border px-5 py-4 sm:px-6">
-                <p className="text-sm font-semibold">Deposit collected before work starts</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Clients pay through PayPal. The booking only confirms after the deposit lands.
+            </div>
+          </div>
+        </section>
+
+        <section className={`${container} pb-20 sm:pb-24`}>
+          <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-border bg-card p-6 sm:flex-row sm:items-center sm:p-8">
+            <div className="flex items-start gap-4">
+              <span className="icon-tile">
+                <Gavel className="size-4" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="font-semibold">Judging the PayPal AI Hackathon?</h2>
+                <p className="mt-1 text-muted-foreground">
+                  A 3-minute guided path, the Claude MCP snippet and the “make it $1” tamper test.
                 </p>
               </div>
             </div>
+            <a href="/judges" className="btn-glass shrink-0">
+              Open judge guide <ArrowRight className="size-4" aria-hidden="true" />
+            </a>
           </div>
         </section>
-        <section id="control" className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-16">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
-            <div className="min-w-0 flex-1">
-              <p className="eyebrow">Human-in-the-loop by design</p>
-              <h2 className="mt-3 text-2xl font-semibold sm:text-4xl">
-                Automation without giving up control.
-              </h2>
-            </div>
-            <p className="max-w-md leading-7 text-muted-foreground sm:pb-1 sm:text-right">
-              ServiceReady prepares the work and shows its evidence. The important decisions stay
-              with you.
-            </p>
-          </div>
-          <ul className="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
-            {[
-              [
-                LockKeyhole,
-                "AI never sets your prices",
-                "Suspicious prices are flagged for review instead of silently published.",
-              ],
-              [
-                CircleDollarSign,
-                "Agents never pay on a client's behalf",
-                "The client completes payment directly through PayPal.",
-              ],
-              [
-                Check,
-                "Every PayPal write needs approval",
-                "You approve messages and money-moving actions before they happen.",
-              ],
-              [
-                ReceiptText,
-                "A complete activity record",
-                "See what the assistant checked, drafted and sent.",
-              ],
-            ].map(([Icon, title, text]) => {
-              const I = Icon as typeof LockKeyhole;
-              return (
-                <li key={String(title)} className="flex gap-4 bg-card p-5">
-                  <span className="icon-tile">
-                    <I className="size-4" />
-                  </span>
-                  <div>
-                    <h3 className="font-semibold">{String(title)}</h3>
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">{String(text)}</p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-        <section className="border-y border-border bg-muted">
-          <div className="mx-auto max-w-3xl px-5 py-14 text-center sm:px-8 sm:py-16">
-            <MessageSquareText className="mx-auto size-7" />
-            <h2 className="mt-5 text-2xl font-semibold sm:text-4xl">
-              Make your services ready for the next client.
+
+        <section className="bg-foreground text-background">
+          <div className={`${container} py-16 text-center sm:py-20`}>
+            <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+              Ready for your next client?
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-              Paste the rate card you already have. Review the result before anything is published.
+            <p className="mx-auto mt-4 max-w-xl text-lg text-background/70">
+              Paste the price list you already have. Review it, publish it, share the link.
             </p>
-            <Link to="/onboard" className="btn-mint mt-6">
-              Import your rate card <ArrowRight className="size-4" />
-            </Link>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link to="/onboard" className="btn-mint w-full px-6 sm:w-auto">
+                Create your storefront <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+              <Link
+                to="/login"
+                search={{ demo: "1", next: "/app" }}
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-background/25 px-6 text-sm font-semibold text-background hover:bg-background/10 sm:min-h-10 sm:w-auto"
+              >
+                Explore the demo
+              </Link>
+            </div>
           </div>
         </section>
       </main>
-      <footer>
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
+      <footer className="border-t border-border">
+        <div
+          className={`${container} flex flex-col gap-4 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between`}
+        >
           <Wordmark />
           <p>Built for independent service businesses.</p>
-          <div className="flex gap-5">
+          <div className="flex gap-6">
             <a href="#how" className="hover:text-foreground">
               How it works
             </a>
+            <a href="/judges" className="hover:text-foreground">
+              Judges
+            </a>
             <Link to="/login" search={{ next: "/app" }} className="hover:text-foreground">
-              Seller console
+              Sign in
             </Link>
           </div>
         </div>
@@ -369,7 +404,11 @@ function BookingProof() {
           <span className="size-1.5 rounded-full bg-warning" />
           Awaiting approval
         </span>
-        <Link to="/login" search={{ demo: "1", next: "/app/approvals" }} className="text-xs font-semibold hover:underline sm:text-sm">
+        <Link
+          to="/login"
+          search={{ demo: "1", next: "/app/approvals" }}
+          className="text-xs font-semibold hover:underline sm:text-sm"
+        >
           Review message →
         </Link>
       </div>

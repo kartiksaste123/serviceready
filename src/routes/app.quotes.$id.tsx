@@ -205,7 +205,11 @@ function Detail() {
     policy,
     reason,
     deposit_cents: paidDeposit?.amount_cents ?? 0,
-    deposit_state: !paidDeposit ? "none" : paidDeposit.status === "AUTHORIZED" ? "held" : "captured",
+    deposit_state: !paidDeposit
+      ? "none"
+      : paidDeposit.status === "AUTHORIZED"
+        ? "held"
+        : "captured",
     deposit_paid_at: q.deposit_paid_at ?? paidDeposit?.updated_at ?? null,
     work_started:
       !!q.work_started_at ||
@@ -232,7 +236,8 @@ function Detail() {
             <SourceBadge source={q.source} />
             {q.integrity === "tampered" ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-danger-bg px-2 py-1 text-xs font-semibold text-danger">
-                <ShieldAlert className="size-3.5" aria-hidden="true" /> Amounts tampered · payments blocked
+                <ShieldAlert className="size-3.5" aria-hidden="true" /> Amounts tampered · payments
+                blocked
               </span>
             ) : (
               <span
@@ -264,9 +269,7 @@ function Detail() {
             )}
             Check PayPal
           </button>
-          {(q.status === "quoted" ||
-            q.status === "deposit_paid" ||
-            q.status === "delivered") && (
+          {(q.status === "quoted" || q.status === "deposit_paid" || q.status === "delivered") && (
             <button
               type="button"
               className="btn-glass btn-sm"
@@ -323,6 +326,17 @@ function Detail() {
         <StatusTracker status={q.status} />
       </div>
 
+      {pending.length > 0 && (
+        <section className="mb-5 space-y-3" aria-labelledby="ap-h">
+          <h2 id="ap-h" className="font-semibold">
+            Waiting for your approval
+          </h2>
+          {pending.map((p) => (
+            <ProposalCard key={p.id} p={p} showClient={false} />
+          ))}
+        </section>
+      )}
+
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_1fr]">
         <section className="glass-card p-5" aria-labelledby="pay-h">
           <h2 id="pay-h" className="mb-4 font-semibold">
@@ -378,9 +392,11 @@ function Detail() {
                   {(p.kept_cents != null || p.refunded_cents != null) && (
                     <p className="mt-2 text-xs">
                       Policy outcome: kept{" "}
-                      <span className="font-semibold tabular-nums">{money(p.kept_cents ?? 0)}</span> ·
-                      returned to client{" "}
-                      <span className="font-semibold tabular-nums">{money(p.refunded_cents ?? 0)}</span>
+                      <span className="font-semibold tabular-nums">{money(p.kept_cents ?? 0)}</span>{" "}
+                      · returned to client{" "}
+                      <span className="font-semibold tabular-nums">
+                        {money(p.refunded_cents ?? 0)}
+                      </span>
                     </p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -547,20 +563,9 @@ function Detail() {
         </section>
       </div>
 
-      {pending.length > 0 && (
-        <section className="mt-6 space-y-3" aria-labelledby="ap-h">
-          <h2 id="ap-h" className="font-semibold">
-            Waiting for your approval
-          </h2>
-          {pending.map((p) => (
-            <ProposalCard key={p.id} p={p} showClient={false} />
-          ))}
-        </section>
-      )}
-
       <section className="glass-card mt-6 p-5" aria-labelledby="audit-h">
         <h2 id="audit-h" className="mb-5 font-semibold">
-          Audit trail
+          Activity
         </h2>
         {data.events.length ? (
           <EventTimeline events={data.events} />
@@ -601,7 +606,7 @@ function Detail() {
                               role="radio"
                               aria-checked={reason === r}
                               onClick={() => setReason(r)}
-                              className={`rounded-lg border px-2.5 py-2 text-left text-xs font-semibold ${reason === r ? "border-foreground bg-primary text-primary-foreground" : "border-input hover:bg-muted"}`}
+                              className={`rounded-lg border px-2.5 py-2 text-left text-xs font-semibold ${reason === r ? "border-primary bg-primary text-primary-foreground" : "border-input hover:bg-muted"}`}
                             >
                               {l}
                             </button>
@@ -659,7 +664,9 @@ function Detail() {
                       </p>
                     </>
                   ) : (
-                    <p>The deposit covered the full price, so the booking will be closed as paid.</p>
+                    <p>
+                      The deposit covered the full price, so the booking will be closed as paid.
+                    </p>
                   )}
                 </div>
               </AlertDialogDescription>

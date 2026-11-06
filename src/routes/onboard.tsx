@@ -145,29 +145,25 @@ function Onboard() {
       </header>
       <main className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-5 sm:pt-8">
         <ol className="mb-8 flex flex-wrap gap-2 text-[13px]" aria-label="Progress">
-          {["Paste what you charge", "Check services and prices", "Publish for assistants"].map(
-            (l, i) => (
-              <li
-                key={l}
-                aria-current={step === i + 1 ? "step" : undefined}
-                className={`flex items-center gap-2 rounded-full border px-3 py-1 ${step === i + 1 ? "border-foreground bg-background font-semibold text-foreground" : step > i + 1 ? "border-border bg-background text-foreground" : "border-border text-muted-foreground"}`}
-              >
-                <span className="font-mono text-[11px]">{step > i + 1 ? "✓" : i + 1}</span>
-                {l}
-              </li>
-            ),
-          )}
+          {["Paste your prices", "Check the details", "Go live"].map((l, i) => (
+            <li
+              key={l}
+              aria-current={step === i + 1 ? "step" : undefined}
+              className={`flex items-center gap-2 rounded-full border px-3 py-1 ${step === i + 1 ? "border-primary bg-accent font-semibold text-primary" : step > i + 1 ? "border-border bg-background text-foreground" : "border-border text-muted-foreground"}`}
+            >
+              <span className="font-mono text-[11px]">{step > i + 1 ? "✓" : i + 1}</span>
+              {l}
+            </li>
+          ))}
         </ol>
 
         {step === 1 && (
           <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
             <section className="glass-card p-6 sm:p-8">
-              <h1 className="display text-2xl sm:text-4xl">
-                Paste your rate card, price list or WhatsApp message
-              </h1>
+              <h1 className="display text-2xl sm:text-4xl">Paste your price list</h1>
               <p className="mt-3 text-muted-foreground">
-                Any format — one service per line or separated by “|”. AI structures it, never
-                changes your prices, and flags anything that looks off.
+                Any format works — a rate card, notes, or a WhatsApp message. We turn it into
+                bookable services. Your prices are never changed.
               </p>
               <label htmlFor="raw" className="sr-only">
                 Rate card text
@@ -219,7 +215,7 @@ function Onboard() {
                   ],
                   [
                     "Assistants can book you",
-                    "Your storefront and MCP endpoint go live with PayPal deposits.",
+                    "Share your booking page. Clients and AI assistants can book and pay a PayPal deposit.",
                   ],
                 ].map(([t, d], i) => (
                   <li key={t} className="flex gap-3">
@@ -262,7 +258,11 @@ function Onboard() {
                 </p>
               </div>
               <div className="flex w-full gap-2 sm:w-auto">
-                <button type="button" className="btn-glass btn-sm flex-1 sm:flex-none" onClick={() => setDrafts(null)}>
+                <button
+                  type="button"
+                  className="btn-glass btn-sm flex-1 sm:flex-none"
+                  onClick={() => setDrafts(null)}
+                >
                   <ArrowLeft className="size-4" aria-hidden="true" />
                   Back
                 </button>

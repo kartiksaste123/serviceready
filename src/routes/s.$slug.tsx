@@ -534,9 +534,9 @@ function AgentChat({ slug, judge = false }: { slug: string; judge?: boolean }) {
           <Bot className="size-4" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold">Try booking with an AI assistant</h2>
+          <h2 className="text-sm font-semibold">Book with the AI assistant</h2>
           <p className="text-xs text-muted-foreground">
-            {engine ?? "Real tool calls · PayPal sandbox deposit link at the end"}
+            {engine ?? "Ask anything — it quotes from these exact prices"}
           </p>
         </div>
         {items.length > 0 && (

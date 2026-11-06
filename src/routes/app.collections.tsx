@@ -27,8 +27,8 @@ function Collections() {
   return (
     <>
       <PageHeader
-        title="Who owes what"
-        sub="Open balance invoices, oldest first. Open a client to check PayPal and draft a follow-up for your approval."
+        title="Payments due"
+        sub="Clients with an unpaid final bill, most urgent first."
       />
       {isLoading ? (
         <Skeleton className="h-80 rounded-2xl" />
