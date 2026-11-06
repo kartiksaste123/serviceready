@@ -73,6 +73,14 @@ const m = <T>(mockFn: () => Promise<T>, method: string, path: string, body?: unk
   USE_MOCKS ? mockFn() : http<T>(method, path, body);
 const enc = encodeURIComponent;
 
+export type PayPalPublicConfig = {
+  client_id: string;
+  env: "sandbox" | "live";
+  sdk?: { v6: boolean; legacy: boolean };
+  deposit_authorize_min_usd?: number;
+};
+let paypalConfigPromise: Promise<PayPalPublicConfig> | null = null;
+
 export const api = {
   getSeller: () => m<Seller>(() => mock.getSeller(), "GET", "/api/seller"),
   updateRules: (rules: SellerRules) =>
@@ -107,7 +115,7 @@ export const api = {
       `/api/quotes/${enc(id)}${refresh ? "?refresh=1" : ""}`,
     ),
   createDepositOrder: (id: string) =>
-    m<{ order_id: string }>(
+    m<{ order_id: string; intent?: "CAPTURE" | "AUTHORIZE" }>(
       () => mock.createDepositOrder(id),
       "POST",
       `/api/quotes/${enc(id)}/deposit/order`,
@@ -128,6 +136,9 @@ export const api = {
       "POST",
       `/api/demo/quotes/${enc(id)}/pay-balance`,
     ),
+  /** AUTHORIZE deposits: capture the held funds when the seller starts work. */
+  startWork: (id: string) =>
+    m<QuoteDetail>(() => mock.getQuote(id), "POST", `/api/quotes/${enc(id)}/start-work`),
   deliver: (id: string) =>
     m<QuoteDetail>(() => mock.deliver(id), "POST", `/api/quotes/${enc(id)}/deliver`),
   refreshInvoice: (id: string) =>
@@ -171,12 +182,21 @@ export const api = {
       engine?:
         { kind: "llm"; provider: string; model: string } | { kind: "heuristic"; reason: string };
     }>(() => mock.agentChat(slug, messages), "POST", "/api/agent/chat", { slug, messages }),
-  paypalConfig: () =>
-    m<{ client_id: string; env: "sandbox" }>(
+  /** Cached for the session — prefetched on storefront/quote pages so PayPal renders instantly. */
+  paypalConfig: () => {
+    paypalConfigPromise ??= m<PayPalPublicConfig>(
       () => mock.paypalConfig(),
       "GET",
       "/api/paypal/config",
-    ),
+    ).catch((e) => {
+      paypalConfigPromise = null;
+      throw e;
+    });
+    return paypalConfigPromise;
+  },
+  /** Browser-safe client token for PayPal JS SDK v6. */
+  paypalClientToken: () =>
+    http<{ client_token: string; expires_at: string }>("GET", "/api/paypal/client-token"),
   bootstrapSeller: (b?: { name?: string; tagline?: string }) =>
     m<Seller>(() => mock.getSeller(), "POST", "/api/seller/bootstrap", b ?? {}),
   setServiceImage: (b: {

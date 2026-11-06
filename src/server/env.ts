@@ -58,3 +58,11 @@ export function publicOrigin(request?: Request): string {
 export function paypalWebhookId(): string | undefined {
   return read("PAYPAL_WEBHOOK_ID");
 }
+
+/** Deposit AUTHORIZE threshold in cents (DEPOSIT_AUTHORIZE_MIN_USD; "0" disables AUTHORIZE). */
+export function authorizeMinDepositCents(): number {
+  const v = read("DEPOSIT_AUTHORIZE_MIN_USD");
+  if (v === undefined) return 500_00;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : 500_00;
+}

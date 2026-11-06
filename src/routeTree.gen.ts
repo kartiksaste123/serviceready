@@ -35,6 +35,7 @@ import { Route as ApiAgentChatRouteImport } from './routes/api.agent.chat'
 import { Route as ApiCatalogParseRouteImport } from './routes/api.catalog.parse'
 import { Route as ApiCatalogPublishRouteImport } from './routes/api.catalog.publish'
 import { Route as ApiDemoResetRouteImport } from './routes/api.demo.reset'
+import { Route as ApiPaypalClientTokenRouteImport } from './routes/api.paypal.client-token'
 import { Route as ApiPaypalConfigRouteImport } from './routes/api.paypal.config'
 import { Route as ApiPaypalWebhookRouteImport } from './routes/api.paypal.webhook'
 import { Route as ApiPublicSlugRouteImport } from './routes/api.public.$slug'
@@ -42,6 +43,7 @@ import { Route as ApiQuotesIdRouteImport } from './routes/api.quotes.$id'
 import { Route as ApiSellerBootstrapRouteImport } from './routes/api.seller.bootstrap'
 import { Route as ApiSellerRulesRouteImport } from './routes/api.seller.rules'
 import { Route as ApiServicesImageRouteImport } from './routes/api.services.image'
+import { Route as ApiVaultReturnRouteImport } from './routes/api.vault.return'
 import { Route as AppQuotesIdRouteImport } from './routes/app.quotes.$id'
 import { Route as ApiProposalsIdApproveRouteImport } from './routes/api.proposals.$id.approve'
 import { Route as ApiProposalsIdRejectRouteImport } from './routes/api.proposals.$id.reject'
@@ -50,6 +52,7 @@ import { Route as ApiQuotesIdCancelRouteImport } from './routes/api.quotes.$id.c
 import { Route as ApiQuotesIdDeliverRouteImport } from './routes/api.quotes.$id.deliver'
 import { Route as ApiQuotesIdInvoiceRouteImport } from './routes/api.quotes.$id.invoice'
 import { Route as ApiQuotesIdRepliesRouteImport } from './routes/api.quotes.$id.replies'
+import { Route as ApiQuotesIdStartWorkRouteImport } from './routes/api.quotes.$id.start-work'
 import { Route as ApiDemoQuotesIdPayBalanceRouteImport } from './routes/api.demo.quotes.$id.pay-balance'
 import { Route as ApiQuotesIdCollectionsRunRouteImport } from './routes/api.quotes.$id.collections.run'
 import { Route as ApiQuotesIdDepositCaptureRouteImport } from './routes/api.quotes.$id.deposit.capture'
@@ -185,6 +188,11 @@ const ApiDemoResetRoute = ApiDemoResetRouteImport.update({
   path: '/api/demo/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPaypalClientTokenRoute = ApiPaypalClientTokenRouteImport.update({
+  id: '/api/paypal/client-token',
+  path: '/api/paypal/client-token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPaypalConfigRoute = ApiPaypalConfigRouteImport.update({
   id: '/api/paypal/config',
   path: '/api/paypal/config',
@@ -219,6 +227,11 @@ const ApiServicesImageRoute = ApiServicesImageRouteImport.update({
   id: '/image',
   path: '/image',
   getParentRoute: () => ApiServicesRoute,
+} as any)
+const ApiVaultReturnRoute = ApiVaultReturnRouteImport.update({
+  id: '/api/vault/return',
+  path: '/api/vault/return',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppQuotesIdRoute = AppQuotesIdRouteImport.update({
   id: '/quotes/$id',
@@ -258,6 +271,11 @@ const ApiQuotesIdInvoiceRoute = ApiQuotesIdInvoiceRouteImport.update({
 const ApiQuotesIdRepliesRoute = ApiQuotesIdRepliesRouteImport.update({
   id: '/replies',
   path: '/replies',
+  getParentRoute: () => ApiQuotesIdRoute,
+} as any)
+const ApiQuotesIdStartWorkRoute = ApiQuotesIdStartWorkRouteImport.update({
+  id: '/start-work',
+  path: '/start-work',
   getParentRoute: () => ApiQuotesIdRoute,
 } as any)
 const ApiDemoQuotesIdPayBalanceRoute =
@@ -311,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/api/catalog/parse': typeof ApiCatalogParseRoute
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
+  '/api/paypal/client-token': typeof ApiPaypalClientTokenRoute
   '/api/paypal/config': typeof ApiPaypalConfigRoute
   '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
   '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
@@ -318,6 +337,7 @@ export interface FileRoutesByFullPath {
   '/api/seller/bootstrap': typeof ApiSellerBootstrapRoute
   '/api/seller/rules': typeof ApiSellerRulesRoute
   '/api/services/image': typeof ApiServicesImageRoute
+  '/api/vault/return': typeof ApiVaultReturnRoute
   '/app/quotes/$id': typeof AppQuotesIdRoute
   '/api/proposals/$id/approve': typeof ApiProposalsIdApproveRoute
   '/api/proposals/$id/reject': typeof ApiProposalsIdRejectRoute
@@ -326,6 +346,7 @@ export interface FileRoutesByFullPath {
   '/api/quotes/$id/deliver': typeof ApiQuotesIdDeliverRoute
   '/api/quotes/$id/invoice': typeof ApiQuotesIdInvoiceRoute
   '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
+  '/api/quotes/$id/start-work': typeof ApiQuotesIdStartWorkRoute
   '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
   '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
   '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
@@ -357,6 +378,7 @@ export interface FileRoutesByTo {
   '/api/catalog/parse': typeof ApiCatalogParseRoute
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
+  '/api/paypal/client-token': typeof ApiPaypalClientTokenRoute
   '/api/paypal/config': typeof ApiPaypalConfigRoute
   '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
   '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
@@ -364,6 +386,7 @@ export interface FileRoutesByTo {
   '/api/seller/bootstrap': typeof ApiSellerBootstrapRoute
   '/api/seller/rules': typeof ApiSellerRulesRoute
   '/api/services/image': typeof ApiServicesImageRoute
+  '/api/vault/return': typeof ApiVaultReturnRoute
   '/app/quotes/$id': typeof AppQuotesIdRoute
   '/api/proposals/$id/approve': typeof ApiProposalsIdApproveRoute
   '/api/proposals/$id/reject': typeof ApiProposalsIdRejectRoute
@@ -372,6 +395,7 @@ export interface FileRoutesByTo {
   '/api/quotes/$id/deliver': typeof ApiQuotesIdDeliverRoute
   '/api/quotes/$id/invoice': typeof ApiQuotesIdInvoiceRoute
   '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
+  '/api/quotes/$id/start-work': typeof ApiQuotesIdStartWorkRoute
   '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
   '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
   '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
@@ -405,6 +429,7 @@ export interface FileRoutesById {
   '/api/catalog/parse': typeof ApiCatalogParseRoute
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
+  '/api/paypal/client-token': typeof ApiPaypalClientTokenRoute
   '/api/paypal/config': typeof ApiPaypalConfigRoute
   '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
   '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
@@ -412,6 +437,7 @@ export interface FileRoutesById {
   '/api/seller/bootstrap': typeof ApiSellerBootstrapRoute
   '/api/seller/rules': typeof ApiSellerRulesRoute
   '/api/services/image': typeof ApiServicesImageRoute
+  '/api/vault/return': typeof ApiVaultReturnRoute
   '/app/quotes/$id': typeof AppQuotesIdRoute
   '/api/proposals/$id/approve': typeof ApiProposalsIdApproveRoute
   '/api/proposals/$id/reject': typeof ApiProposalsIdRejectRoute
@@ -420,6 +446,7 @@ export interface FileRoutesById {
   '/api/quotes/$id/deliver': typeof ApiQuotesIdDeliverRoute
   '/api/quotes/$id/invoice': typeof ApiQuotesIdInvoiceRoute
   '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
+  '/api/quotes/$id/start-work': typeof ApiQuotesIdStartWorkRoute
   '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
   '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
   '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
@@ -454,6 +481,7 @@ export interface FileRouteTypes {
     | '/api/catalog/parse'
     | '/api/catalog/publish'
     | '/api/demo/reset'
+    | '/api/paypal/client-token'
     | '/api/paypal/config'
     | '/api/paypal/webhook'
     | '/api/public/$slug'
@@ -461,6 +489,7 @@ export interface FileRouteTypes {
     | '/api/seller/bootstrap'
     | '/api/seller/rules'
     | '/api/services/image'
+    | '/api/vault/return'
     | '/app/quotes/$id'
     | '/api/proposals/$id/approve'
     | '/api/proposals/$id/reject'
@@ -469,6 +498,7 @@ export interface FileRouteTypes {
     | '/api/quotes/$id/deliver'
     | '/api/quotes/$id/invoice'
     | '/api/quotes/$id/replies'
+    | '/api/quotes/$id/start-work'
     | '/api/demo/quotes/$id/pay-balance'
     | '/api/quotes/$id/collections/run'
     | '/api/quotes/$id/deposit/capture'
@@ -500,6 +530,7 @@ export interface FileRouteTypes {
     | '/api/catalog/parse'
     | '/api/catalog/publish'
     | '/api/demo/reset'
+    | '/api/paypal/client-token'
     | '/api/paypal/config'
     | '/api/paypal/webhook'
     | '/api/public/$slug'
@@ -507,6 +538,7 @@ export interface FileRouteTypes {
     | '/api/seller/bootstrap'
     | '/api/seller/rules'
     | '/api/services/image'
+    | '/api/vault/return'
     | '/app/quotes/$id'
     | '/api/proposals/$id/approve'
     | '/api/proposals/$id/reject'
@@ -515,6 +547,7 @@ export interface FileRouteTypes {
     | '/api/quotes/$id/deliver'
     | '/api/quotes/$id/invoice'
     | '/api/quotes/$id/replies'
+    | '/api/quotes/$id/start-work'
     | '/api/demo/quotes/$id/pay-balance'
     | '/api/quotes/$id/collections/run'
     | '/api/quotes/$id/deposit/capture'
@@ -547,6 +580,7 @@ export interface FileRouteTypes {
     | '/api/catalog/parse'
     | '/api/catalog/publish'
     | '/api/demo/reset'
+    | '/api/paypal/client-token'
     | '/api/paypal/config'
     | '/api/paypal/webhook'
     | '/api/public/$slug'
@@ -554,6 +588,7 @@ export interface FileRouteTypes {
     | '/api/seller/bootstrap'
     | '/api/seller/rules'
     | '/api/services/image'
+    | '/api/vault/return'
     | '/app/quotes/$id'
     | '/api/proposals/$id/approve'
     | '/api/proposals/$id/reject'
@@ -562,6 +597,7 @@ export interface FileRouteTypes {
     | '/api/quotes/$id/deliver'
     | '/api/quotes/$id/invoice'
     | '/api/quotes/$id/replies'
+    | '/api/quotes/$id/start-work'
     | '/api/demo/quotes/$id/pay-balance'
     | '/api/quotes/$id/collections/run'
     | '/api/quotes/$id/deposit/capture'
@@ -588,9 +624,11 @@ export interface RootRouteChildren {
   ApiCatalogParseRoute: typeof ApiCatalogParseRoute
   ApiCatalogPublishRoute: typeof ApiCatalogPublishRoute
   ApiDemoResetRoute: typeof ApiDemoResetRoute
+  ApiPaypalClientTokenRoute: typeof ApiPaypalClientTokenRoute
   ApiPaypalConfigRoute: typeof ApiPaypalConfigRoute
   ApiPaypalWebhookRoute: typeof ApiPaypalWebhookRoute
   ApiPublicSlugRoute: typeof ApiPublicSlugRouteWithChildren
+  ApiVaultReturnRoute: typeof ApiVaultReturnRoute
   ApiDemoQuotesIdPayBalanceRoute: typeof ApiDemoQuotesIdPayBalanceRoute
 }
 
@@ -778,6 +816,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDemoResetRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/paypal/client-token': {
+      id: '/api/paypal/client-token'
+      path: '/api/paypal/client-token'
+      fullPath: '/api/paypal/client-token'
+      preLoaderRoute: typeof ApiPaypalClientTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/paypal/config': {
       id: '/api/paypal/config'
       path: '/api/paypal/config'
@@ -826,6 +871,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/services/image'
       preLoaderRoute: typeof ApiServicesImageRouteImport
       parentRoute: typeof ApiServicesRoute
+    }
+    '/api/vault/return': {
+      id: '/api/vault/return'
+      path: '/api/vault/return'
+      fullPath: '/api/vault/return'
+      preLoaderRoute: typeof ApiVaultReturnRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/app/quotes/$id': {
       id: '/app/quotes/$id'
@@ -881,6 +933,13 @@ declare module '@tanstack/react-router' {
       path: '/replies'
       fullPath: '/api/quotes/$id/replies'
       preLoaderRoute: typeof ApiQuotesIdRepliesRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
+    '/api/quotes/$id/start-work': {
+      id: '/api/quotes/$id/start-work'
+      path: '/start-work'
+      fullPath: '/api/quotes/$id/start-work'
+      preLoaderRoute: typeof ApiQuotesIdStartWorkRouteImport
       parentRoute: typeof ApiQuotesIdRoute
     }
     '/api/demo/quotes/$id/pay-balance': {
@@ -957,6 +1016,7 @@ interface ApiQuotesIdRouteChildren {
   ApiQuotesIdDeliverRoute: typeof ApiQuotesIdDeliverRoute
   ApiQuotesIdInvoiceRoute: typeof ApiQuotesIdInvoiceRoute
   ApiQuotesIdRepliesRoute: typeof ApiQuotesIdRepliesRoute
+  ApiQuotesIdStartWorkRoute: typeof ApiQuotesIdStartWorkRoute
   ApiQuotesIdCollectionsRunRoute: typeof ApiQuotesIdCollectionsRunRoute
   ApiQuotesIdDepositCaptureRoute: typeof ApiQuotesIdDepositCaptureRoute
   ApiQuotesIdDepositOrderRoute: typeof ApiQuotesIdDepositOrderRoute
@@ -967,6 +1027,7 @@ const ApiQuotesIdRouteChildren: ApiQuotesIdRouteChildren = {
   ApiQuotesIdDeliverRoute: ApiQuotesIdDeliverRoute,
   ApiQuotesIdInvoiceRoute: ApiQuotesIdInvoiceRoute,
   ApiQuotesIdRepliesRoute: ApiQuotesIdRepliesRoute,
+  ApiQuotesIdStartWorkRoute: ApiQuotesIdStartWorkRoute,
   ApiQuotesIdCollectionsRunRoute: ApiQuotesIdCollectionsRunRoute,
   ApiQuotesIdDepositCaptureRoute: ApiQuotesIdDepositCaptureRoute,
   ApiQuotesIdDepositOrderRoute: ApiQuotesIdDepositOrderRoute,
@@ -1046,9 +1107,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCatalogParseRoute: ApiCatalogParseRoute,
   ApiCatalogPublishRoute: ApiCatalogPublishRoute,
   ApiDemoResetRoute: ApiDemoResetRoute,
+  ApiPaypalClientTokenRoute: ApiPaypalClientTokenRoute,
   ApiPaypalConfigRoute: ApiPaypalConfigRoute,
   ApiPaypalWebhookRoute: ApiPaypalWebhookRoute,
   ApiPublicSlugRoute: ApiPublicSlugRouteWithChildren,
+  ApiVaultReturnRoute: ApiVaultReturnRoute,
   ApiDemoQuotesIdPayBalanceRoute: ApiDemoQuotesIdPayBalanceRoute,
 }
 export const routeTree = rootRouteImport

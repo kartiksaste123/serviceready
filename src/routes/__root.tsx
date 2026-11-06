@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { JudgeMode } from "@/components/JudgeMode";
 import {
   Outlet,
   Link,
@@ -119,6 +120,7 @@ function RootComponent() {
       <AuthProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
+        <JudgeMode />
         <Toaster theme="light" position="bottom-right" />
       </AuthProvider>
     </QueryClientProvider>

@@ -5,8 +5,17 @@
  * gated by a client/agent payment mandate (spend limit + revocable key).
  */
 import * as live from "./live";
-import { createMandate, getMandateStatus, revokeMandate, consumeMandateForDeposit } from "./mandates";
+import {
+  createMandate,
+  getMandateStatus,
+  revokeMandate,
+  consumeMandateForDeposit,
+  startMandateVault,
+  mandateVaultId,
+} from "./mandates";
+import { publicOrigin } from "./env";
 import { HttpError } from "./http";
+import { findPriceOverrides, GUARDRAIL_MESSAGE } from "../lib/guardrails";
 
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -45,6 +54,7 @@ const TOOLS = [
         brief: { type: "string", description: "What the client needs and by when" },
       },
       required: ["service_id", "client_name", "client_email"],
+      additionalProperties: false,
     },
   },
   {
@@ -106,6 +116,29 @@ const TOOLS = [
         },
       },
       required: ["quote_id", "mandate_key"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "save_paypal_for_mandate",
+    description:
+      "Returning-client fast path (PayPal Vault v3). Returns a PayPal approval link; the client approves once and their PayPal is saved to this mandate. Later deposits can use pay_deposit_with_saved_paypal — still capped by the mandate spend limit and revocable.",
+    inputSchema: {
+      type: "object",
+      properties: { mandate_key: { type: "string" } },
+      required: ["mandate_key"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "pay_deposit_with_saved_paypal",
+    description:
+      "Pay a quote's deposit with the PayPal saved via save_paypal_for_mandate (no popup). Amount is the catalog deposit — never pass an amount. Counts against the mandate spend limit.",
+    inputSchema: {
+      type: "object",
+      properties: { quote_id: { type: "string" }, mandate_key: { type: "string" } },
+      required: ["quote_id", "mandate_key"],
+      additionalProperties: false,
     },
   },
 ];
@@ -130,6 +163,20 @@ async function callTool(
   args: Record<string, unknown>,
   request: Request,
 ) {
+  // Hard money guardrail: only the catalog sets prices. Applies to every money-moving tool.
+  if (name === "request_quote" || name === "create_deposit_link" || name === "pay_deposit_with_saved_paypal") {
+    const fields = findPriceOverrides(args);
+    if (fields.length) {
+      await live.logGuardrailBlock({
+        slug,
+        tool: name,
+        fields,
+        actor: "client_agent",
+        quote_id: typeof args["quote_id"] === "string" ? args["quote_id"] : null,
+      });
+      throw new HttpError(`${GUARDRAIL_MESSAGE} (rejected: ${fields.join(", ")})`, 400);
+    }
+  }
   switch (name) {
     case "list_services": {
       const store = await live.getPublic(slug, request);
@@ -242,6 +289,48 @@ async function callTool(
         note: "PayPal sandbox. After approval the buyer returns to quote_url, where ServiceReady captures the order server-side. Agent never pays — client approves within mandate limit.",
       };
     }
+    case "save_paypal_for_mandate": {
+      const sellerId = await sellerIdForSlug(slug, request);
+      const store = await live.getPublic(slug, request);
+      const r = await startMandateVault({
+        mandateKey: str(args["mandate_key"], "mandate_key"),
+        sellerId,
+        origin: publicOrigin(request),
+        brandName: store.seller.name,
+      });
+      return {
+        ...r,
+        note: "Send approve_url to the client. After they approve at PayPal, pay_deposit_with_saved_paypal works without a popup — still inside the mandate limit.",
+      };
+    }
+    case "pay_deposit_with_saved_paypal": {
+      const quoteId = str(args["quote_id"], "quote_id");
+      const mandateKey = str(args["mandate_key"], "mandate_key");
+      const sellerId = await sellerIdForSlug(slug, request);
+      const vaultId = await mandateVaultId(mandateKey);
+      if (!vaultId) {
+        throw new HttpError(
+          "No saved PayPal on this mandate — call save_paypal_for_mandate and have the client approve first",
+          400,
+        );
+      }
+      const d = await live.getQuote(quoteId);
+      if (d.quote.status !== "quoted") throw new HttpError("Deposit already handled or quote cancelled", 400);
+      const mandate = await consumeMandateForDeposit({
+        mandateKey,
+        sellerId,
+        amountCents: d.quote.deposit_cents,
+        quoteId,
+      });
+      const q = await live.payDepositWithVault(quoteId, vaultId);
+      return {
+        quote_id: q.id,
+        status: q.status,
+        deposit_paid_usd: q.deposit_cents / 100,
+        mandate: { mandate_id: mandate.mandate_id, remaining_usd: mandate.remaining_usd },
+        source_of_truth: "PayPal capture on a Vault payment token",
+      };
+    }
     default:
       throw new HttpError(`Unknown tool: ${name}`, 404);
   }
@@ -265,7 +354,7 @@ async function handleOne(slug: string, msg: JsonRpcReq, request: Request): Promi
             ? msg.params["protocolVersion"]
             : PROTOCOL_VERSION,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: `serviceready-${slug}`, version: "1.1.0" },
+        serverInfo: { name: `serviceready-${slug}`, version: "1.2.0" },
         instructions:
           "Book this freelancer with agentic commerce guardrails: create_payment_mandate (spend limit) → list_services → request_quote → create_deposit_link(mandate_key). Deposits are real PayPal sandbox orders inside the mandate. Quote status only changes from PayPal evidence. Revoke the mandate anytime.",
       });

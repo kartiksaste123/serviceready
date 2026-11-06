@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { prefetchPayPal } from "@/components/PayPalDepositButton";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -54,8 +55,13 @@ export const Route = createFileRoute("/s/$slug")({
       },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>): { judge?: string } =>
+    typeof s["judge"] === "string" ? { judge: s["judge"] } : {},
   component: Storefront,
 });
+
+const JUDGE_SAMPLE =
+  "I want a logo for my bakery, my name is Sam Lee, email sam@bakery.com";
 
 const initials = (name: string) =>
   name
@@ -103,6 +109,7 @@ function SellerAvatar({ name, slug }: { name: string; slug: string }) {
 
 function Storefront() {
   const { slug } = Route.useParams();
+  const judge = Route.useSearch().judge === "1";
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["public", slug],
     queryFn: () => api.getPublicStore(slug),
@@ -111,6 +118,8 @@ function Storefront() {
   });
   const [picked, setPicked] = useState<Service | null>(null);
   useEffect(() => setPicked(null), [slug]);
+  // Warm PayPal (config + SDK v6) while the client chats, so the quote page's button is instant.
+  useEffect(() => prefetchPayPal(), []);
   const notFound = isError && error instanceof Error && /not found/i.test(error.message);
 
   return (
@@ -253,7 +262,7 @@ function Storefront() {
                   })}
                 </div>
               )}
-              <AgentChat key={slug} slug={slug} />
+              <AgentChat key={slug} slug={slug} judge={judge} />
             </div>
           </>
         )}
@@ -458,7 +467,7 @@ type Item =
   | { kind: "quote"; quote: Quote }
   | { kind: "error"; text: string };
 
-function AgentChat({ slug }: { slug: string }) {
+function AgentChat({ slug, judge = false }: { slug: string; judge?: boolean }) {
   const [items, setItems] = useState<Item[]>([]);
   const [text, setText] = useState("");
   const scroller = useRef<HTMLDivElement>(null);
@@ -542,11 +551,28 @@ function AgentChat({ slug }: { slug: string }) {
       >
         {!items.length && (
           <div className="mt-auto space-y-2">
+            {judge && (
+              <div className="rounded-xl border border-success bg-success-bg p-3 text-sm">
+                <p className="font-semibold text-success">Judge demo · step 1 of 4</p>
+                <p className="mt-0.5 text-[13px] text-foreground">
+                  Send a real booking request. The AI calls tools, the catalog sets the price, and
+                  you get a PayPal sandbox deposit button.
+                </p>
+                <button
+                  type="button"
+                  className="btn-mint mt-2 w-full"
+                  onClick={() => send(JUDGE_SAMPLE)}
+                >
+                  <Zap className="size-4" aria-hidden="true" />
+                  Send booking request
+                </button>
+              </div>
+            )}
             <p className="text-center text-sm text-muted-foreground">Ask like a client would:</p>
             {[
               "What services do you offer?",
               "Tell me about the brand identity kit",
-              "I want a logo for my bakery, my name is Sam Lee, email sam@bakery.com",
+              JUDGE_SAMPLE,
             ].map((s) => (
               <button
                 type="button"
@@ -580,7 +606,13 @@ function AgentChat({ slug }: { slug: string }) {
               <div className="flex items-center gap-2 text-[12px]">
                 <Wrench className="size-3" aria-hidden="true" />
                 <code className="font-mono font-semibold">{it.trace.tool}</code>
-                <span className="text-muted-foreground">tool call</span>
+                {(it.trace.output as { blocked?: boolean } | null)?.blocked ? (
+                  <span className="rounded bg-danger-bg px-1.5 text-danger">
+                    blocked · AI can't set prices
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">tool call</span>
+                )}
               </div>
               <div className="flex flex-wrap gap-4">
                 <JsonBlock label="input" value={it.trace.input} />
@@ -590,7 +622,8 @@ function AgentChat({ slug }: { slug: string }) {
           ) : it.kind === "quote" ? (
             <Link key={i} to="/q/$id" params={{ id: it.quote.id }} className="btn-mint w-full">
               <Zap className="size-4" aria-hidden="true" />
-              Review & pay deposit · {money0(it.quote.deposit_cents)}
+              {it.quote.deposit_intent === "AUTHORIZE" ? "Review & authorize deposit" : "Review & pay deposit"}{" "}
+              · {money0(it.quote.deposit_cents)}
             </Link>
           ) : (
             <p

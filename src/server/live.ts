@@ -35,7 +35,8 @@ import {
 } from "../lib/validation";
 import { money, money0 } from "../lib/format";
 import { db } from "./db";
-import { paypalWebhookId, publicOrigin } from "./env";
+import { authorizeMinDepositCents, paypalWebhookId, publicOrigin } from "./env";
+import { depositIntentFor, type DepositIntent } from "../lib/deposit-policy";
 import { HttpError } from "./http";
 import * as paypal from "./paypal";
 import {
@@ -44,7 +45,9 @@ import {
   toolkitCreateRefund,
   toolkitSendInvoiceReminder,
 } from "./paypal-toolkit";
-import { chatCompletion, chatJson, hasLlm, llmDisclosure, LlmError } from "./llm";
+import { chatJson, hasLlm, llmDisclosure, LlmError } from "./llm";
+import { findPriceOverrides, GUARDRAIL_MESSAGE } from "../lib/guardrails";
+import { collectionsRisk, historyFor, TONE_GUIDE } from "../lib/risk";
 import { z } from "zod";
 
 const DEMO_SLUG = "maya-rao-studio";
@@ -105,6 +108,8 @@ type PaymentRow = {
   paypal_invoice_id: string | null;
   invoice_url: string | null;
   updated_at: string;
+  intent?: string | null;
+  paypal_authorization_id?: string | null;
 };
 type EventRow = {
   id: string;
@@ -190,6 +195,7 @@ function mapQuote(r: QuoteRow): Quote {
     approval_url: r.approval_url,
     created_at: r.created_at,
     updated_at: r.updated_at,
+    deposit_intent: depositIntentFor(r.deposit_cents, authorizeMinDepositCents()),
   };
 }
 function mapPayment(r: PaymentRow): Payment {
@@ -200,6 +206,10 @@ function mapPayment(r: PaymentRow): Payment {
     status: r.status,
     ...(r.paypal_order_id ? { paypal_order_id: r.paypal_order_id } : {}),
     ...(r.paypal_capture_id ? { paypal_capture_id: r.paypal_capture_id } : {}),
+    ...(r.paypal_authorization_id ? { paypal_authorization_id: r.paypal_authorization_id } : {}),
+    ...(r.kind === "deposit"
+      ? { intent: (r.intent === "AUTHORIZE" ? "AUTHORIZE" : "CAPTURE") as DepositIntent }
+      : {}),
     ...(r.paypal_invoice_id ? { paypal_invoice_id: r.paypal_invoice_id } : {}),
     ...(r.invoice_url ? { invoice_url: r.invoice_url } : {}),
     updated_at: r.updated_at,
@@ -305,6 +315,7 @@ export async function bootstrapSeller(
   request: Request,
   body: { name?: string; tagline?: string } = {},
 ): Promise<Seller> {
+  invalidateCatalogCache();
   const token = bearerToken(request);
   if (!token) throw new HttpError("Sign in to open your seller desk", 401);
   const { data: authData, error: authErr } = await db().auth.getUser(token);
@@ -387,6 +398,31 @@ async function pushEvent(partial: {
   return mapEvent(data as EventRow);
 }
 
+/** Audit a blocked money-override attempt on the timeline (seller-level when no quote). */
+export async function logGuardrailBlock(opts: {
+  slug: string;
+  tool: string;
+  fields: string[];
+  actor: "client_agent" | "seller_agent";
+  quote_id?: string | null;
+}): Promise<void> {
+  try {
+    const sellerId = await getSellerIdBySlug(opts.slug);
+    await pushEvent({
+      quote_id: opts.quote_id ?? null,
+      seller_id: sellerId,
+      actor: opts.actor,
+      kind: "decision",
+      tool: "guardrail.price_override_blocked",
+      input: { tool: opts.tool, fields: opts.fields },
+      output: { blocked: true },
+      text: `Blocked ${opts.tool}: agent tried to set ${opts.fields.join(", ")} — amounts come only from the catalog`,
+    });
+  } catch {
+    /* audit is best-effort; the block itself already happened */
+  }
+}
+
 async function getQuoteRow(id: string): Promise<QuoteRow> {
   const { data, error } = await db().from("quotes").select("*").eq("id", id).maybeSingle();
   if (error) throw new HttpError(error.message, 500);
@@ -419,8 +455,11 @@ async function detail(id: string): Promise<QuoteDetail> {
   if (eventsRes.error) throw new HttpError(eventsRes.error.message, 500);
   if (repliesRes.error) throw new HttpError(repliesRes.error.message, 500);
   if (proposalsRes.error) throw new HttpError(proposalsRes.error.message, 500);
+  const quote = mapQuote(q);
+  const depPay = [...payments].reverse().find((p) => p.kind === "deposit" && p.status !== "VOIDED");
+  if (depPay?.intent && q.status !== "quoted") quote.deposit_intent = depPay.intent;
   return {
-    quote: mapQuote(q),
+    quote,
     payments,
     events: (eventsRes.data as EventRow[]).map(mapEvent),
     replies: (repliesRes.data as ReplyRow[]).map(mapReply),
@@ -434,6 +473,8 @@ export async function getSeller(request?: Request): Promise<Seller> {
 
 /** Resolve seller id by public slug (MCP mandates). */
 export async function getSellerIdBySlug(slug: string): Promise<string> {
+  const hit = catalogCache.get(slug);
+  if (hit && Date.now() - hit.at < CATALOG_TTL_MS) return hit.seller.id;
   const { data, error } = await db().from("sellers").select("id").eq("slug", slug).maybeSingle();
   if (error) throw new HttpError(error.message, 500);
   if (!data) throw new HttpError(`Unknown storefront: ${slug}`, 404);
@@ -473,19 +514,51 @@ export async function listServices(request?: Request): Promise<Service[]> {
   return (data as ServiceRow[]).map(mapService);
 }
 
+/**
+ * In-memory seller catalog cache (per Render instance). Storefront, MCP list_services and the
+ * agent chat all read the same published catalog, so a short TTL keeps those sub-second.
+ * Invalidated on any catalog write (publish, cover image, reset, bootstrap).
+ */
+const CATALOG_TTL_MS = 30_000;
+const catalogCache = new Map<
+  string,
+  { at: number; seller: SellerRow; services: Service[]; inflight?: undefined }
+>();
+const catalogInflight = new Map<string, Promise<{ seller: SellerRow; services: Service[] }>>();
+
+export function invalidateCatalogCache(slug?: string): void {
+  if (slug) catalogCache.delete(slug);
+  else catalogCache.clear();
+}
+
+async function publishedCatalog(slug: string): Promise<{ seller: SellerRow; services: Service[] }> {
+  const hit = catalogCache.get(slug);
+  if (hit && Date.now() - hit.at < CATALOG_TTL_MS) return hit;
+  const pending = catalogInflight.get(slug);
+  if (pending) return pending;
+  const p = (async () => {
+    const seller = await requireSeller(slug);
+    const { data, error } = await db()
+      .from("services")
+      .select("*")
+      .eq("seller_id", seller.id)
+      .eq("status", "published")
+      .order("created_at", { ascending: true });
+    if (error) throw new HttpError(error.message, 500);
+    const entry = { at: Date.now(), seller, services: (data as ServiceRow[]).map(mapService) };
+    catalogCache.set(slug, entry);
+    return entry;
+  })().finally(() => catalogInflight.delete(slug));
+  catalogInflight.set(slug, p);
+  return p;
+}
+
 export async function getPublic(slug: string, request?: Request): Promise<PublicStore> {
-  const seller = await requireSeller(slug);
-  const { data, error } = await db()
-    .from("services")
-    .select("*")
-    .eq("seller_id", seller.id)
-    .eq("status", "published")
-    .order("created_at", { ascending: true });
-  if (error) throw new HttpError(error.message, 500);
+  const { seller, services } = await publishedCatalog(slug);
   const origin = publicOrigin(request);
   return {
     seller: { name: seller.name, slug: seller.slug, tagline: seller.tagline },
-    services: (data as ServiceRow[]).map(mapService),
+    services: services.map((s) => ({ ...s, deliverables: [...s.deliverables] })),
     agent: {
       mcp_url: `${origin}/mcp/${seller.slug}`,
       webmcp_tools: WEBMCP_TOOLS,
@@ -586,13 +659,30 @@ export async function getQuote(id: string, refresh = false): Promise<QuoteDetail
 }
 
 export async function paypalConfig() {
-  return paypal.getPublicClientId();
+  const cfg = await paypal.getPublicClientId();
+  return {
+    ...cfg,
+    sdk: { v6: true, legacy: true },
+    deposit_authorize_min_usd: authorizeMinDepositCents() / 100,
+  };
+}
+
+/** Browser-safe PayPal JS SDK v6 client token (cached ~10 min per instance). */
+let sdkTokenCache: { token: string; exp: number; host: string } | null = null;
+export async function paypalClientToken(request?: Request) {
+  const host = new URL(publicOrigin(request)).host;
+  if (sdkTokenCache && sdkTokenCache.host === host && sdkTokenCache.exp > Date.now() + 120_000) {
+    return { client_token: sdkTokenCache.token, expires_at: new Date(sdkTokenCache.exp).toISOString() };
+  }
+  const t = await paypal.createSdkClientToken([host]);
+  sdkTokenCache = { token: t.client_token, exp: Date.now() + t.expires_in * 1000, host };
+  return { client_token: t.client_token, expires_at: new Date(sdkTokenCache.exp).toISOString() };
 }
 
 export async function createDepositOrder(
   id: string,
   request?: Request,
-): Promise<{ order_id: string; approve_url?: string; quote_url: string }> {
+): Promise<{ order_id: string; approve_url?: string; quote_url: string; intent: DepositIntent }> {
   const q = await getQuoteRow(id);
   if (q.status === "cancelled") throw new HttpError("This quote was cancelled", 400);
   if (q.status !== "quoted") throw new HttpError("The deposit for this quote is already paid", 400);
@@ -600,9 +690,23 @@ export async function createDepositOrder(
   const origin = publicOrigin(request);
   const quote_url = `${origin}/q/${q.id}`;
 
+  const intent = depositIntentFor(q.deposit_cents, authorizeMinDepositCents());
   const pays = await paymentsFor(id);
+  // Retire open orders minted under a different intent (policy changed) so the SDK intent matches.
+  for (const p of pays) {
+    if (p.kind === "deposit" && p.status === "CREATED" && (p.intent ?? "CAPTURE") !== intent) {
+      await db()
+        .from("payments")
+        .update({ status: "VOIDED", updated_at: new Date().toISOString() })
+        .eq("id", p.id);
+    }
+  }
   const open = pays.find(
-    (p) => p.kind === "deposit" && p.status === "CREATED" && p.paypal_order_id,
+    (p) =>
+      p.kind === "deposit" &&
+      p.status === "CREATED" &&
+      p.paypal_order_id &&
+      (p.intent ?? "CAPTURE") === intent,
   );
   if (open?.paypal_order_id) {
     let approve_url: string | undefined;
@@ -612,7 +716,12 @@ export async function createDepositOrder(
     } catch {
       /* the JS SDK button still works with just the order id */
     }
-    return { order_id: open.paypal_order_id, quote_url, ...(approve_url ? { approve_url } : {}) };
+    return {
+      order_id: open.paypal_order_id,
+      quote_url,
+      intent,
+      ...(approve_url ? { approve_url } : {}),
+    };
   }
 
   const { data: sellerRow } = await db()
@@ -624,7 +733,8 @@ export async function createDepositOrder(
     amountCents: q.deposit_cents,
     customId: q.id,
     description: `Deposit — ${q.service_title}`,
-    requestId: `deposit-${q.id}`,
+    requestId: intent === "CAPTURE" ? `deposit-${q.id}` : `deposit-${q.id}-authorize`,
+    intent,
     returnUrl: `${quote_url}?paypal=return`,
     cancelUrl: `${quote_url}?paypal=cancel`,
     ...(sellerRow?.name ? { brandName: String(sellerRow.name) } : {}),
@@ -636,6 +746,7 @@ export async function createDepositOrder(
     amount_cents: q.deposit_cents,
     status: "CREATED",
     paypal_order_id: order.id,
+    intent,
   });
   if (error) throw new HttpError(error.message, 500);
 
@@ -645,13 +756,18 @@ export async function createDepositOrder(
     actor: "system",
     kind: "tool_call",
     tool: "paypal.orders.create",
-    input: { amount: q.deposit_cents / 100, currency: "USD", intent: "CAPTURE" },
+    input: { amount: q.deposit_cents / 100, currency: "USD", intent },
     output: { id: order.id, status: order.status },
+    text:
+      intent === "AUTHORIZE"
+        ? `Deposit order created with intent=AUTHORIZE — funds are held on approval and captured when work starts`
+        : null,
   });
 
   return {
     order_id: order.id,
     quote_url,
+    intent,
     ...(order.approveUrl ? { approve_url: order.approveUrl } : {}),
   };
 }
@@ -701,12 +817,204 @@ async function markDepositPaid(
   return mapQuote(updated as QuoteRow);
 }
 
+/** Buyer approved an intent=AUTHORIZE deposit: hold funds, flip quote to deposit_paid (held). Idempotent. */
+async function markDepositAuthorized(
+  q: QuoteRow,
+  paymentId: string,
+  order_id: string,
+  authorizationId: string,
+  via: "authorize_api" | "webhook",
+  expiresAt?: string,
+): Promise<Quote> {
+  const now = new Date().toISOString();
+  const { error: pErr } = await db()
+    .from("payments")
+    .update({ status: "AUTHORIZED", paypal_authorization_id: authorizationId, updated_at: now })
+    .eq("id", paymentId);
+  if (pErr) throw new HttpError(pErr.message, 500);
+  const { data: updated, error: qErr } = await db()
+    .from("quotes")
+    .update({ status: "deposit_paid", updated_at: now })
+    .eq("id", q.id)
+    .select("*")
+    .single();
+  if (qErr) throw new HttpError(qErr.message, 500);
+  await pushEvent({
+    quote_id: q.id,
+    seller_id: q.seller_id,
+    actor: "paypal",
+    kind: "webhook",
+    tool: "PAYMENT.AUTHORIZATION.CREATED",
+    output: {
+      order_id,
+      authorization_id: authorizationId,
+      amount: q.deposit_cents / 100,
+      verified_via: via,
+      ...(expiresAt ? { expires_at: expiresAt } : {}),
+    },
+    text: "Deposit authorized — PayPal is holding the funds; captured when work starts",
+  });
+  return mapQuote(updated as QuoteRow);
+}
+
+async function authorizeDeposit(q: QuoteRow, p: Payment, order_id: string): Promise<Quote> {
+  let res: Awaited<ReturnType<typeof paypal.authorizeOrder>>;
+  try {
+    res = await paypal.authorizeOrder(order_id);
+  } catch (e) {
+    const o = await paypal.getOrder(order_id).catch(() => null);
+    if (o?.authorizationId) {
+      const fresh = await getQuoteRow(q.id);
+      if (fresh.status !== "quoted") return mapQuote(fresh);
+      return markDepositAuthorized(q, p.id, order_id, o.authorizationId, "authorize_api");
+    }
+    throw e;
+  }
+  if (!res.authorizationId || (res.authorizationStatus && res.authorizationStatus !== "CREATED")) {
+    throw new HttpError(`PayPal authorization status is ${res.authorizationStatus ?? res.status}`, 502);
+  }
+  if (res.customId && res.customId !== q.id) {
+    throw new HttpError("PayPal order does not match this quote", 400);
+  }
+  if (res.amountCents !== undefined && res.amountCents !== q.deposit_cents) {
+    throw new HttpError("Authorized amount does not match deposit", 400);
+  }
+  await pushEvent({
+    quote_id: q.id,
+    seller_id: q.seller_id,
+    actor: "system",
+    kind: "tool_call",
+    tool: "paypal.orders.authorize",
+    input: { order_id },
+    output: { authorization_id: res.authorizationId, status: res.authorizationStatus },
+  });
+  return markDepositAuthorized(q, p.id, order_id, res.authorizationId, "authorize_api", res.expiresAt);
+}
+
+/**
+ * Capture a held (AUTHORIZED) deposit — the seller starts work. Idempotent.
+ * Called explicitly ("Start work") or automatically before the balance invoice.
+ */
+async function captureHeldDepositRow(q: QuoteRow, reason: "start_work" | "deliver"): Promise<boolean> {
+  const pays = await paymentsFor(q.id);
+  const dep = pays.find((p) => p.kind === "deposit" && p.status === "AUTHORIZED");
+  if (!dep?.paypal_authorization_id) return false;
+  const cap = await paypal.captureAuthorization({
+    authorizationId: dep.paypal_authorization_id,
+    requestId: `capture-auth-${dep.paypal_authorization_id}`,
+  });
+  if (cap.status !== "COMPLETED" && cap.status !== "PENDING") {
+    throw new HttpError(`PayPal authorization capture status is ${cap.status}`, 502);
+  }
+  const now = new Date().toISOString();
+  await db()
+    .from("payments")
+    .update({ status: "COMPLETED", paypal_capture_id: cap.id, updated_at: now })
+    .eq("id", dep.id);
+  await pushEvent({
+    quote_id: q.id,
+    seller_id: q.seller_id,
+    actor: "paypal",
+    kind: "tool_call",
+    tool: "paypal.authorizations.capture",
+    input: { authorization_id: dep.paypal_authorization_id, final_capture: true },
+    output: { capture_id: cap.id, status: cap.status, amount: q.deposit_cents / 100 },
+    text:
+      reason === "start_work"
+        ? "Work started — held deposit captured on PayPal"
+        : "Held deposit captured on PayPal before the balance invoice",
+  });
+  return true;
+}
+
+export async function startWork(id: string, request?: Request): Promise<QuoteDetail> {
+  const { quote: q } = await assertOwnsQuote(request, id);
+  if (q.status !== "deposit_paid") {
+    throw new HttpError(
+      q.status === "quoted" ? "The client hasn't approved the deposit yet" : "Work already started",
+      400,
+    );
+  }
+  const captured = await captureHeldDepositRow(q, "start_work");
+  if (!captured) {
+    await pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "system",
+      kind: "decision",
+      text: "Deposit was already captured — nothing held to capture",
+    });
+  }
+  return detail(id);
+}
+
+/**
+ * Returning client with a Vault-saved PayPal (via mandate): merchant-initiated deposit capture.
+ * Amount always comes from the quote (catalog), never from the caller.
+ */
+export async function payDepositWithVault(id: string, vaultId: string): Promise<Quote> {
+  const q = await getQuoteRow(id);
+  if (q.status !== "quoted") throw new HttpError("Deposit already handled or quote cancelled", 400);
+  if (q.deposit_cents <= 0) throw new HttpError("This quote has no deposit to pay", 400);
+  const order = await paypal.createVaultedCaptureOrder({
+    amountCents: q.deposit_cents,
+    customId: q.id,
+    description: `Deposit — ${q.service_title}`,
+    vaultId,
+    requestId: `deposit-vault-${q.id}`,
+  });
+  let captureId = order.captureId;
+  if (order.status === "APPROVED" || order.status === "CREATED") {
+    const c = await paypal.captureOrder(order.id);
+    if (c.status !== "COMPLETED") throw new HttpError(`PayPal capture status is ${c.status}`, 502);
+    captureId = c.captureId;
+  } else if (order.status !== "COMPLETED") {
+    throw new HttpError(`PayPal vaulted order status is ${order.status}`, 502);
+  }
+  if (order.amountCents !== undefined && order.amountCents !== q.deposit_cents) {
+    throw new HttpError("Captured amount does not match deposit", 400);
+  }
+  const { data: pay, error } = await db()
+    .from("payments")
+    .insert({
+      quote_id: q.id,
+      kind: "deposit",
+      amount_cents: q.deposit_cents,
+      status: "CREATED",
+      paypal_order_id: order.id,
+      intent: "CAPTURE",
+    })
+    .select("id")
+    .single();
+  if (error) throw new HttpError(error.message, 500);
+  await pushEvent({
+    quote_id: q.id,
+    seller_id: q.seller_id,
+    actor: "client_agent",
+    kind: "tool_call",
+    tool: "paypal.orders.create(vault_id)",
+    input: { amount: q.deposit_cents / 100, payment_source: "paypal.vault_id", intent: "CAPTURE" },
+    output: { id: order.id, status: order.status, capture_id: captureId },
+    text: "Returning client paid the deposit with PayPal saved in Vault (inside the mandate limit)",
+  });
+  return markDepositPaid(q, (pay as { id: string }).id, order.id, captureId, "capture_api");
+}
+
 export async function captureDeposit(id: string, order_id: string): Promise<Quote> {
   const q = await getQuoteRow(id);
   const pays = await paymentsFor(id);
   const p = pays.find((x) => x.kind === "deposit" && x.paypal_order_id === order_id);
   if (!p) throw new HttpError("PayPal order not found for this quote", 404);
-  if (p.status === "COMPLETED") return mapQuote(q);
+  if (p.status === "COMPLETED" || p.status === "AUTHORIZED") return mapQuote(q);
+  if (p.intent === "AUTHORIZE") {
+    if (q.status !== "quoted") {
+      throw new HttpError(
+        q.status === "cancelled" ? "This quote was cancelled" : "Deposit already handled",
+        400,
+      );
+    }
+    return authorizeDeposit(q, p, order_id);
+  }
   if (q.status !== "quoted") {
     throw new HttpError(
       q.status === "cancelled" ? "This quote was cancelled" : "Deposit already handled",
@@ -817,7 +1125,11 @@ export async function handlePaypalWebhook(request: Request): Promise<{
   let handled = "ignored";
   const r = event.resource ?? {};
   try {
-    if (event_type === "CHECKOUT.ORDER.APPROVED" || event_type === "PAYMENT.CAPTURE.COMPLETED") {
+    if (
+      event_type === "CHECKOUT.ORDER.APPROVED" ||
+      event_type === "PAYMENT.CAPTURE.COMPLETED" ||
+      event_type === "PAYMENT.AUTHORIZATION.CREATED"
+    ) {
       const orderId =
         event_type === "CHECKOUT.ORDER.APPROVED"
           ? r.id
@@ -828,7 +1140,29 @@ export async function handlePaypalWebhook(request: Request): Promise<{
           .select("*")
           .eq("paypal_order_id", orderId)
           .maybeSingle();
-        if (pay && (pay as PaymentRow).status !== "COMPLETED") {
+        const payStatus = (pay as PaymentRow | null)?.status;
+        if (
+          pay &&
+          payStatus === "AUTHORIZED" &&
+          event_type === "PAYMENT.CAPTURE.COMPLETED"
+        ) {
+          // Held deposit captured outside the desk (e.g. PayPal dashboard) — re-read and sync.
+          const payment = pay as PaymentRow;
+          const order = await paypal.getOrder(orderId);
+          if (order.captureId) {
+            await db()
+              .from("payments")
+              .update({
+                status: "COMPLETED",
+                paypal_capture_id: order.captureId,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", payment.id);
+            handled = "held_deposit_captured";
+          } else {
+            handled = "authorization_still_held";
+          }
+        } else if (pay && payStatus !== "COMPLETED" && payStatus !== "AUTHORIZED") {
           const payment = pay as PaymentRow;
           const q = await getQuoteRow(payment.quote_id);
           if (q.status === "quoted") {
@@ -837,7 +1171,11 @@ export async function handlePaypalWebhook(request: Request): Promise<{
               handled = "order_mismatch";
             } else if (order.status === "APPROVED") {
               await captureDeposit(q.id, orderId);
-              handled = "captured_from_webhook";
+              handled =
+                payment.intent === "AUTHORIZE" ? "authorized_from_webhook" : "captured_from_webhook";
+            } else if (order.status === "COMPLETED" && order.authorizationId && !order.captureId) {
+              await markDepositAuthorized(q, payment.id, orderId, order.authorizationId, "webhook");
+              handled = "deposit_marked_authorized";
             } else if (order.status === "COMPLETED") {
               await markDepositPaid(
                 q,
@@ -854,7 +1192,7 @@ export async function handlePaypalWebhook(request: Request): Promise<{
             handled = "already_handled";
           }
         } else {
-          handled = pay ? "already_completed" : "unknown_order";
+          handled = pay ? `already_${String(payStatus).toLowerCase()}` : "unknown_order";
         }
       }
     } else if (event_type.startsWith("INVOICING.INVOICE.")) {
@@ -900,6 +1238,8 @@ export async function deliver(id: string, request?: Request): Promise<QuoteDetai
   if (pays.some((p) => p.kind === "balance")) {
     throw new HttpError("A balance invoice already exists for this booking", 400);
   }
+  // AUTHORIZE deposits: never invoice the balance while the deposit is still only held.
+  await captureHeldDepositRow(q, "deliver");
 
   await pushEvent({
     quote_id: id,
@@ -1035,7 +1375,9 @@ export async function refreshInvoiceStatus(id: string): Promise<QuoteDetail> {
 export async function cancelQuote(id: string, request?: Request): Promise<QuoteDetail> {
   const { quote: q } = await assertOwnsQuote(request, id);
   const pays = await paymentsFor(id);
-  const deposit = pays.find((p) => p.kind === "deposit");
+  const deposit =
+    pays.find((p) => p.kind === "deposit" && (p.status === "COMPLETED" || p.status === "AUTHORIZED")) ??
+    pays.find((p) => p.kind === "deposit");
   const now = new Date().toISOString();
 
   // Unpaid quote — void open orders and cancel.
@@ -1052,6 +1394,37 @@ export async function cancelQuote(id: string, request?: Request): Promise<QuoteD
       actor: "seller",
       kind: "approval",
       text: "Quote cancelled",
+    });
+    return detail(id);
+  }
+
+  // Held (AUTHORIZED) deposit — void the authorization; nothing was captured, nothing to refund.
+  if (
+    deposit &&
+    deposit.status === "AUTHORIZED" &&
+    deposit.paypal_authorization_id &&
+    q.status === "deposit_paid"
+  ) {
+    await paypal.voidAuthorization(deposit.paypal_authorization_id);
+    await db().from("payments").update({ status: "VOIDED", updated_at: now }).eq("id", deposit.id);
+    await db().from("quotes").update({ status: "cancelled", updated_at: now }).eq("id", id);
+    await pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "paypal",
+      kind: "tool_call",
+      tool: "paypal.authorizations.void",
+      input: { authorization_id: deposit.paypal_authorization_id },
+      output: { status: "VOIDED" },
+      text: "Held deposit voided on PayPal — the client was never charged",
+    });
+    await pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "seller",
+      kind: "approval",
+      tool: "booking.cancel_void",
+      text: "Booking cancelled — held deposit released",
     });
     return detail(id);
   }
@@ -1285,12 +1658,62 @@ export async function runCollections(id: string, trigger?: string, request?: Req
     if (sellerRes.error) throw new HttpError(sellerRes.error.message, 500);
     const sellerRow = (sellerRes.data as SellerRow | null) ?? (await demoSeller());
     const tone = sellerRow.reminder_tone;
+    // Deterministic risk → tone hint (warm / firm / final). Seller rules stay the base voice.
+    const [{ data: clientQuotes }, { count: remindersSent }] = await Promise.all([
+      db()
+        .from("quotes")
+        .select("id, client_email, status, updated_at")
+        .eq("seller_id", q.seller_id)
+        .ilike("client_email", q.client_email),
+      db()
+        .from("proposals")
+        .select("id", { count: "exact", head: true })
+        .eq("quote_id", id)
+        .eq("action", "send_reminder")
+        .eq("status", "executed"),
+    ]);
+    const daysOver = Math.max(
+      0,
+      Math.floor((Date.now() - new Date(bal.updated_at).getTime()) / 864e5),
+    );
+    const risk = collectionsRisk({
+      outstanding_cents: bal.amount_cents,
+      days_overdue: daysOver,
+      history: historyFor(
+        (clientQuotes ?? []) as Array<Pick<Quote, "id" | "client_email" | "status" | "updated_at">>,
+        q.client_email,
+        id,
+      ),
+      reminders_sent: remindersSent ?? 0,
+    });
+    await log({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "collections_agent",
+      kind: "tool_call",
+      tool: "collections.risk_score",
+      input: {
+        outstanding: bal.amount_cents / 100,
+        days_overdue: daysOver,
+        reminders_sent: remindersSent ?? 0,
+      },
+      output: risk,
+      text: `Risk ${risk.score}/100 (${risk.band}) → ${risk.tone} reminder tone${risk.factors.length ? ` · ${risk.factors.join(", ")}` : ""}`,
+    });
+    const toneLine =
+      risk.tone === "final"
+        ? "This is a final reminder for"
+        : risk.tone === "firm"
+          ? "A quick note that the invoice is now overdue for"
+          : "Just a gentle reminder about";
     let draft = claimsPaid
       ? `Hi ${first}, thank you! I just checked and PayPal still shows the ${money(bal.amount_cents)} invoice as open on my side — sometimes the payment doesn't complete the last step. Here's the link again: ${bal.invoice_url}\n\nNo rush at all!\n\n— Maya`
-      : `Hi ${first}, hope you're enjoying the new ${q.service_title.toLowerCase()}! Just a gentle reminder that the ${money(bal.amount_cents)} balance is open whenever you're ready: ${bal.invoice_url}\n\nThanks so much, Maya`;
+      : risk.tone === "warm"
+        ? `Hi ${first}, hope you're enjoying the new ${q.service_title.toLowerCase()}! Just a gentle reminder that the ${money(bal.amount_cents)} balance is open whenever you're ready: ${bal.invoice_url}\n\nThanks so much, Maya`
+        : `Hi ${first}, ${toneLine.charAt(0).toLowerCase()}${toneLine.slice(1)} the ${money(bal.amount_cents)} balance on ${q.service_title} (sent ${daysOver} day${daysOver === 1 ? "" : "s"} ago). You can pay it here: ${bal.invoice_url}\n\n${risk.tone === "final" ? "Please settle it this week, or reply if something's holding it up so we can sort it out." : "Could you take care of it in the next few days?"}\n\nThanks, Maya`;
     summary = claimsPaid
       ? "Client claims paid but PayPal still shows open — propose a gentle nudge with the invoice link."
-      : "Balance still unpaid — propose a friendly reminder.";
+      : `Balance still unpaid — propose a ${risk.tone} reminder (risk ${risk.score}/100).`;
 
     if (hasLlm()) {
       try {
@@ -1303,7 +1726,7 @@ export async function runCollections(id: string, trigger?: string, request?: Req
             {
               role: "system",
               content: `You draft a short client email for a freelance collections agent.
-Tone: ${tone}. Seller signs as Maya. PayPal is the source of truth — never trust client payment claims over an unpaid invoice.
+Base voice: ${tone}. Risk-based tone for this reminder: ${risk.tone} — ${TONE_GUIDE[risk.tone]} (risk ${risk.score}/100). Seller signs as Maya. PayPal is the source of truth — never trust client payment claims over an unpaid invoice.
 Return JSON: {"draft_message":"...","summary":"one-line agent decision for the human approver"}.
 Include the invoice URL verbatim. Keep under 1200 characters. No subject line.`,
             },
@@ -1338,7 +1761,7 @@ Include the invoice URL verbatim. Keep under 1200 characters. No subject line.`,
           actor: "collections_agent",
           kind: "tool_call",
           tool: "llm.draft_reminder",
-          input: { tone, claims_paid_but_paypal_open: claimsPaid },
+          input: { tone, risk_tone: risk.tone, risk_score: risk.score, claims_paid_but_paypal_open: claimsPaid },
           output: { provider: disc?.provider, model: disc?.model, chars: draft.length },
         });
       } catch {
@@ -1571,6 +1994,15 @@ export async function health() {
     out["ok"] = false;
   }
   out["mcp"] = { endpoint: `/mcp/${DEMO_SLUG}`, transport: "streamable-http (JSON-RPC 2.0)" };
+  out["features"] = {
+    deposit_intents: ["CAPTURE", "AUTHORIZE"],
+    deposit_authorize_min_usd: authorizeMinDepositCents() / 100,
+    paypal_js_sdk: "v6 (v5 Buttons fallback)",
+    vault_returning_client: "mandate-bound PayPal Vault v3 (MCP save_paypal_for_mandate)",
+    money_guardrails: "agents cannot set amounts (rejected + audited)",
+    collections_risk: "deterministic score → warm/firm/final tone",
+    catalog_cache_ttl_ms: CATALOG_TTL_MS,
+  };
   return out;
 }
 
@@ -1590,9 +2022,27 @@ export async function getStats(request?: Request): Promise<Stats> {
   const owed_by_client: Stats["owed_by_client"] = [];
   const daysToPay: number[] = [];
 
+  // One payments query for the whole desk instead of one per booking.
+  const payByQuote = new Map<string, Payment[]>();
+  if (quotes.length) {
+    const { data: payRows, error: payErr } = await db()
+      .from("payments")
+      .select("*")
+      .in(
+        "quote_id",
+        quotes.map((q) => q.id),
+      )
+      .order("created_at", { ascending: true });
+    if (payErr) throw new HttpError(payErr.message, 500);
+    for (const r of (payRows ?? []) as PaymentRow[]) {
+      const list = payByQuote.get(r.quote_id) ?? [];
+      list.push(mapPayment(r));
+      payByQuote.set(r.quote_id, list);
+    }
+  }
   for (const q of quotes) {
     by_status[q.status] = (by_status[q.status] ?? 0) + 1;
-    const pays = await paymentsFor(q.id);
+    const pays = payByQuote.get(q.id) ?? [];
     const dep = pays.find((p) => p.kind === "deposit" && p.status === "COMPLETED");
     if (dep) deposits_collected_cents += dep.amount_cents;
     const bal = pays.find((p) => p.kind === "balance");
@@ -1612,6 +2062,11 @@ export async function getStats(request?: Request): Promise<Stats> {
         quote_id: q.id,
         outstanding_cents: bal.amount_cents,
         days_since_invoice: days,
+        risk: collectionsRisk({
+          outstanding_cents: bal.amount_cents,
+          days_overdue: days,
+          history: historyFor(quotes, q.client_email, q.id),
+        }),
       });
     }
   }
@@ -1820,6 +2275,7 @@ export async function publishCatalog(
   services: ServiceDraft[],
   request?: Request,
 ): Promise<Service[]> {
+  invalidateCatalogCache();
   for (const d of services) {
     const errs = draftErrors(d);
     if (errs.length) throw new HttpError(errs[0]!.message, 400);
@@ -1845,6 +2301,7 @@ export async function publishCatalog(
   }));
   const { data, error } = await db().from("services").insert(rows).select("*");
   if (error) throw new HttpError(error.message, 500);
+  invalidateCatalogCache();
   return (data as ServiceRow[]).map(mapService);
 }
 
@@ -1852,17 +2309,30 @@ const AgentPlanSchema = z.object({
   reply: z.string(),
   actions: z
     .array(
-      z.object({
-        tool: z.enum(["list_services", "get_service", "request_quote", "get_quote_status"]),
-        service_id: z.string().optional(),
-        quote_id: z.string().optional(),
-        client_name: z.string().optional(),
-        client_email: z.string().optional(),
-        brief: z.string().optional(),
-      }),
+      z
+        .object({
+          // Lenient: models sometimes write "request_quote(...)" — normalize to the bare tool name.
+          tool: z
+            .string()
+            .transform((t) => t.trim().match(/^[a-z_]+/i)?.[0]?.toLowerCase() ?? "")
+            .pipe(z.enum(["list_services", "get_service", "request_quote", "get_quote_status"])),
+          service_id: z.string().optional(),
+          quote_id: z.string().optional(),
+          client_name: z.string().optional(),
+          client_email: z.string().optional(),
+          brief: z.string().optional(),
+        })
+        // keep unknown keys so the money guardrail can see (and reject) price overrides
+        .passthrough(),
     )
     .default([]),
 });
+
+/** Deterministic client-facing quote summary — amounts copied from the catalog-built quote, never the model. */
+function quoteReply(created: Quote, svc: Service, sellerName: string): string {
+  const held = created.deposit_intent === "AUTHORIZE";
+  return `I've requested a quote for **${svc.title}** from ${sellerName}.\n\n- Total: **${money(created.total_cents)}**\n- Deposit due now: **${money(created.deposit_cents)}** (${svc.deposit_pct}%)${held ? " — PayPal holds it and it's only captured when work starts" : ""}\n- Balance on delivery: ${money(created.balance_cents)}\n- Turnaround: ~${svc.lead_time_days} days\n- Quote reference: **${created.id}**\n\nPay the deposit with PayPal using the button below to confirm.`;
+}
 
 /** Deterministic storefront agent — used when no LLM key is set. */
 export type AgentEngine =
@@ -1976,26 +2446,26 @@ export async function agentChat(
       deliverables: s.deliverables,
     }));
     const history = messages
-      .slice(-8)
-      .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+      .slice(-6)
+      .map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 1200)}`)
       .join("\n");
 
+    // One model round-trip: the model plans tool calls + writes the reply; the server executes the
+    // tools and writes any money-bearing text deterministically from real results.
     const plan = await chatJson(
       [
         {
           role: "system",
-          content: `You are the storefront assistant for ${store.seller.name} (${store.seller.tagline}).
-Help clients discover services and request a quote. Deposits are paid with PayPal.
-Available tools (put intended calls in "actions"; the server executes them):
-- list_services
-- get_service (needs service_id)
-- request_quote (needs service_id, client_name, client_email, brief) — only when you have a valid email
-- get_quote_status (needs quote_id)
-Always include list_services as the first action.
-Return JSON: {"reply":"markdown for the client","actions":[{"tool":"...","service_id?","quote_id?","client_name?","client_email?","brief?"}]}
-Be concise. Never invent prices — use the catalog. Never claim payment succeeded.
-As soon as the client has given a name, a valid email and a need that matches a service, call request_quote right away (use their message as the brief) — do not ask for more detail first.
-The client never sees raw tool output, so when you only list or describe services, name them with prices and deposits in the reply itself.`,
+          content: `Storefront assistant for ${store.seller.name} (${store.seller.tagline}). Deposits are paid with PayPal.
+Tools (put intended calls in "actions"; the server runs them):
+- get_service — fields: service_id
+- request_quote — fields: service_id, client_name, client_email, brief
+- get_quote_status — fields: quote_id
+Action shape: {"tool":"request_quote","service_id":"<catalog id>","client_name":"...","client_email":"...","brief":"..."}
+Rules: use catalog ids; never invent or set prices/amounts (the server rejects money fields); never claim payment succeeded.
+As soon as the client gave a name, a valid email and a need that matches a service, call request_quote (brief = their need) — don't ask for more.
+When only browsing, name matching services with price and deposit % in the reply. Be concise markdown.
+Return JSON only: {"reply":"...","actions":[...]}`,
         },
         {
           role: "user",
@@ -2003,41 +2473,68 @@ The client never sees raw tool output, so when you only list or describe service
         },
       ],
       AgentPlanSchema,
-      { temperature: 0.3 },
+      { temperature: 0.2, timeoutMs: 20_000 },
     );
 
     const tool_calls: ToolTrace[] = [];
     let quote: Quote | null = null;
+    let quoteSvc: Service | null = null;
 
-    // Always surface list_services first for the UI timeline.
+    // list_services is served from the per-request catalog (no extra DB/model call).
     tool_calls.push({
       tool: "list_services",
-      input: { slug },
+      input: { slug, cached: true },
       output: catalog.map((s) => ({ id: s.id, title: s.title, price_cents: s.price_cents })),
     });
 
-    const actions = plan.actions.length ? plan.actions : [{ tool: "list_services" as const }];
-
-    for (const action of actions) {
-      if (action.tool === "list_services") continue; // already logged
-      if (action.tool === "get_service") {
-        const svc =
-          store.services.find((s) => s.id === action.service_id) ??
-          store.services.find(
-            (s) =>
-              action.service_id && s.title.toLowerCase().includes(action.service_id.toLowerCase()),
-          );
+    // Money guardrail + dedupe (at most one request_quote per turn).
+    const actions: typeof plan.actions = [];
+    let quoteRequested = false;
+    for (const action of plan.actions) {
+      if (action.tool === "list_services") continue;
+      const { tool: _tool, ...rest } = action;
+      void _tool;
+      const fields = findPriceOverrides(rest);
+      if (fields.length) {
         tool_calls.push({
-          tool: "get_service",
-          input: { id: action.service_id },
-          output: svc ?? { error: "not_found" },
+          tool: action.tool,
+          input: rest,
+          output: { blocked: true, reason: GUARDRAIL_MESSAGE, fields },
         });
-      } else if (action.tool === "request_quote") {
-        const service_id = action.service_id ?? "";
-        const svc = store.services.find((s) => s.id === service_id);
-        const email = (action.client_email ?? "").trim();
-        const name = (action.client_name ?? "").trim() || email.split("@")[0] || "Client";
-        if (svc && isEmail(email)) {
+        void logGuardrailBlock({ slug, tool: action.tool, fields, actor: "client_agent" });
+        continue;
+      }
+      if (action.tool === "request_quote") {
+        if (quoteRequested) continue;
+        quoteRequested = true;
+      }
+      actions.push(action);
+    }
+
+    // Independent tools run in parallel.
+    const results = await Promise.all(
+      actions.map(async (action): Promise<ToolTrace> => {
+        if (action.tool === "get_service") {
+          const svc =
+            store.services.find((s) => s.id === action.service_id) ??
+            store.services.find(
+              (s) =>
+                action.service_id &&
+                s.title.toLowerCase().includes(action.service_id.toLowerCase()),
+            );
+          return { tool: "get_service", input: { id: action.service_id }, output: svc ?? { error: "not_found" } };
+        }
+        if (action.tool === "request_quote") {
+          const svc = store.services.find((s) => s.id === (action.service_id ?? ""));
+          const email = (action.client_email ?? "").trim();
+          const name = (action.client_name ?? "").trim() || email.split("@")[0] || "Client";
+          if (!svc || !isEmail(email)) {
+            return {
+              tool: "request_quote",
+              input: { service_id: action.service_id, client_email: email },
+              output: { error: "need published service_id and valid client_email" },
+            };
+          }
           const created = await postPublicQuote(
             slug,
             {
@@ -2049,7 +2546,9 @@ The client never sees raw tool output, so when you only list or describe service
             },
             request,
           );
-          tool_calls.push({
+          quote = created;
+          quoteSvc = svc;
+          return {
             tool: "request_quote",
             input: { service_id: svc.id, client_email: email, client_name: name },
             output: {
@@ -2057,74 +2556,53 @@ The client never sees raw tool output, so when you only list or describe service
               service: svc.title,
               total: money(created.total_cents),
               deposit_due_now: money(created.deposit_cents),
+              deposit_intent: created.deposit_intent ?? "CAPTURE",
               balance_on_delivery: money(created.balance_cents),
               turnaround_days: svc.lead_time_days,
+              priced_from: "catalog",
             },
-          });
-          quote = created;
-        } else {
-          tool_calls.push({
-            tool: "request_quote",
-            input: action,
-            output: { error: "need published service_id and valid client_email" },
-          });
+          };
         }
-      } else if (action.tool === "get_quote_status" && action.quote_id) {
+        // get_quote_status
+        if (!action.quote_id) {
+          return { tool: "get_quote_status", input: {}, output: { error: "quote_id required" } };
+        }
         try {
-          const detail = await getQuote(action.quote_id);
-          tool_calls.push({
+          const d = await getQuote(action.quote_id);
+          return {
             tool: "get_quote_status",
             input: { quote_id: action.quote_id },
             output: {
-              id: detail.quote.id,
-              status: detail.quote.status,
-              deposit_cents: detail.quote.deposit_cents,
-              balance_cents: detail.quote.balance_cents,
+              id: d.quote.id,
+              status: d.quote.status,
+              deposit_cents: d.quote.deposit_cents,
+              balance_cents: d.quote.balance_cents,
             },
-          });
+          };
         } catch (err) {
-          tool_calls.push({
+          return {
             tool: "get_quote_status",
             input: { quote_id: action.quote_id },
             output: { error: err instanceof Error ? err.message : "error" },
-          });
+          };
         }
-      }
-    }
+      }),
+    );
+    tool_calls.push(...results);
 
     let reply = plan.reply?.trim() || "How can I help you pick a service?";
-    // Second pass: let the model write the final answer from real tool results (no invented ids/prices).
-    const ranTools = tool_calls.some((t) => t.tool !== "list_services");
-    if (ranTools) {
-      try {
-        const final = await chatCompletion(
-          [
-            {
-              role: "system",
-              content: `You are the storefront assistant for ${store.seller.name}. Write the final reply to the client in concise markdown (bold with ** only, bullet lists with "- ").
-Use ONLY facts from TOOL_RESULTS and copy amounts exactly as written there. If a quote was created, state total, deposit due now, balance on delivery, turnaround, and tell them to pay the deposit with PayPal using the button below. Never claim payment succeeded.`,
-            },
-            {
-              role: "user",
-              content: `CONVERSATION:\n${history}\n\nTOOL_RESULTS:\n${JSON.stringify(
-                tool_calls.filter((t) => t.tool !== "list_services"),
-              ).slice(0, 6000)}`,
-            },
-          ],
-          { temperature: 0.3, timeoutMs: 15_000 },
-        );
-        if (final.trim()) reply = final.trim();
-      } catch {
-        /* keep the first-pass reply */
+    const q = quote as Quote | null;
+    const qs = quoteSvc as Service | null;
+    if (q && qs) {
+      reply = quoteReply(q, qs, store.seller.name);
+    } else {
+      const status = results.find((t) => t.tool === "get_quote_status")?.output as
+        | { id?: string; status?: string; deposit_cents?: number; balance_cents?: number; error?: string }
+        | undefined;
+      if (status?.id && status.status) {
+        reply = `Quote **${status.id}** is **${status.status.replace(/_/g, " ")}** (deposit ${money(status.deposit_cents ?? 0)}, balance ${money(status.balance_cents ?? 0)}). Status only changes on PayPal evidence.`;
       }
     }
-    if (quote) {
-      // Ensure the reply points at the real quote id / deposit if the model omitted them.
-      if (!reply.includes(quote.id)) {
-        reply += `\n\nQuote reference: **${quote.id}**`;
-      }
-    }
-
     const disc = llmDisclosure();
     return {
       messages: [...messages, { role: "assistant", content: reply }],
@@ -2217,6 +2695,7 @@ export async function setServiceImage(
     service_id?: string;
   },
 ): Promise<{ image_url: string; service?: Service }> {
+  invalidateCatalogCache();
   const seller = await sellerFromRequest(request);
   if (body.mode === "clear") {
     if (!body.service_id) return { image_url: "" };
@@ -2229,6 +2708,7 @@ export async function setServiceImage(
       .maybeSingle();
     if (error) throw new HttpError(error.message, 500);
     if (!data) throw new HttpError("Service not found", 404);
+    invalidateCatalogCache();
     return { image_url: "", service: mapService(data as ServiceRow) };
   }
   const mode = body.mode === "generate" ? "generate" : "upload";
@@ -2263,13 +2743,16 @@ export async function setServiceImage(
       .select("*")
       .single();
     if (error) throw new HttpError(error.message, 500);
+    invalidateCatalogCache();
     return { image_url, service: mapService(data as ServiceRow) };
   }
+  invalidateCatalogCache();
   return { image_url };
 }
 
 
 export async function resetDemo(request?: Request): Promise<{ ok: true }> {
+  invalidateCatalogCache();
   const seller = await sellerFromRequest(request);
   if (seller.slug !== DEMO_SLUG) {
     throw new HttpError("Reset demo is only available on the shared judge workspace", 403);

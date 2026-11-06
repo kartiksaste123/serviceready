@@ -27,7 +27,7 @@
 **Say:**  
 “Solo freelancers start work on trust and chase invoices for weeks. ServiceReady is an agent-ready storefront: **AI** helps buyers book, and **PayPal** takes a deposit before work starts — client claims are never trusted over PayPal evidence.”
 
-**Cut to:** Landing CTA → click through to storefront `/s/maya-rao-studio`.
+**Cut to:** Landing CTA **Judge demo · 3 min** → storefront `/s/maya-rao-studio?judge=1` → **Send booking request**.
 
 ---
 
@@ -54,7 +54,7 @@
 
 ### 0:45–1:20 — PayPal Orders v2 deposit (must show sandbox popup)
 
-**On screen:** Quote page `/q/...`. Big **Pay deposit with PayPal** / PayPal Smart Button. Overlay: `PayPal Orders v2 · sandbox`.
+**On screen:** Quote page `/q/...`. PayPal **JS SDK v6** button (caption shows `SDK v6`). Overlay: `PayPal Orders v2 · JS SDK v6 · sandbox`. For a Full Brand Kit ($600 deposit) the page says **Authorize** — PayPal holds the funds until work starts.
 
 **Say:**  
 “Before any work starts, I pay a deposit with **PayPal Orders v2** — real sandbox, not a mock.”
@@ -64,7 +64,9 @@
 **On screen:** Popup clearly branded PayPal. After approve, quote status **Deposit paid** + capture / order id in timeline if shown.
 
 **Say:**  
-“Approved. Server captured the order. Status flips to deposit-paid only from **PayPal** evidence.”
+“Approved. Small deposits are captured; big ones are **authorized** — PayPal holds the money and I capture it when I start work, or void it if the job is cancelled. Status flips only from **PayPal** evidence.”
+
+**Optional (5s):** desk → **Start work · capture $600** → timeline shows `paypal.authorizations.capture`.
 
 ---
 
@@ -84,7 +86,7 @@
 **On screen:** **Run payment check** / collections run → proposal card with AI-drafted reminder. Overlay: `AI draft · human approves`.
 
 **Say:**  
-“Payment check uses the official **PayPal Agent Toolkit** — you can see `get_invoice` in the audit trail. **AI** drafts a reminder; a human approves before **send_invoice_reminder**. PayPal evidence beats client claims.”
+“The desk is an **AG Grid** with a deterministic **risk score** — days overdue, amount and pay history — that sets the reminder tone: warm, firm or final. Payment check uses the official **PayPal Agent Toolkit** — you can see `get_invoice` in the audit trail. **AI** drafts a reminder; a human approves before **send_invoice_reminder**. PayPal evidence beats client claims.”
 
 **Do:** Approve (or skip send if already showing unpaid invoice) → pay the invoice as the **same sandbox buyer** → **Check payment** / refresh.
 
@@ -100,7 +102,7 @@
 **On screen:** Terminal or Connect page — `create_payment_mandate` → `create_deposit_link` with `mandate_key`. Overlay: `Spend limit · revocable`.
 
 **Say:**  
-“Outside agents need a **payment mandate** with a spend limit before they can mint a PayPal deposit link. Revoke the key anytime.”
+“Outside agents need a **payment mandate** with a spend limit before they can mint a PayPal deposit link. If an agent tries to set its own price, the call is **rejected** and logged. Revoke the key anytime.”
 
 ---
 
@@ -111,8 +113,8 @@
 ```
 ServiceReady
 AI (xAI Grok): catalog · agent chat · collections drafts
-Agents: MCP mandate → create_deposit_link · Agent Toolkit collections/refund
-PayPal: Orders v2 deposit · Invoicing v2 · create_refund · signed Webhooks
+Agents: MCP mandate → create_deposit_link · Vault rebooking · price-override guardrail
+PayPal: Orders v2 capture/authorize · JS SDK v6 · Invoicing v2 · Agent Toolkit · signed Webhooks
 Supabase + TanStack Start on Render · MIT
 Demo: serviceready.onrender.com
 Repo: github.com/kartiksaste123/serviceready

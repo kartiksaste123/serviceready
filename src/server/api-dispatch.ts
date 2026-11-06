@@ -3,6 +3,15 @@
  */
 import * as live from "./live";
 import { errResponse, HttpError, json, readJson } from "./http";
+import { completeMandateVault } from "./mandates";
+
+function htmlPage(title: string, body: string, status = 200): Response {
+  const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  return new Response(
+    `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><body style="font-family:system-ui;max-width:520px;margin:12vh auto;padding:0 20px;line-height:1.5"><h1 style="font-size:22px">${esc(title)}</h1><p>${esc(body)}</p><p><a href="/">Back to ServiceReady</a></p></body>`,
+    { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
+  );
+}
 
 function pathOf(request: Request): string {
   return new URL(request.url).pathname.replace(/\/+$/, "") || "/";
@@ -19,6 +28,29 @@ export async function dispatchApi(request: Request): Promise<Response> {
       return json(await live.paypalConfig());
     }
 
+    if (method === "GET" && path === "/api/paypal/client-token") {
+      return json(await live.paypalClientToken(request));
+    }
+
+    // PayPal Vault v3 return (client approved "save PayPal" for a mandate)
+    if (method === "GET" && path === "/api/vault/return") {
+      const mandateId = url.searchParams.get("mandate_id") ?? "";
+      const setupTokenId =
+        url.searchParams.get("approval_token_id") ?? url.searchParams.get("token") ?? "";
+      if (!mandateId || !setupTokenId) {
+        return htmlPage("PayPal not saved", "Missing mandate or approval token.", 400);
+      }
+      try {
+        const r = await completeMandateVault({ mandateId, setupTokenId });
+        return htmlPage(
+          "PayPal saved for rebooking",
+          `Your PayPal${r.payer_email ? ` (${r.payer_email})` : ""} is saved to this agent mandate. Future deposits can be paid without a popup, only inside the mandate's spend limit — and you can revoke it anytime.`,
+        );
+      } catch (e) {
+        return htmlPage("PayPal not saved", e instanceof Error ? e.message : "Vault failed", 400);
+      }
+    }
+
     if (method === "GET" && path === "/api/health") {
       return json(await live.health());
     }
@@ -32,6 +64,7 @@ export async function dispatchApi(request: Request): Promise<Response> {
           accepts: "POST",
           events: [
             "CHECKOUT.ORDER.APPROVED",
+            "PAYMENT.AUTHORIZATION.CREATED",
             "PAYMENT.CAPTURE.COMPLETED",
             "INVOICING.INVOICE.PAID",
             "INVOICING.INVOICE.UPDATED",
@@ -120,6 +153,12 @@ export async function dispatchApi(request: Request): Promise<Response> {
         const body = await readJson<{ order_id?: string }>(request);
         if (!body.order_id) throw new HttpError("order_id is required", 400);
         return json(await live.captureDeposit(decodeURIComponent(m[1]!), body.order_id));
+      }
+    }
+    {
+      const m = path.match(/^\/api\/quotes\/([^/]+)\/start-work$/);
+      if (m && method === "POST") {
+        return json(await live.startWork(decodeURIComponent(m[1]!), request));
       }
     }
     {

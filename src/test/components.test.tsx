@@ -11,14 +11,16 @@ afterEach(cleanup);
 beforeEach(() => mock.__resetForTests());
 
 describe("booking accessibility", () => {
-  it("supports keyboard opening a booking table row", async () => {
+  it("opens a booking from the card list and mounts the AG Grid desktop table", async () => {
     const q = (await mock.getQuote("q_jordan")).quote;
     const open = vi.fn();
     render(<BookingsGrid rows={[q]} onOpen={open} />);
-    fireEvent.keyDown(screen.getByRole("row", { name: /Open booking for Jordan/ }), {
-      key: "Enter",
-    });
+    fireEvent.click(screen.getAllByRole("button", { name: /Jordan/ })[0]!);
     expect(open).toHaveBeenCalledWith(q.id);
+    expect(screen.getByTestId("bookings-ag-grid")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("bookings-ag-grid").querySelector(".ag-root-wrapper")).not.toBeNull(),
+    );
   });
   it("makes cancellation explicit, not a normal progress tracker", () => {
     render(<StatusTracker status="cancelled" />);

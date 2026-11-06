@@ -15,7 +15,7 @@ import type { QuoteDetail } from "@/lib/types";
 import { fmtDate, money } from "@/lib/format";
 import { LIMITS } from "@/lib/validation";
 import { Empty, ErrorState, StatusBadge, Wordmark } from "@/components/kit";
-import { PayPalDepositButton } from "@/components/PayPalDepositButton";
+import { PayPalDepositButton, prefetchPayPal } from "@/components/PayPalDepositButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusTracker } from "@/components/StatusTracker";
 import { toast } from "sonner";
@@ -52,6 +52,8 @@ function QuotePage() {
   });
   const [msg, setMsg] = useState("");
   const [sent, setSent] = useState(false);
+  // Warm PayPal (config + SDK v6) in parallel with the quote fetch so the button renders instantly.
+  useEffect(() => prefetchPayPal(), []);
   useEffect(() => {
     setMsg("");
     setSent(false);
@@ -141,7 +143,9 @@ function QuotePage() {
           (() => {
             const q = data.quote;
             const bal = data.payments.find((p) => p.kind === "balance");
-            const dep = data.payments.find((p) => p.kind === "deposit" && p.status === "COMPLETED");
+            const dep = data.payments.find(
+              (p) => p.kind === "deposit" && (p.status === "COMPLETED" || p.status === "AUTHORIZED"),
+            );
             return (
               <>
                 {/* Header strip: title + status + progress across the full width */}
@@ -211,7 +215,9 @@ function QuotePage() {
                             {dep ? (
                               <>
                                 <span className="sm:hidden">Deposit</span>
-                                <span className="hidden sm:inline">Deposit paid</span>
+                                <span className="hidden sm:inline">
+                                  {dep.status === "AUTHORIZED" ? "Deposit held" : "Deposit paid"}
+                                </span>
                               </>
                             ) : (
                               <>
@@ -255,11 +261,13 @@ function QuotePage() {
                       {q.status === "quoted" && (
                         <>
                           <p className="mb-4 mt-1 text-sm text-muted-foreground">
-                            Pay {money(q.deposit_cents)} to confirm this booking. The remaining{" "}
-                            {money(q.balance_cents)} is invoiced when the work is delivered.
+                            {q.deposit_intent === "AUTHORIZE"
+                              ? `Authorize ${money(q.deposit_cents)} to confirm this booking. PayPal holds it and it's only captured when work starts — cancel before then and you're never charged. The remaining ${money(q.balance_cents)} is invoiced on delivery.`
+                              : `Pay ${money(q.deposit_cents)} to confirm this booking. The remaining ${money(q.balance_cents)} is invoiced when the work is delivered.`}
                           </p>
                           <PayPalDepositButton
                             quoteId={q.id}
+                            intent={q.deposit_intent}
                             onPaid={(nq) => {
                               qc.setQueryData<QuoteDetail>(["quote", id], (old) =>
                                 old ? { ...old, quote: nq } : old,
@@ -306,8 +314,9 @@ function QuotePage() {
                         ))}
                       {q.status === "deposit_paid" && (
                         <Notice>
-                          Deposit received — Maya is working on it. You'll get the balance invoice
-                          on delivery.
+                          {data.payments.some((p) => p.kind === "deposit" && p.status === "AUTHORIZED")
+                            ? "Deposit authorized — PayPal is holding it until work starts. You'll get the balance invoice on delivery."
+                            : "Deposit received — Maya is working on it. You'll get the balance invoice on delivery."}
                         </Notice>
                       )}
                       {q.status === "delivered" && (

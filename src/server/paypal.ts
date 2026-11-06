@@ -82,6 +82,8 @@ export async function getPublicClientId(): Promise<{ client_id: string; env: "sa
   return { client_id: clientId, env };
 }
 
+export type DepositIntent = "CAPTURE" | "AUTHORIZE";
+
 export function centsToUsd(cents: number): string {
   return (cents / 100).toFixed(2);
 }
@@ -96,6 +98,8 @@ export async function createOrder(opts: {
   returnUrl?: string;
   cancelUrl?: string;
   brandName?: string;
+  /** CAPTURE (pay now) or AUTHORIZE (hold funds, capture when work starts). */
+  intent?: DepositIntent;
 }): Promise<{ id: string; status: string; approveUrl?: string }> {
   const value = centsToUsd(opts.amountCents);
   const order = await paypalFetch<{
@@ -106,7 +110,7 @@ export async function createOrder(opts: {
     "POST",
     "/v2/checkout/orders",
     {
-      intent: "CAPTURE",
+      intent: opts.intent ?? "CAPTURE",
       purchase_units: [
         {
           amount: { currency_code: opts.currency ?? "USD", value },
@@ -134,22 +138,246 @@ export async function createOrder(opts: {
 export async function getOrder(orderId: string): Promise<{
   id: string;
   status: string;
+  intent?: DepositIntent;
   customId?: string;
   approveUrl?: string;
+  authorizationId?: string;
+  authorizationStatus?: string;
+  captureId?: string;
 }> {
   const o = await paypalFetch<{
     id: string;
     status: string;
-    purchase_units?: Array<{ custom_id?: string }>;
+    intent?: DepositIntent;
+    purchase_units?: Array<{
+      custom_id?: string;
+      payments?: {
+        authorizations?: Array<{ id: string; status: string }>;
+        captures?: Array<{ id: string; status: string }>;
+      };
+    }>;
     links?: Array<{ rel: string; href: string }>;
   }>("GET", `/v2/checkout/orders/${encodeURIComponent(orderId)}`);
   const approveUrl = o.links?.find((l) => l.rel === "approve" || l.rel === "payer-action")?.href;
-  const customId = o.purchase_units?.[0]?.custom_id;
+  const unit = o.purchase_units?.[0];
+  const customId = unit?.custom_id;
+  const auth = unit?.payments?.authorizations?.[0];
+  const cap = unit?.payments?.captures?.[0];
   return {
     id: o.id,
     status: o.status,
+    ...(o.intent ? { intent: o.intent } : {}),
     ...(customId ? { customId } : {}),
     ...(approveUrl ? { approveUrl } : {}),
+    ...(auth ? { authorizationId: auth.id, authorizationStatus: auth.status } : {}),
+    ...(cap ? { captureId: cap.id } : {}),
+  };
+}
+
+/** Orders v2 authorize — buyer approved an intent=AUTHORIZE order; hold the funds. */
+export async function authorizeOrder(orderId: string): Promise<{
+  id: string;
+  status: string;
+  authorizationId?: string;
+  authorizationStatus?: string;
+  amountCents?: number;
+  customId?: string;
+  expiresAt?: string;
+}> {
+  const r = await paypalFetch<{
+    id: string;
+    status: string;
+    purchase_units?: Array<{
+      custom_id?: string;
+      payments?: {
+        authorizations?: Array<{
+          id: string;
+          status: string;
+          amount?: { value: string; currency_code: string };
+          expiration_time?: string;
+          custom_id?: string;
+        }>;
+      };
+    }>;
+  }>("POST", `/v2/checkout/orders/${encodeURIComponent(orderId)}/authorize`, {});
+  const unit = r.purchase_units?.[0];
+  const a = unit?.payments?.authorizations?.[0];
+  const out: Awaited<ReturnType<typeof authorizeOrder>> = { id: r.id, status: r.status };
+  if (a?.id) out.authorizationId = a.id;
+  if (a?.status) out.authorizationStatus = a.status;
+  if (a?.amount?.value) out.amountCents = Math.round(parseFloat(a.amount.value) * 100);
+  const cid = unit?.custom_id ?? a?.custom_id;
+  if (cid) out.customId = cid;
+  if (a?.expiration_time) out.expiresAt = a.expiration_time;
+  return out;
+}
+
+/** Payments v2 — capture a held authorization (seller starts work). */
+export async function captureAuthorization(opts: {
+  authorizationId: string;
+  requestId: string;
+  finalCapture?: boolean;
+}): Promise<{ id: string; status: string; amountCents?: number }> {
+  const r = await paypalFetch<{ id: string; status: string; amount?: { value: string } }>(
+    "POST",
+    `/v2/payments/authorizations/${encodeURIComponent(opts.authorizationId)}/capture`,
+    { final_capture: opts.finalCapture ?? true },
+    { "PayPal-Request-Id": opts.requestId },
+  );
+  return {
+    id: r.id,
+    status: r.status,
+    ...(r.amount?.value ? { amountCents: Math.round(parseFloat(r.amount.value) * 100) } : {}),
+  };
+}
+
+/** Payments v2 — void a held authorization (cancel before work starts; nothing to refund). */
+export async function voidAuthorization(authorizationId: string): Promise<{ ok: true }> {
+  await paypalFetch(
+    "POST",
+    `/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/void`,
+    undefined,
+  );
+  return { ok: true };
+}
+
+/**
+ * Browser-safe client token for the PayPal JS SDK v6 (`createInstance({ clientToken })`).
+ * Never exposes the secret; scoped to sdk_init for the given domains.
+ */
+export async function createSdkClientToken(domains: string[]): Promise<{
+  client_token: string;
+  expires_in: number;
+}> {
+  const { clientId, clientSecret, apiBase } = paypalEnv();
+  const raw = `${clientId}:${clientSecret}`;
+  const basic = typeof Buffer !== "undefined" ? Buffer.from(raw).toString("base64") : btoa(raw);
+  const params = new URLSearchParams({
+    grant_type: "client_credentials",
+    response_type: "client_token",
+    intent: "sdk_init",
+  });
+  for (const d of domains) params.append("domains[]", d);
+  const res = await fetch(`${apiBase}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${basic}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  });
+  if (!res.ok) throw new HttpError("PayPal client token failed", 502);
+  const data = (await res.json()) as { access_token: string; expires_in: number };
+  return { client_token: data.access_token, expires_in: data.expires_in ?? 900 };
+}
+
+/** Vault v3 — setup token so a returning client can save PayPal (buyer approves once). */
+export async function createVaultSetupToken(opts: {
+  returnUrl: string;
+  cancelUrl: string;
+  requestId: string;
+  brandName?: string;
+}): Promise<{ id: string; status: string; approveUrl?: string }> {
+  const r = await paypalFetch<{
+    id: string;
+    status: string;
+    links?: Array<{ rel: string; href: string }>;
+  }>(
+    "POST",
+    "/v3/vault/setup-tokens",
+    {
+      payment_source: {
+        paypal: {
+          usage_type: "MERCHANT",
+          usage_pattern: "IMMEDIATE",
+          permit_multiple_payment_tokens: true,
+          experience_context: {
+            return_url: opts.returnUrl,
+            cancel_url: opts.cancelUrl,
+            shipping_preference: "NO_SHIPPING",
+            vault_instruction: "ON_PAYER_APPROVAL",
+            ...(opts.brandName ? { brand_name: opts.brandName.slice(0, 127) } : {}),
+          },
+        },
+      },
+    },
+    { "PayPal-Request-Id": opts.requestId },
+  );
+  const approveUrl = r.links?.find((l) => l.rel === "approve")?.href;
+  return { id: r.id, status: r.status, ...(approveUrl ? { approveUrl } : {}) };
+}
+
+export async function getVaultSetupToken(id: string): Promise<{ id: string; status: string }> {
+  const r = await paypalFetch<{ id: string; status: string }>(
+    "GET",
+    `/v3/vault/setup-tokens/${encodeURIComponent(id)}`,
+  );
+  return { id: r.id, status: r.status };
+}
+
+/** Vault v3 — exchange an approved setup token for a reusable payment token. */
+export async function createVaultPaymentToken(opts: {
+  setupTokenId: string;
+  requestId: string;
+}): Promise<{ id: string; customerId?: string; payerEmail?: string }> {
+  const r = await paypalFetch<{
+    id: string;
+    customer?: { id?: string };
+    payment_source?: { paypal?: { email_address?: string } };
+  }>(
+    "POST",
+    "/v3/vault/payment-tokens",
+    { payment_source: { token: { id: opts.setupTokenId, type: "SETUP_TOKEN" } } },
+    { "PayPal-Request-Id": opts.requestId },
+  );
+  return {
+    id: r.id,
+    ...(r.customer?.id ? { customerId: r.customer.id } : {}),
+    ...(r.payment_source?.paypal?.email_address
+      ? { payerEmail: r.payment_source.paypal.email_address }
+      : {}),
+  };
+}
+
+/**
+ * Orders v2 with a vaulted PayPal payment token — merchant-initiated deposit for a returning
+ * client who already approved Vault. No popup; PayPal completes the capture in one call.
+ */
+export async function createVaultedCaptureOrder(opts: {
+  amountCents: number;
+  customId: string;
+  description?: string;
+  vaultId: string;
+  requestId: string;
+}): Promise<{ id: string; status: string; captureId?: string; amountCents?: number }> {
+  const r = await paypalFetch<{
+    id: string;
+    status: string;
+    purchase_units?: Array<{
+      payments?: { captures?: Array<{ id: string; status: string; amount?: { value: string } }> };
+    }>;
+  }>(
+    "POST",
+    "/v2/checkout/orders",
+    {
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          amount: { currency_code: "USD", value: centsToUsd(opts.amountCents) },
+          custom_id: opts.customId,
+          description: opts.description?.slice(0, 127),
+        },
+      ],
+      payment_source: { paypal: { vault_id: opts.vaultId } },
+    },
+    { "PayPal-Request-Id": opts.requestId },
+  );
+  const cap = r.purchase_units?.[0]?.payments?.captures?.[0];
+  return {
+    id: r.id,
+    status: r.status,
+    ...(cap?.id ? { captureId: cap.id } : {}),
+    ...(cap?.amount?.value ? { amountCents: Math.round(parseFloat(cap.amount.value) * 100) } : {}),
   };
 }
 

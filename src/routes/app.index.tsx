@@ -213,6 +213,7 @@ function Bookings() {
         ) : (
           <BookingsGrid
             rows={rows.slice(cur * PAGE, cur * PAGE + PAGE)}
+            all={data ?? []}
             onOpen={(id) => nav({ to: "/app/quotes/$id", params: { id } })}
           />
         )}

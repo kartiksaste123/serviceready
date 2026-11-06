@@ -35,10 +35,12 @@ Solo freelancers lose hours chasing invoices and start work on trust. Clients gh
 
 1. **AI catalog parse** — Paste a messy rate card. A server-side **xAI/Grok** (OpenAI-compatible) model extracts services, prices, and deposit rules with validation guardrails.
 2. **Public storefront + AI agent chat** — Buyers (or other agents) talk to the storefront assistant on `/s/maya-rao-studio`. It lists services, requests quotes, and returns a PayPal deposit link — with tool traces in the UI.
-3. **PayPal Orders v2 deposit** — Before work starts, the buyer pays a deposit via the **PayPal JS SDK Buttons** against the sandbox. Server creates and captures the order (`Orders v2`); capture id is stored; status becomes deposit-paid only from PayPal evidence.
+3. **PayPal Orders v2 deposit (JS SDK v6)** — Before work starts, the buyer approves a deposit with the **PayPal JS SDK v6** button (v5 fallback). Small deposits are captured; deposits ≥ $500 use **intent=AUTHORIZE**: PayPal holds the funds, the seller captures on **Start work**, and cancelling before then **voids** the hold (client never charged). Status changes only from PayPal evidence.
 4. **Deliver → PayPal Invoicing v2 balance** — Seller marks delivered; ServiceReady creates and sends a real **PayPal invoice** for the remaining balance.
 5. **AI collections via PayPal Agent Toolkit, human approves** — “Run payment check” calls official `@paypal/agent-toolkit` (`get_invoice` / `get_order`) with tool traces in the audit trail, then drafts reminder copy. A human approves before `send_invoice_reminder`. Cancel & refund uses Agent Toolkit `create_refund`.
-6. **MCP payment mandates** — Outside agents must `create_payment_mandate` (spend limit + revocable key) before `create_deposit_link`. Over-limit or revoked keys are rejected.
+6. **MCP payment mandates** — Outside agents must `create_payment_mandate` (spend limit + revocable key) before `create_deposit_link`. Over-limit or revoked keys are rejected. Returning clients can save PayPal to a mandate with **Vault v3** (`save_paypal_for_mandate` → `pay_deposit_with_saved_paypal`), still capped and revocable.
+7. **Hard money guardrails** — any agent or LLM tool call that tries to pass a price/amount/deposit is rejected and written to the audit trail. Amounts come only from the catalog.
+8. **Collections risk score** — deterministic (days overdue × amount × pay history × ignored reminders) → warm / firm / final tone that the collections agent drafts with; shown in an **AG Grid** desk and a highest-risk-first collections list.
 
 ### Live demo (judges)
 
@@ -70,7 +72,9 @@ Keys live only in **server** env (`XAI_API_KEY` / `OPENAI_API_KEY`). Without a k
 
 | Flow | API | Role |
 |------|-----|------|
-| Deposit | **Orders v2** create + capture + **JS SDK Buttons** | Money before work |
+| Deposit | **Orders v2** CAPTURE, or **AUTHORIZE** → Payments v2 authorization capture / void | Money before work; held funds for large jobs |
+| Checkout | **PayPal JS SDK v6** (`<paypal-button>`, one-time payment session), v5 Buttons fallback | Buyer approval |
+| Returning client | **Vault v3** setup token → payment token → `vault_id` order (inside mandate) | No-popup rebooking |
 | Balance | **Invoicing v2** create, send, get | Post-delivery balance |
 | Collections / refund | **@paypal/agent-toolkit** (`get_invoice`, `get_order`, `send_invoice_reminder`, `create_refund`) | Official toolkit tool traces; human gate on send |
 | Agentic commerce | MCP payment **mandate** (spend limit + revoke) | Agent cannot mint deposit links beyond budget |
@@ -95,6 +99,12 @@ This project was significantly rebuilt for the hackathon:
 - **@paypal/agent-toolkit** wired into collections, refunds, and approved invoice reminders (visible tool traces)
 - **MCP payment mandates** (spend limit + revocable key) gating `create_deposit_link`
 - **Deposit refund on cancel** via Agent Toolkit `create_refund`
+- **AUTHORIZE → capture on start / void on cancel** for deposits ≥ $500
+- **PayPal JS SDK v6** checkout (v5 fallback)
+- **Vault v3** returning-client mandates (MCP `save_paypal_for_mandate`, `pay_deposit_with_saved_paypal`)
+- **Money guardrails** (agent price overrides rejected + audited), **deterministic collections risk score**, **AG Grid** seller desk
+- Faster storefront agent: one model round-trip, parallel tools, cached catalog; PayPal config/SDK prefetch
+- Unhappy-path tests: forged webhook signatures, duplicate deliveries
 - **MCP server** (`/mcp/maya-rao-studio`, Streamable HTTP) + WebMCP on the storefront
 - Hosted on **Render** (Node web service, blueprint `render.yaml`) — tick Render on the form
 - Sandbox buyer credentials in README for Devpost test access
@@ -119,10 +129,12 @@ Code pointers: `src/server/paypal-toolkit.ts`, `src/server/mandates.ts`, `src/se
 Tick / list these on the form (comma-separated or multi-select as the UI allows):
 
 - PayPal Agent Toolkit (@paypal/agent-toolkit)
-- PayPal Orders v2
+- PayPal Orders v2 (CAPTURE + AUTHORIZE)
 - PayPal Invoicing v2
-- PayPal Payments v2 (refunds)
-- PayPal JavaScript SDK (Smart Buttons)
+- PayPal Payments v2 (refunds, authorization capture/void)
+- PayPal JavaScript SDK v6 (v5 Buttons fallback)
+- PayPal Vault v3 (setup tokens / payment tokens)
+- AG Grid Community
 - PayPal REST API (sandbox OAuth2 client credentials)
 - PayPal Webhooks (signature verification)
 - Model Context Protocol (MCP server, Streamable HTTP) + WebMCP
@@ -138,9 +150,9 @@ Tick / list these on the form (comma-separated or multi-select as the UI allows)
 
 **Recommended “Built With” short string for the text box:**
 
-`PayPal Agent Toolkit, PayPal Orders v2, PayPal Invoicing v2, PayPal Webhooks, PayPal Payments refunds, xAI Grok, MCP mandates, Supabase, Render, TanStack Start, TypeScript, Bun`
+`PayPal Agent Toolkit, PayPal Orders v2 (capture + authorize), PayPal JS SDK v6, PayPal Invoicing v2, PayPal Payments v2, PayPal Vault v3, PayPal Webhooks, xAI Grok, MCP mandates, AG Grid, Supabase, Render, TanStack Start, TypeScript, Bun`
 
-Sponsor tools: tick **Render** (live demo is a Render web service — Best Use of Render). Prefer **Best Use of Agentic Commerce** / **Best Use of PayPal + AI** for the mandate + toolkit story.
+Sponsor tools: tick **Render** and **AG Grid** (desk bookings grid uses AG Grid Community) (live demo is a Render web service — Best Use of Render). Prefer **Best Use of Agentic Commerce** / **Best Use of PayPal + AI** for the mandate + toolkit story.
 
 ---
 
@@ -176,7 +188,7 @@ Keep the demo free and working through judging (**15 Dec 2026**).
 - **Images:** marketing/storefront visuals generated with OpenArt (and Artlist where noted).
 - **Fallback:** OpenAI Chat Completions if `OPENAI_API_KEY` is set instead.
 - **Where used:** catalog parse, storefront agent chat (with tool traces), collections reminder drafts (human-in-the-loop).
-- **Guardrails:** JSON-shaped outputs validated in `src/lib/validation.ts`; PayPal money movement never delegated to the model.
+- **Guardrails:** JSON-shaped outputs validated in `src/lib/validation.ts`; tool calls carrying money fields are rejected + audited (`src/lib/guardrails.ts`); client-facing amounts are written from the catalog quote, not by the model; PayPal money movement never delegated to the model.
 
 ---
 

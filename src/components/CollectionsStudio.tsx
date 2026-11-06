@@ -3,11 +3,21 @@ import { AlertTriangle, ChevronRight, Clock3, PartyPopper } from "lucide-react";
 import type { Stats } from "@/lib/types";
 import { money } from "@/lib/format";
 import { Empty } from "./kit";
+import { RiskPill } from "./RiskPill";
+import { collectionsRisk } from "@/lib/risk";
 
 const OVERDUE_DAYS = 7;
 
 export function CollectionsStudio({ stats }: { stats: Stats }) {
-  const rows = stats.owed_by_client;
+  // Highest collections risk first (days overdue × amount × pay history).
+  const rows = stats.owed_by_client
+    .map((r) => ({
+      ...r,
+      risk:
+        r.risk ??
+        collectionsRisk({ outstanding_cents: r.outstanding_cents, days_overdue: r.days_since_invoice }),
+    }))
+    .sort((a, b) => b.risk.score - a.risk.score || b.days_since_invoice - a.days_since_invoice);
   if (!rows.length)
     return (
       <Empty title="Everyone has paid" icon={<PartyPopper className="size-5" aria-hidden="true" />}>
@@ -42,9 +52,9 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
       </div>
       <div className="glass-card w-full overflow-hidden">
         <div className="flex items-baseline justify-between border-b border-border p-5">
-          <h2 className="font-semibold">Oldest first</h2>
+          <h2 className="font-semibold">Highest risk first</h2>
           <span className="text-sm text-muted-foreground">
-            Open a client to check PayPal and draft a follow-up
+            Risk = days overdue × amount × pay history · tone hint drives the draft
           </span>
         </div>
         <ol className="divide-y divide-border">
@@ -69,7 +79,10 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex justify-between gap-4">
                       <span className="truncate font-semibold">{r.client_name}</span>
-                      <span className="font-bold tabular-nums">{money(r.outstanding_cents)}</span>
+                      <span className="flex items-center gap-2">
+                        <RiskPill risk={r.risk} />
+                        <span className="font-bold tabular-nums">{money(r.outstanding_cents)}</span>
+                      </span>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {r.days_since_invoice === 0

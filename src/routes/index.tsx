@@ -129,11 +129,16 @@ function Home() {
                 — AI never sets your prices, and every reminder stays human-approved.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Link to="/onboard" className="btn-mint w-full sm:w-auto">
-                  Import your rate card <ArrowRight className="size-4" />
+                <Link
+                  to="/s/$slug"
+                  params={{ slug: "maya-rao-studio" }}
+                  search={{ judge: "1" }}
+                  className="btn-mint w-full sm:w-auto"
+                >
+                  Judge demo · 3 min <ArrowRight className="size-4" />
                 </Link>
-                <Link to="/s/$slug" params={{ slug: "maya-rao-studio" }} className="btn-glass w-full sm:w-auto">
-                  See Maya's storefront
+                <Link to="/onboard" className="btn-glass w-full sm:w-auto">
+                  Import your rate card
                 </Link>
                 <Link
                   to="/login"

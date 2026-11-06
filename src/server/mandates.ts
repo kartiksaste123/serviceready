@@ -6,6 +6,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { db } from "./db";
 import { HttpError } from "./http";
+import * as paypal from "./paypal";
 
 export type MandatePublic = {
   mandate_id: string;
@@ -16,6 +17,8 @@ export type MandatePublic = {
   revoked: boolean;
   label: string | null;
   created_at: string;
+  /** PayPal Vault (v3) payment token attached after the client approved "save PayPal". */
+  saved_paypal: { vaulted: boolean; payer_email: string | null; vaulted_at: string | null };
 };
 
 type MandateRow = {
@@ -90,7 +93,30 @@ async function writeMandate(row: MandateRow, plaintextKey?: string): Promise<voi
   if (error) throw new HttpError(error.message, 500);
 }
 
-function toPublic(row: MandateRow, plaintextKey: string): MandatePublic {
+type VaultLink = { vault_id: string; payer_email: string | null; vaulted_at: string };
+
+async function loadVault(keyHash: string): Promise<VaultLink | null> {
+  const { data, error } = await db()
+    .from("agent_events")
+    .select("input, output, created_at")
+    .eq("tool", "payment_mandate.vault")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new HttpError(error.message, 500);
+  for (const row of data ?? []) {
+    const input = (row as { input?: Record<string, unknown> }).input ?? {};
+    const output = (row as { output?: Record<string, unknown> }).output ?? {};
+    if (input["key_hash"] !== keyHash || !output["vault_id"]) continue;
+    return {
+      vault_id: String(output["vault_id"]),
+      payer_email: typeof output["payer_email"] === "string" ? output["payer_email"] : null,
+      vaulted_at: String((row as { created_at?: string }).created_at ?? ""),
+    };
+  }
+  return null;
+}
+
+function toPublic(row: MandateRow, plaintextKey: string, vault?: VaultLink | null): MandatePublic {
   const remaining = Math.max(0, row.spend_limit_cents - row.spent_cents);
   return {
     mandate_id: row.mandate_id,
@@ -101,6 +127,11 @@ function toPublic(row: MandateRow, plaintextKey: string): MandatePublic {
     revoked: row.revoked,
     label: row.label,
     created_at: row.created_at,
+    saved_paypal: {
+      vaulted: Boolean(vault),
+      payer_email: vault?.payer_email ?? null,
+      vaulted_at: vault?.vaulted_at ?? null,
+    },
   };
 }
 
@@ -143,9 +174,93 @@ export async function revokeMandate(mandateKey: string): Promise<MandatePublic> 
 }
 
 export async function getMandateStatus(mandateKey: string): Promise<MandatePublic> {
-  const row = await loadByHash(hashKey(mandateKey));
+  const keyHash = hashKey(mandateKey);
+  const [row, vault] = await Promise.all([loadByHash(keyHash), loadVault(keyHash)]);
   if (!row) throw new HttpError("Unknown mandate_key", 404);
-  return toPublic(row, mandateKey);
+  return toPublic(row, mandateKey, vault);
+}
+
+/**
+ * Returning-client Vault: mint a PayPal Vault v3 setup token bound to this mandate.
+ * The client approves once at PayPal; /api/vault/return exchanges it for a payment token.
+ */
+export async function startMandateVault(opts: {
+  mandateKey: string;
+  sellerId: string;
+  origin: string;
+  brandName?: string;
+}): Promise<{ approve_url: string; setup_token_id: string; mandate_id: string }> {
+  const keyHash = hashKey(opts.mandateKey);
+  const row = await loadByHash(keyHash);
+  if (!row) throw new HttpError("Unknown mandate_key", 404);
+  if (row.seller_id && row.seller_id !== opts.sellerId) {
+    throw new HttpError("mandate_key does not belong to this storefront", 403);
+  }
+  if (row.revoked) throw new HttpError("mandate_key has been revoked", 403);
+  const st = await paypal.createVaultSetupToken({
+    returnUrl: `${opts.origin}/api/vault/return?mandate_id=${encodeURIComponent(row.mandate_id)}`,
+    cancelUrl: `${opts.origin}/?vault=cancelled`,
+    requestId: `vault-setup-${row.mandate_id}-${Date.now()}`,
+    ...(opts.brandName ? { brandName: opts.brandName } : {}),
+  });
+  if (!st.approveUrl) throw new HttpError("PayPal did not return a Vault approval link", 502);
+  const { error } = await db().from("agent_events").insert({
+    quote_id: null,
+    seller_id: row.seller_id || null,
+    actor: "client_agent",
+    kind: "tool_call",
+    tool: "payment_mandate.vault_setup",
+    input: { key_hash: keyHash, mandate_id: row.mandate_id },
+    output: { setup_token_id: st.id, status: st.status },
+    text: "PayPal Vault setup token created — client approves once to save PayPal for rebooking",
+  });
+  if (error) throw new HttpError(error.message, 500);
+  return { approve_url: st.approveUrl, setup_token_id: st.id, mandate_id: row.mandate_id };
+}
+
+/** PayPal redirect target: exchange the approved setup token for a reusable payment token. */
+export async function completeMandateVault(opts: {
+  mandateId: string;
+  setupTokenId: string;
+}): Promise<{ mandate_id: string; payer_email: string | null }> {
+  const { data, error } = await db()
+    .from("agent_events")
+    .select("input, output, seller_id")
+    .eq("tool", "payment_mandate.vault_setup")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new HttpError(error.message, 500);
+  const setup = (data ?? []).find((r) => {
+    const o = (r as { output?: Record<string, unknown> }).output ?? {};
+    const i = (r as { input?: Record<string, unknown> }).input ?? {};
+    return o["setup_token_id"] === opts.setupTokenId && i["mandate_id"] === opts.mandateId;
+  }) as { input: Record<string, unknown>; seller_id: string | null } | undefined;
+  if (!setup) throw new HttpError("Unknown Vault setup for this mandate", 404);
+  const token = await paypal.createVaultPaymentToken({
+    setupTokenId: opts.setupTokenId,
+    requestId: `vault-token-${opts.setupTokenId}`,
+  });
+  const { error: wErr } = await db().from("agent_events").insert({
+    quote_id: null,
+    seller_id: setup.seller_id,
+    actor: "paypal",
+    kind: "webhook",
+    tool: "payment_mandate.vault",
+    input: { key_hash: setup.input["key_hash"], mandate_id: opts.mandateId },
+    output: {
+      vault_id: token.id,
+      customer_id: token.customerId ?? null,
+      payer_email: token.payerEmail ?? null,
+    },
+    text: "PayPal saved to mandate via Vault — returning-client deposits need no popup (still inside the spend limit)",
+  });
+  if (wErr) throw new HttpError(wErr.message, 500);
+  return { mandate_id: opts.mandateId, payer_email: token.payerEmail ?? null };
+}
+
+/** Vault id for a mandate (server-only; never returned to agents). */
+export async function mandateVaultId(mandateKey: string): Promise<string | null> {
+  return (await loadVault(hashKey(mandateKey)))?.vault_id ?? null;
 }
 
 /**

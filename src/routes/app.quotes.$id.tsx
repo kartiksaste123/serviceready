@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Loader2,
   PackageCheck,
+  Play,
   RefreshCw,
   Send,
   XCircle,
@@ -55,11 +56,13 @@ export const Route = createFileRoute("/app/quotes/$id")({
   component: Detail,
 });
 
-function nextStep(q: Quote): string {
+function nextStep(q: Quote, held = false): string {
   switch (q.status) {
     case "quoted":
-      return `Waiting for ${q.client_name} to pay the ${money(q.deposit_cents)} deposit. Share the quote link if they haven't seen it.`;
+      return `Waiting for ${q.client_name} to ${q.deposit_intent === "AUTHORIZE" ? "authorize" : "pay"} the ${money(q.deposit_cents)} deposit. Share the quote link if they haven't seen it.`;
     case "deposit_paid":
+      if (held)
+        return "Deposit authorized — PayPal is holding the funds. Start work to capture it (cancel now voids the hold, nothing to refund).";
       return "Deposit received — do the work, then mark it delivered to send the balance invoice.";
     case "delivered":
       return "Work delivered — send the balance invoice to get paid.";
@@ -117,8 +120,18 @@ function Detail() {
       toast(
         d.payments.some((p) => p.kind === "deposit" && p.status === "REFUNDED")
           ? "Booking cancelled — deposit refunded on PayPal"
-          : "Quote cancelled",
+          : d.payments.some((p) => p.kind === "deposit" && p.status === "VOIDED") &&
+              d.events.some((e) => e.tool === "paypal.authorizations.void")
+            ? "Booking cancelled — held deposit voided on PayPal"
+            : "Quote cancelled",
       );
+    },
+  });
+  const startWork = useMutation({
+    mutationFn: () => api.startWork(id),
+    onSuccess: (d) => {
+      applyDetail(d);
+      toast.success("Work started — held deposit captured on PayPal");
     },
   });
   const simulate = useMutation({
@@ -177,6 +190,7 @@ function Detail() {
   const pending = data.proposals.filter((p) => p.status === "pending");
   const bal = data.payments.find((p) => p.kind === "balance");
   const canDeliver = q.status === "deposit_paid" || q.status === "delivered";
+  const heldDeposit = data.payments.find((p) => p.kind === "deposit" && p.status === "AUTHORIZED");
   const canCollect = !!bal && q.status !== "cancelled";
   const quoteLink = absoluteUrl(q.approval_url);
 
@@ -229,7 +243,27 @@ function Detail() {
               ) : (
                 <XCircle className="size-3.5" aria-hidden="true" />
               )}
-              {q.status === "quoted" ? "Cancel quote" : "Cancel & refund deposit"}
+              {q.status === "quoted"
+                ? "Cancel quote"
+                : heldDeposit
+                  ? "Cancel & void hold"
+                  : "Cancel & refund deposit"}
+            </button>
+          )}
+          {heldDeposit && q.status === "deposit_paid" && (
+            <button
+              type="button"
+              className="btn-mint btn-sm"
+              disabled={startWork.isPending}
+              onClick={() => startWork.mutate()}
+              title="Capture the PayPal authorization"
+            >
+              {startWork.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Play className="size-3.5" aria-hidden="true" />
+              )}
+              Start work · capture {money(heldDeposit.amount_cents)}
             </button>
           )}
           {canDeliver && (
@@ -253,7 +287,7 @@ function Detail() {
       <div className="glass-card mb-5 p-5">
         <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-semibold">Booking progress</h2>
-          <p className="text-sm text-muted-foreground">{nextStep(q)}</p>
+          <p className="text-sm text-muted-foreground">{nextStep(q, !!heldDeposit)}</p>
         </div>
         <StatusTracker status={q.status} />
       </div>
@@ -485,12 +519,18 @@ function Detail() {
           {confirm === "cancel" ? (
             <AlertDialogHeader>
               <AlertDialogTitle>
-                {q.status === "quoted" ? "Cancel this quote?" : "Cancel booking and refund deposit?"}
+                {q.status === "quoted"
+                  ? "Cancel this quote?"
+                  : heldDeposit
+                    ? "Cancel booking and void the held deposit?"
+                    : "Cancel booking and refund deposit?"}
               </AlertDialogTitle>
               <AlertDialogDescription className="text-muted-foreground">
                 {q.status === "quoted"
                   ? `${q.client_name} will no longer be able to pay the deposit. No money has been taken.`
-                  : `PayPal Agent Toolkit will refund the deposit capture for ${q.client_name}. Status flips to cancelled from PayPal refund evidence.`}
+                  : heldDeposit
+                    ? `PayPal is only holding ${money(heldDeposit.amount_cents)} for ${q.client_name} — the authorization is voided and they're never charged.`
+                    : `PayPal Agent Toolkit will refund the deposit capture for ${q.client_name}. Status flips to cancelled from PayPal refund evidence.`}
               </AlertDialogDescription>
             </AlertDialogHeader>
           ) : (
@@ -498,7 +538,7 @@ function Detail() {
               <AlertDialogTitle>Mark delivered and invoice the balance?</AlertDialogTitle>
               <AlertDialogDescription className="text-muted-foreground">
                 {q.balance_cents > 0
-                  ? `A PayPal invoice for ${money(q.balance_cents)} will be sent to ${q.client_email}.`
+                  ? `${heldDeposit ? `The held ${money(heldDeposit.amount_cents)} deposit is captured first, then a` : "A"} PayPal invoice for ${money(q.balance_cents)} will be sent to ${q.client_email}.`
                   : "The deposit covered the full price, so the booking will be closed as paid."}
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -514,7 +554,9 @@ function Detail() {
               {confirm === "cancel"
                 ? q.status === "quoted"
                   ? "Cancel quote"
-                  : "Refund & cancel"
+                  : heldDeposit
+                    ? "Void & cancel"
+                    : "Refund & cancel"
                 : q.balance_cents > 0
                   ? "Send invoice"
                   : "Close booking"}

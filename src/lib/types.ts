@@ -64,6 +64,8 @@ export interface Quote {
   approval_url: string;
   created_at: string;
   updated_at: string;
+  /** How the deposit is taken: CAPTURE now, or AUTHORIZE (held) and captured when work starts. */
+  deposit_intent?: "CAPTURE" | "AUTHORIZE";
 }
 export interface Payment {
   id: string;
@@ -72,6 +74,9 @@ export interface Payment {
   status: string;
   paypal_order_id?: string;
   paypal_capture_id?: string;
+  paypal_authorization_id?: string;
+  /** Orders v2 intent for deposits (CAPTURE | AUTHORIZE). */
+  intent?: "CAPTURE" | "AUTHORIZE";
   paypal_invoice_id?: string;
   invoice_url?: string;
   updated_at: string;
@@ -137,6 +142,8 @@ export interface Stats {
     quote_id: string;
     outstanding_cents: number;
     days_since_invoice: number;
+    /** Deterministic collections risk (src/lib/risk.ts). */
+    risk?: { score: number; band: "low" | "medium" | "high"; tone: "warm" | "firm" | "final"; factors: string[] };
   }[];
 }
 export interface PublicStore {
