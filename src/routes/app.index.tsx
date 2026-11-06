@@ -33,7 +33,7 @@ export const Route = createFileRoute("/app/")({
   component: Bookings,
 });
 
-const PAGE = 10;
+const PAGE = 25;
 type FilterKey = "all" | "quoted" | "active" | "balance_invoiced" | "paid" | "cancelled";
 const FILTERS: Array<{ key: FilterKey; label: string; match: QuoteStatus[] | null }> = [
   { key: "all", label: "All", match: null },
@@ -84,19 +84,27 @@ function Bookings() {
 
   return (
     <>
-      <PageHeader title="Bookings" sub="Every client, from quote to final payment.">
+      <PageHeader
+        title="Bookings"
+        sub="Every client request in one place — from quote, to PayPal deposit, to final payment."
+        tour="bookings"
+      >
         <a href={`/s/${slug}`} target="_blank" rel="noreferrer" className="btn-glass btn-sm">
           <ExternalLink className="size-3.5" aria-hidden="true" />
           View storefront
         </a>
-        <CopyButton
-          text={storeUrl}
-          label="Copy booking link"
-          className="!border-primary !bg-primary !text-primary-foreground hover:!bg-primary-hover"
-        />
+        <span data-tour="copy-link" className="inline-flex">
+          <CopyButton
+            text={storeUrl}
+            label="Copy booking link"
+            className="!border-primary !bg-primary !text-primary-foreground hover:!bg-primary-hover"
+          />
+        </span>
       </PageHeader>
-      <KPIs />
-      <section className="mb-8" aria-labelledby="today">
+      <div data-tour="kpis">
+        <KPIs />
+      </div>
+      <section className="mb-8" aria-labelledby="today" data-tour="today">
         <h2 id="today" className="mb-3 text-base font-semibold">
           Needs you today
         </h2>
@@ -154,7 +162,11 @@ function Bookings() {
           </div>
         )}
       </section>
-      <div id="all-bookings" className="glass-card scroll-mt-6 overflow-hidden">
+      <div
+        id="all-bookings"
+        data-tour="all-bookings"
+        className="glass-card scroll-mt-6 overflow-hidden"
+      >
         <div className="flex flex-col gap-3 px-4 pt-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <h2 className="text-base font-semibold">All bookings</h2>
           <div className="relative w-full sm:w-64">
@@ -189,6 +201,7 @@ function Bookings() {
           className="mt-3 flex gap-5 overflow-x-auto border-b border-border px-4 sm:px-5"
           role="group"
           aria-label="Filter by status"
+          data-tour="bookings-filters"
         >
           {FILTERS.map((f) => (
             <button

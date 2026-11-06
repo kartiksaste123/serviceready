@@ -162,6 +162,12 @@
   .code-box {
     @apply rounded-lg border border-border bg-muted p-4 font-mono text-sm text-foreground;
   }
+  /* Long lists scroll inside their own panel so page headers/actions stay in view. */
+  .scroll-panel {
+    @apply overflow-y-auto overscroll-contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
   .surface-band {
     @apply bg-accent;
   }

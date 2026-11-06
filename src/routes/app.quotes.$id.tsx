@@ -22,6 +22,7 @@ import {
   type CancelReason,
 } from "@/lib/cancel-policy";
 import { finalBill } from "@/lib/tip";
+import { TutorialButton } from "@/components/Tour";
 import { toast } from "sonner";
 import { api, USE_MOCKS } from "@/lib/api";
 import type { AgentRun, Quote, QuoteDetail } from "@/lib/types";
@@ -254,7 +255,8 @@ function Detail() {
             updated {timeAgo(q.updated_at)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-tour="quote-actions">
+          <TutorialButton tour="quote" />
           <button
             type="button"
             className="btn-glass btn-sm"
@@ -275,6 +277,7 @@ function Detail() {
               className="btn-glass btn-sm"
               disabled={cancel.isPending}
               onClick={() => setConfirm("cancel")}
+              title="Cancel and apply your refund / keep-deposit rules from Settings"
             >
               {cancel.isPending ? (
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
@@ -306,19 +309,20 @@ function Detail() {
               className="btn-mint btn-sm"
               disabled={deliver.isPending}
               onClick={() => setConfirm("deliver")}
+              title="Marks the work done and sends the client a PayPal invoice for the remaining balance"
             >
               {deliver.isPending ? (
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
               ) : (
                 <PackageCheck className="size-3.5" aria-hidden="true" />
               )}
-              Mark delivered & invoice balance
+              Mark delivered & send invoice
             </button>
           )}
         </div>
       </div>
 
-      <div className="glass-card mb-5 p-5">
+      <div className="glass-card mb-5 p-5" data-tour="quote-progress">
         <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-semibold">Booking progress</h2>
           <p className="text-sm text-muted-foreground">{nextStep(q, !!heldDeposit)}</p>
@@ -338,7 +342,7 @@ function Detail() {
       )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_1fr]">
-        <section className="glass-card p-5" aria-labelledby="pay-h">
+        <section className="glass-card p-5" aria-labelledby="pay-h" data-tour="quote-payments">
           <h2 id="pay-h" className="mb-4 font-semibold">
             Payments
           </h2>
@@ -563,12 +567,14 @@ function Detail() {
         </section>
       </div>
 
-      <section className="glass-card mt-6 p-5" aria-labelledby="audit-h">
+      <section className="glass-card mt-6 p-5" aria-labelledby="audit-h" data-tour="quote-audit">
         <h2 id="audit-h" className="mb-5 font-semibold">
           Activity
         </h2>
         {data.events.length ? (
-          <EventTimeline events={data.events} />
+          <div className="scroll-panel max-h-[480px] pr-1">
+            <EventTimeline events={data.events} />
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">No events yet.</p>
         )}

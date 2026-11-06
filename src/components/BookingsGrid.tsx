@@ -135,6 +135,7 @@ export function BookingsGrid({
       },
       {
         headerName: "Amount",
+        headerTooltip: "Full price of the booking",
         field: "total_cents",
         width: 120,
         type: "rightAligned",
@@ -182,7 +183,7 @@ export function BookingsGrid({
   return (
     <>
       {/* Mobile: stacked cards */}
-      <ul className="divide-y divide-border md:hidden">
+      <ul className="scroll-panel max-h-[65vh] divide-y divide-border md:hidden">
         {data.map((q) => (
           <li key={q.id}>
             <button
@@ -215,6 +216,10 @@ export function BookingsGrid({
       {/* Desktop: AG Grid Community (sortable, resizable columns; row click opens the booking) */}
       <div
         className="hidden md:block"
+        style={{
+          // Fixed-height grid: rows scroll inside, header row stays pinned.
+          height: `min(${40 + Math.max(data.length, 3) * 64 + 2}px, max(360px, calc(100vh - 22rem)))`,
+        }}
         data-testid="bookings-ag-grid"
         aria-label="Bookings"
         role="region"
@@ -225,7 +230,7 @@ export function BookingsGrid({
             rowData={data}
             columnDefs={cols}
             getRowId={(p) => p.data.id}
-            domLayout="autoHeight"
+            domLayout="normal"
             defaultColDef={{ sortable: true, resizable: true, suppressMovable: true }}
             rowClass="cursor-pointer"
             onRowClicked={(e) => e.data && onOpen(e.data.id)}

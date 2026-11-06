@@ -41,11 +41,13 @@ function Approvals() {
     <>
       <PageHeader
         title="Approvals"
-        sub="Messages your assistant drafted. Nothing goes out until you approve it."
+        sub="Your AI assistant drafts client messages here (like payment reminders). Review each one — Approve sends it, Dismiss drops it. Nothing goes out without you."
+        tour="approvals"
       />
       <div
         role="tablist"
         aria-label="Approvals"
+        data-tour="approvals-tabs"
         className="mb-4 inline-flex rounded-lg border border-border bg-background p-1"
       >
         {(["pending", "history"] as const).map((t) => (
@@ -82,7 +84,10 @@ function Approvals() {
           </Empty>
         )
       ) : (
-        <div className={`grid items-start gap-4 ${rows.length > 1 ? "xl:grid-cols-2" : ""}`}>
+        <div
+          data-tour="approvals-list"
+          className={`scroll-panel grid items-start gap-4 lg:max-h-[calc(100vh-15rem)] lg:pr-1 ${rows.length > 1 ? "xl:grid-cols-2" : ""}`}
+        >
           {rows.map((p) => (
             <ProposalCard key={`${p.id}-${p.status}`} p={p} />
           ))}

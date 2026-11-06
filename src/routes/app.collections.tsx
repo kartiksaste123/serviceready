@@ -28,14 +28,17 @@ function Collections() {
     <>
       <PageHeader
         title="Payments due"
-        sub="Clients with an unpaid final bill, most urgent first."
+        sub="Work you've delivered where the client hasn't paid the final PayPal invoice yet — most urgent first. Open one to check PayPal or send a reminder."
+        tour="payments"
       />
       {isLoading ? (
         <Skeleton className="h-80 rounded-2xl" />
       ) : isError || !data ? (
         <ErrorState title="Couldn't load balances" onRetry={() => refetch()} />
       ) : (
-        <CollectionsStudio stats={data} />
+        <div data-tour="payments-list">
+          <CollectionsStudio stats={data} />
+        </div>
       )}
     </>
   );

@@ -62,7 +62,7 @@ export function CollectionsStudio({ stats }: { stats: Stats }) {
             Ordered by how overdue, how much, and past payment habits
           </span>
         </div>
-        <ol className="divide-y divide-border">
+        <ol className="scroll-panel max-h-[max(320px,calc(100vh-24rem))] divide-y divide-border">
           {rows.map((r) => {
             const late = r.days_since_invoice > OVERDUE_DAYS;
             return (

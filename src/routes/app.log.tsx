@@ -52,7 +52,11 @@ function Log() {
   }, [data, q]);
   return (
     <>
-      <PageHeader title="Activity log" sub="Everything that happened, newest first." />
+      <PageHeader
+        title="Activity log"
+        sub="Every quote, PayPal payment, approval and assistant action — newest first."
+        tour="log"
+      />
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative lg:w-72">
           <Search
@@ -92,7 +96,10 @@ function Log() {
           ))}
         </div>
       </div>
-      <div className="glass-card p-5">
+      <div
+        data-tour="log-main"
+        className="glass-card scroll-panel max-h-[max(360px,calc(100vh-16rem))] p-5"
+      >
         {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 6 }).map((_, i) => (

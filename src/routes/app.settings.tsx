@@ -112,13 +112,18 @@ function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" sub="Your business rules. Assistants always follow them." />
+      <PageHeader
+        title="Settings"
+        sub="Your business rules — deposit, reminders and cancellations. Assistants and quotes always follow them."
+        tour="settings"
+      />
       {isLoading ? (
         <Skeleton className="h-80 rounded-2xl" />
       ) : isError || !d ? (
         <ErrorState title="Couldn't load settings" onRetry={() => refetch()} />
       ) : (
         <form
+          data-tour="settings-form"
           className="glass-card p-6"
           noValidate
           onSubmit={(e) => {

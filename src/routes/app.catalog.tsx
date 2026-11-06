@@ -40,12 +40,18 @@ function Catalog() {
             ? `${published} published service${published === 1 ? "" : "s"} that AI assistants and clients can quote and book.`
             : "What AI assistants and clients can book."
         }
+        tour="catalog"
       >
-        <Link to="/s/$slug" params={{ slug }} className="btn-glass btn-sm">
+        <Link
+          to="/s/$slug"
+          params={{ slug }}
+          className="btn-glass btn-sm"
+          data-tour="catalog-storefront"
+        >
           <ExternalLink className="size-3.5" aria-hidden="true" />
           View storefront
         </Link>
-        <Link to="/onboard" className="btn-mint btn-sm">
+        <Link to="/onboard" className="btn-mint btn-sm" data-tour="catalog-import">
           <Upload className="size-3.5" aria-hidden="true" />
           Import rate card
         </Link>
@@ -66,10 +72,14 @@ function Catalog() {
           to publish your first services.
         </Empty>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {data.map((s) => (
-            <article key={s.id} className="glass-card flex flex-col p-5">
-              <div className="mb-3">
+        <div className="scroll-panel -m-1 grid gap-4 p-1 sm:grid-cols-2 lg:max-h-[calc(100vh-12rem)] xl:grid-cols-3 2xl:grid-cols-4">
+          {data.map((s, idx) => (
+            <article
+              key={s.id}
+              className="glass-card flex flex-col p-5"
+              {...(idx === 0 ? { "data-tour": "service-card" } : {})}
+            >
+              <div className="mb-3" {...(idx === 0 ? { "data-tour": "service-cover" } : {})}>
                 <ServiceImageField
                   title={s.title}
                   description={s.description}

@@ -57,6 +57,7 @@ function Connect() {
       <PageHeader
         title="AI assistants"
         sub="Let Claude, ChatGPT or a browser assistant quote your services for clients."
+        tour="connect"
       />
       {isLoading || seller.isLoading ? (
         <Skeleton className="h-96 rounded-2xl" />
@@ -76,7 +77,7 @@ function Connect() {
               on the live deploy; this local preview shows the same configuration.
             </p>
           )}
-          <section className="glass-card p-5" aria-labelledby="c1">
+          <section className="glass-card p-5" aria-labelledby="c1" data-tour="connect-url">
             <h2 id="c1" className="text-sm font-semibold">
               1. Copy your service connection
             </h2>
@@ -90,7 +91,7 @@ function Connect() {
               <CopyButton text={url} label="Copy" className="ml-auto shrink-0" />
             </div>
           </section>
-          <section aria-labelledby="c2">
+          <section aria-labelledby="c2" data-tour="connect-tools">
             <h2 id="c2" className="mb-3 text-sm font-semibold">
               2. Add it to your assistant
             </h2>

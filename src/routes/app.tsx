@@ -19,6 +19,7 @@ import { api, USE_MOCKS } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { money } from "@/lib/format";
 import { Wordmark } from "@/components/kit";
+import { TourProvider, useWelcomeTour } from "@/components/Tour";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/app")({
@@ -59,6 +60,24 @@ const NAV_GROUPS = [
 ] as const;
 
 function AppLayout() {
+  return (
+    <TourProvider>
+      <AppShell />
+    </TourProvider>
+  );
+}
+
+const NAV_TOUR: Record<string, string> = {
+  "/app": "nav-bookings",
+  "/app/approvals": "nav-approvals",
+  "/app/collections": "nav-payments",
+  "/app/catalog": "nav-catalog",
+  "/app/connect": "nav-connect",
+  "/app/settings": "nav-settings",
+  "/app/log": "nav-log",
+};
+
+function AppShell() {
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
@@ -81,6 +100,7 @@ function AppLayout() {
     queryFn: api.getSeller,
     enabled: USE_MOCKS || !!auth.session,
   });
+  useWelcomeTour(USE_MOCKS || (auth.ready && !!auth.session));
   const count = pending.data?.length ?? 0;
   const slug = seller.data?.slug ?? "maya-rao-studio";
 
@@ -139,6 +159,7 @@ function AppLayout() {
                 <Link
                   key={n.to}
                   to={n.to}
+                  data-tour={NAV_TOUR[n.to]}
                   activeOptions={{ exact: "exact" in n }}
                   className="flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
                   activeProps={{
@@ -163,6 +184,7 @@ function AppLayout() {
             href={`/s/${slug}`}
             target="_blank"
             rel="noreferrer"
+            data-tour="nav-storefront"
             className="mx-1 mt-1 flex min-h-10 items-center justify-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-xs hover:bg-muted"
           >
             <ExternalLink className="size-4" aria-hidden="true" />
