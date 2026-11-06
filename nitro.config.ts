@@ -25,10 +25,10 @@ export default defineNitroConfig({
     },
     // Old unhashed Artlist paths → current hashed assets (302, not cached long).
     "/videos/login-demo.mp4": {
-      redirect: { to: "/videos/login-demo.c8211490fc.mp4", status: 302 },
+      redirect: { to: "/videos/login-demo.733a0af60e.mp4", status: 302 },
     },
     "/videos/login-demo.webm": {
-      redirect: { to: "/videos/login-demo.52f703be51.webm", status: 302 },
+      redirect: { to: "/videos/login-demo.8c9c9ece4a.webm", status: 302 },
     },
     "/videos/login-demo-poster.jpg": {
       redirect: { to: "/videos/login-demo-poster.5b7e660ed6.jpg", status: 302 },
