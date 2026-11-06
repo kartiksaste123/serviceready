@@ -16,6 +16,7 @@ import {
 import { publicOrigin } from "./env";
 import { HttpError } from "./http";
 import { findPriceOverrides, GUARDRAIL_MESSAGE } from "../lib/guardrails";
+import { describeCancelPolicy } from "../lib/cancel-policy";
 
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -40,6 +41,12 @@ const TOOLS = [
       properties: { service_id: { type: "string" } },
       required: ["service_id"],
     },
+  },
+  {
+    name: "get_cancellation_policy",
+    description:
+      "Read the seller's cancellation / no-show policy as structured fields (free-cancel window hours, % of deposit kept on late cancel and on no-show). Quote it verbatim from `summary`; agents can't change it — the server enforces it with PayPal void / partial capture / refund.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "request_quote",
@@ -164,7 +171,12 @@ async function callTool(
   request: Request,
 ) {
   // Hard money guardrail: only the catalog sets prices. Applies to every money-moving tool.
-  if (name === "request_quote" || name === "create_deposit_link" || name === "pay_deposit_with_saved_paypal") {
+  if (
+    name === "request_quote" ||
+    name === "create_deposit_link" ||
+    name === "pay_deposit_with_saved_paypal" ||
+    name === "get_cancellation_policy"
+  ) {
     const fields = findPriceOverrides(args);
     if (fields.length) {
       await live.logGuardrailBlock({
@@ -189,6 +201,7 @@ async function callTool(
           deposit_pct: s.deposit_pct,
           lead_time_days: s.lead_time_days,
         })),
+        cancellation_policy: store.cancel_policy?.summary,
         agentic_commerce: {
           next: "create_payment_mandate → request_quote → create_deposit_link(mandate_key)",
           note: "Deposit amounts come from the catalog; AI never sets prices. PayPal evidence beats client claims.",
@@ -200,7 +213,11 @@ async function callTool(
       const store = await live.getPublic(slug, request);
       const svc = store.services.find((s) => s.id === id);
       if (!svc) throw new HttpError("Service not found", 404);
-      return svc;
+      return { ...svc, cancellation_policy: store.cancel_policy?.summary };
+    }
+    case "get_cancellation_policy": {
+      const store = await live.getPublic(slug, request);
+      return { seller: store.seller.name, ...store.cancel_policy };
     }
     case "request_quote": {
       const q = await live.postPublicQuote(
@@ -222,6 +239,10 @@ async function callTool(
         balance_on_delivery_usd: q.balance_cents / 100,
         status: q.status,
         quote_url: q.approval_url,
+        cancellation_policy: q.cancel_policy
+          ? describeCancelPolicy(q.cancel_policy)
+          : undefined,
+        integrity: q.integrity,
         next_step:
           "Call create_payment_mandate (if you don't have a key), then create_deposit_link with mandate_key so the client pays the deposit with PayPal.",
       };
@@ -233,6 +254,8 @@ async function callTool(
         status: d.quote.status,
         deposit_usd: d.quote.deposit_cents / 100,
         balance_usd: d.quote.balance_cents / 100,
+        tip_usd: (d.quote.tip_cents ?? 0) / 100,
+        integrity: d.quote.integrity,
         payments: d.payments.map((p) => ({
           kind: p.kind,
           status: p.status,
@@ -354,9 +377,9 @@ async function handleOne(slug: string, msg: JsonRpcReq, request: Request): Promi
             ? msg.params["protocolVersion"]
             : PROTOCOL_VERSION,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: `serviceready-${slug}`, version: "1.2.0" },
+        serverInfo: { name: `serviceready-${slug}`, version: "1.3.0" },
         instructions:
-          "Book this freelancer with agentic commerce guardrails: create_payment_mandate (spend limit) → list_services → request_quote → create_deposit_link(mandate_key). Deposits are real PayPal sandbox orders inside the mandate. Quote status only changes from PayPal evidence. Revoke the mandate anytime.",
+          "Book this freelancer with agentic commerce guardrails: create_payment_mandate (spend limit) → list_services → request_quote → create_deposit_link(mandate_key). Deposits are real PayPal sandbox orders inside the mandate. Quote status only changes from PayPal evidence. Quote the cancellation policy only from get_cancellation_policy. Revoke the mandate anytime.",
       });
     case "ping":
       return rpcResult(id, {});

@@ -176,7 +176,8 @@ export async function dispatchApi(request: Request): Promise<Response> {
     {
       const m = path.match(/^\/api\/quotes\/([^/]+)\/cancel$/);
       if (m && method === "POST") {
-        return json(await live.cancelQuote(decodeURIComponent(m[1]!), request));
+        const body = await readJson<{ reason?: string }>(request).catch(() => ({}));
+        return json(await live.cancelQuote(decodeURIComponent(m[1]!), request, body ?? {}));
       }
     }
     {
@@ -196,6 +197,18 @@ export async function dispatchApi(request: Request): Promise<Response> {
       if (m && method === "POST") {
         return json(await live.runCollections(decodeURIComponent(m[1]!), undefined, request));
       }
+    }
+
+    {
+      const m = path.match(/^\/api\/quotes\/([^/]+)\/tip$/);
+      if (m && method === "POST") {
+        const body = await readJson<{ tip_cents?: unknown; tip_pct?: unknown }>(request);
+        return json(await live.setTip(decodeURIComponent(m[1]!), body ?? {}));
+      }
+    }
+    if ((method === "GET" || method === "POST") && path === "/api/judges/tamper-demo") {
+      const qid = url.searchParams.get("quote_id") ?? undefined;
+      return json(await live.tamperDemo(qid || undefined));
     }
 
     if (method === "GET" && path === "/api/proposals") {

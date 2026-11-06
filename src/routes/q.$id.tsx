@@ -7,9 +7,12 @@ import {
   ExternalLink,
   Loader2,
   LockKeyhole,
+  RefreshCw,
   Send,
   ShieldCheck,
 } from "lucide-react";
+import { describeCancelPolicy, normalizePolicy } from "@/lib/cancel-policy";
+import { finalBill, MAX_TIP_PCT, TIP_PRESETS_PCT, tipFromPct } from "@/lib/tip";
 import { api, USE_MOCKS } from "@/lib/api";
 import type { QuoteDetail } from "@/lib/types";
 import { fmtDate, money } from "@/lib/format";
@@ -103,6 +106,31 @@ function QuotePage() {
       .finally(() => window.history.replaceState(null, "", window.location.pathname));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+  const [customTip, setCustomTip] = useState("");
+  const tipM = useMutation({
+    mutationFn: (b: { tip_cents?: number; tip_pct?: number }) => api.setTip(id, b),
+    onSuccess: (d: QuoteDetail) => {
+      qc.setQueryData(["quote", id], d);
+      invalidate();
+      toast.success(
+        (d.quote.tip_cents ?? 0) > 0
+          ? `Tip of ${money(d.quote.tip_cents ?? 0)} added to your final bill — thank you!`
+          : "Tip removed",
+      );
+    },
+  });
+  const checkPayPal = useMutation({
+    mutationFn: () => api.getQuote(id, true),
+    onSuccess: (d: QuoteDetail) => {
+      qc.setQueryData(["quote", id], d);
+      invalidate();
+      toast.success(
+        d.quote.status === "quoted"
+          ? "Checked PayPal — no completed payment yet"
+          : "Checked PayPal — status is up to date",
+      );
+    },
+  });
   const notFound = isError && error instanceof Error && /not found/i.test(error.message);
 
   return (
@@ -245,6 +273,26 @@ function QuotePage() {
                           <dd className="mt-1 text-base font-semibold sm:text-lg">{money(q.balance_cents)}</dd>
                         </div>
                       </dl>
+                      {(q.tip_cents ?? 0) > 0 && (
+                        <p className="mt-3 flex justify-between text-sm tabular-nums">
+                          <span className="text-muted-foreground">
+                            Final bill (balance + {money(q.tip_cents ?? 0)} tip)
+                          </span>
+                          <span className="font-semibold">
+                            {money(finalBill(q.balance_cents, q.tip_cents ?? 0).total_cents)}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                    <div className="border-t border-border p-5 text-sm sm:p-6">
+                      <h2 className="text-sm font-semibold">Cancellation policy</h2>
+                      <p className="mt-2 text-muted-foreground">
+                        {describeCancelPolicy(normalizePolicy(q.cancel_policy))}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Enforced automatically with PayPal (void, partial capture or refund) — and the
+                        amounts on this quote are signed, so they can't be changed after you see them.
+                      </p>
                     </div>
                   </article>
 
@@ -331,6 +379,92 @@ function QuotePage() {
                         </p>
                       )}
                     </section>
+
+                    {(q.status === "quoted" || q.status === "balance_invoiced") && !USE_MOCKS && (
+                      <button
+                        type="button"
+                        className="btn-glass btn-sm -mt-2 w-full"
+                        disabled={checkPayPal.isPending}
+                        onClick={() => checkPayPal.mutate()}
+                      >
+                        {checkPayPal.isPending ? (
+                          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <RefreshCw className="size-3.5" aria-hidden="true" />
+                        )}
+                        Paid already? Check PayPal
+                      </button>
+                    )}
+
+                    {(q.status === "deposit_paid" || q.status === "delivered") && (
+                      <section className="glass-card p-5" aria-labelledby="tip-h">
+                        <h2 id="tip-h" className="font-semibold">
+                          Add a tip to the final bill
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Optional. It's added as its own line on the PayPal invoice with the{" "}
+                          {money(q.balance_cents)} balance.
+                        </p>
+                        <div className="mt-3 grid grid-cols-4 gap-2" role="radiogroup" aria-label="Tip">
+                          {TIP_PRESETS_PCT.map((pct) => {
+                            const cents = tipFromPct(q.total_cents, pct);
+                            const active = (q.tip_cents ?? 0) === cents;
+                            return (
+                              <button
+                                key={pct}
+                                type="button"
+                                role="radio"
+                                aria-checked={active}
+                                disabled={tipM.isPending}
+                                onClick={() => tipM.mutate({ tip_pct: pct })}
+                                className={`rounded-lg border px-2 py-2 text-xs font-semibold tabular-nums ${active ? "border-foreground bg-primary text-primary-foreground" : "border-input hover:bg-muted"}`}
+                              >
+                                {pct === 0 ? "No tip" : `${pct}%`}
+                                {pct > 0 && (
+                                  <span className="block font-normal opacity-80">{money(cents)}</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <form
+                          className="mt-2 flex gap-2"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const v = Math.round(parseFloat(customTip) * 100);
+                            if (Number.isFinite(v)) tipM.mutate({ tip_cents: v });
+                          }}
+                        >
+                          <label htmlFor="tip-custom" className="sr-only">
+                            Custom tip in USD
+                          </label>
+                          <input
+                            id="tip-custom"
+                            className="field tabular-nums"
+                            inputMode="decimal"
+                            placeholder="Custom $"
+                            value={customTip}
+                            onChange={(e) => setCustomTip(e.target.value)}
+                          />
+                          <button
+                            type="submit"
+                            className="btn-glass btn-sm shrink-0"
+                            disabled={!customTip.trim() || tipM.isPending}
+                          >
+                            {tipM.isPending && (
+                              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                            )}
+                            Set tip
+                          </button>
+                        </form>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Up to {MAX_TIP_PCT}% of the total. Final bill:{" "}
+                          <b className="tabular-nums">
+                            {money(finalBill(q.balance_cents, q.tip_cents ?? 0).total_cents)}
+                          </b>
+                        </p>
+                      </section>
+                    )}
 
                     {q.status !== "cancelled" && (
                       <section className="glass-card p-5" aria-labelledby="msg-h">

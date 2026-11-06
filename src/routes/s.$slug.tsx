@@ -182,6 +182,12 @@ function Storefront() {
                 <Check className="size-4" aria-hidden="true" />
                 Balance only due on delivery
               </li>
+              {data.cancel_policy && data.cancel_policy.free_cancel_hours > 0 && (
+                <li className="flex items-center gap-1.5" title={data.cancel_policy.summary}>
+                  <Check className="size-4" aria-hidden="true" />
+                  Free cancellation within {data.cancel_policy.free_cancel_hours}h
+                </li>
+              )}
             </ul>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_420px]">
               {data.services.length === 0 ? (

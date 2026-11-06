@@ -40,7 +40,10 @@ Solo freelancers lose hours chasing invoices and start work on trust. Clients gh
 5. **AI collections via PayPal Agent Toolkit, human approves** — “Run payment check” calls official `@paypal/agent-toolkit` (`get_invoice` / `get_order`) with tool traces in the audit trail, then drafts reminder copy. A human approves before `send_invoice_reminder`. Cancel & refund uses Agent Toolkit `create_refund`.
 6. **MCP payment mandates** — Outside agents must `create_payment_mandate` (spend limit + revocable key) before `create_deposit_link`. Over-limit or revoked keys are rejected. Returning clients can save PayPal to a mandate with **Vault v3** (`save_paypal_for_mandate` → `pay_deposit_with_saved_paypal`), still capped and revocable.
 7. **Hard money guardrails** — any agent or LLM tool call that tries to pass a price/amount/deposit is rejected and written to the audit trail. Amounts come only from the catalog.
-8. **Collections risk score** — deterministic (days overdue × amount × pay history × ignored reminders) → warm / firm / final tone that the collections agent drafts with; shown in an **AG Grid** desk and a highest-risk-first collections list.
+8. **Cancellation / no-show policy engine** — the seller sets three numbers (free-cancel window hours, % of deposit kept on a late cancel, % kept on a no-show). Every cancel runs through one deterministic function; held deposits are **voided** or **partially captured** (`final_capture` releases the rest), captured deposits are **fully or partially refunded** via Agent Toolkit `create_refund`. The timeline shows which rule fired, and storefront / MCP agents can only quote the policy from structured fields (`get_cancellation_policy`).
+9. **Final bill with tip** — clients add a tip (10/15/20% or custom, capped at 50%) on their quote page; the **PayPal Invoicing v2** final bill carries the balance and a separate tip line.
+10. **Visible tamper-proofing** — quote amounts are HMAC-signed when priced from the catalog; each PayPal order stores a fingerprint (quote id + amount + currency + intent) that is recomputed from PayPal's own order before capture. "Make it $1" fails four ways — try it on `/judges`.
+11. **Collections risk score** — deterministic (days overdue × amount × pay history × ignored reminders) → warm / firm / final tone that the collections agent drafts with; shown in an **AG Grid** desk and a highest-risk-first collections list.
 
 ### Live demo (judges)
 
@@ -54,6 +57,8 @@ Solo freelancers lose hours chasing invoices and start work on trust. Clients gh
 | Email | `sb-flkqr53721283@personal.example.com` |
 | Password | `PcS5.(%K` |
 | Type | Personal (US) |
+
+**Judge page:** https://serviceready.onrender.com/judges (one-click steps, copyable sandbox creds, Claude MCP snippet, tamper test)
 
 **3-minute path:** open storefront → ask AI for a logo/brand package → pay deposit with PayPal sandbox → seller **Mark delivered & invoice balance** → pay the PayPal invoice as the same sandbox buyer → run payment check (status flips from PayPal evidence).
 
@@ -78,7 +83,10 @@ Keys live only in **server** env (`XAI_API_KEY` / `OPENAI_API_KEY`). Without a k
 | Balance | **Invoicing v2** create, send, get | Post-delivery balance |
 | Collections / refund | **@paypal/agent-toolkit** (`get_invoice`, `get_order`, `send_invoice_reminder`, `create_refund`) | Official toolkit tool traces; human gate on send |
 | Agentic commerce | MCP payment **mandate** (spend limit + revoke) | Agent cannot mint deposit links beyond budget |
-| Reconciliation | **Webhooks** + `verify-webhook-signature` | Status flips only after re-reading PayPal |
+| Reconciliation | **Webhooks** + `verify-webhook-signature`, plus a **Check PayPal** poll fallback | Status flips only after re-reading PayPal |
+| Cancellation policy | Payments v2 authorization **void** / **partial capture**, Agent Toolkit **create_refund** (full or partial) | Deterministic rule → PayPal action |
+| Final bill | **Invoicing v2** balance + tip line (`allow_tip`) | Tips on the real invoice |
+| Idempotency | `PayPal-Request-Id` on every money write | Safe retries, no double charges |
 | Config | `GET /api/paypal/config` | Public sandbox `client_id` only |
 
 `PAYPAL_CLIENT_SECRET` never appears in `VITE_*` or the client. Sandbox only for the hackathon.
@@ -105,6 +113,10 @@ This project was significantly rebuilt for the hackathon:
 - **Money guardrails** (agent price overrides rejected + audited), **deterministic collections risk score**, **AG Grid** seller desk
 - Faster storefront agent: one model round-trip, parallel tools, cached catalog; PayPal config/SDK prefetch
 - Unhappy-path tests: forged webhook signatures, duplicate deliveries
+- **Cancellation / no-show policy engine** → void / partial capture / partial refund, rule in timeline, `get_cancellation_policy` MCP tool
+- **Final bill + tip** line on PayPal Invoicing v2
+- **HMAC-signed quotes + PayPal order fingerprints** re-checked before capture; `/judges` tamper test
+- **`/judges` page** and **Check PayPal** webhook fallback; `PayPal-Request-Id` on all money writes
 - **MCP server** (`/mcp/maya-rao-studio`, Streamable HTTP) + WebMCP on the storefront
 - Hosted on **Render** (Node web service, blueprint `render.yaml`) — tick Render on the form
 - Sandbox buyer credentials in README for Devpost test access

@@ -144,6 +144,8 @@ export async function getOrder(orderId: string): Promise<{
   authorizationId?: string;
   authorizationStatus?: string;
   captureId?: string;
+  amountCents?: number;
+  currency?: string;
 }> {
   const o = await paypalFetch<{
     id: string;
@@ -151,6 +153,7 @@ export async function getOrder(orderId: string): Promise<{
     intent?: DepositIntent;
     purchase_units?: Array<{
       custom_id?: string;
+      amount?: { value?: string; currency_code?: string };
       payments?: {
         authorizations?: Array<{ id: string; status: string }>;
         captures?: Array<{ id: string; status: string }>;
@@ -171,11 +174,13 @@ export async function getOrder(orderId: string): Promise<{
     ...(approveUrl ? { approveUrl } : {}),
     ...(auth ? { authorizationId: auth.id, authorizationStatus: auth.status } : {}),
     ...(cap ? { captureId: cap.id } : {}),
+    ...(unit?.amount?.value ? { amountCents: Math.round(parseFloat(unit.amount.value) * 100) } : {}),
+    ...(unit?.amount?.currency_code ? { currency: unit.amount.currency_code } : {}),
   };
 }
 
 /** Orders v2 authorize — buyer approved an intent=AUTHORIZE order; hold the funds. */
-export async function authorizeOrder(orderId: string): Promise<{
+export async function authorizeOrder(orderId: string, requestId?: string): Promise<{
   id: string;
   status: string;
   authorizationId?: string;
@@ -199,7 +204,9 @@ export async function authorizeOrder(orderId: string): Promise<{
         }>;
       };
     }>;
-  }>("POST", `/v2/checkout/orders/${encodeURIComponent(orderId)}/authorize`, {});
+  }>("POST", `/v2/checkout/orders/${encodeURIComponent(orderId)}/authorize`, {}, {
+    "PayPal-Request-Id": requestId ?? `authorize-${orderId}`,
+  });
   const unit = r.purchase_units?.[0];
   const a = unit?.payments?.authorizations?.[0];
   const out: Awaited<ReturnType<typeof authorizeOrder>> = { id: r.id, status: r.status };
@@ -217,11 +224,21 @@ export async function captureAuthorization(opts: {
   authorizationId: string;
   requestId: string;
   finalCapture?: boolean;
+  /** Partial capture (cancellation policy). Omit to capture the full authorized amount. */
+  amountCents?: number;
+  currency?: string;
+  noteToPayer?: string;
 }): Promise<{ id: string; status: string; amountCents?: number }> {
   const r = await paypalFetch<{ id: string; status: string; amount?: { value: string } }>(
     "POST",
     `/v2/payments/authorizations/${encodeURIComponent(opts.authorizationId)}/capture`,
-    { final_capture: opts.finalCapture ?? true },
+    {
+      final_capture: opts.finalCapture ?? true,
+      ...(opts.amountCents !== undefined
+        ? { amount: { currency_code: opts.currency ?? "USD", value: centsToUsd(opts.amountCents) } }
+        : {}),
+      ...(opts.noteToPayer ? { note_to_payer: opts.noteToPayer.slice(0, 255) } : {}),
+    },
     { "PayPal-Request-Id": opts.requestId },
   );
   return {
@@ -232,11 +249,15 @@ export async function captureAuthorization(opts: {
 }
 
 /** Payments v2 — void a held authorization (cancel before work starts; nothing to refund). */
-export async function voidAuthorization(authorizationId: string): Promise<{ ok: true }> {
+export async function voidAuthorization(
+  authorizationId: string,
+  requestId?: string,
+): Promise<{ ok: true }> {
   await paypalFetch(
     "POST",
     `/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/void`,
     undefined,
+    { "PayPal-Request-Id": requestId ?? `void-${authorizationId}` },
   );
   return { ok: true };
 }
@@ -407,7 +428,7 @@ export async function verifyWebhookSignature(opts: {
   return res.verification_status ?? "FAILURE";
 }
 
-export async function captureOrder(orderId: string): Promise<{
+export async function captureOrder(orderId: string, requestId?: string): Promise<{
   id: string;
   status: string;
   captureId?: string;
@@ -428,7 +449,9 @@ export async function captureOrder(orderId: string): Promise<{
         }>;
       };
     }>;
-  }>("POST", `/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {});
+  }>("POST", `/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {}, {
+    "PayPal-Request-Id": requestId ?? `capture-${orderId}`,
+  });
 
   const unit = result.purchase_units?.[0];
   const capture = unit?.payments?.captures?.[0];
@@ -459,6 +482,11 @@ export async function createAndSendInvoice(opts: {
   note?: string;
   invoiceNumber?: string;
   businessName?: string;
+  /** Extra invoice lines (e.g. a client-chosen tip). */
+  extraItems?: Array<{ name: string; amountCents: number }>;
+  /** Let the payer add a tip in PayPal's invoice UI (Invoicing v2 configuration.allow_tip). */
+  allowTip?: boolean;
+  requestId?: string;
 }): Promise<{ invoiceId: string; status: string; href?: string }> {
   const value = centsToUsd(opts.amountCents);
   const currency = opts.currency ?? "USD";
@@ -490,7 +518,19 @@ export async function createAndSendInvoice(opts: {
           quantity: "1",
           unit_amount: { currency_code: currency, value },
         },
+        ...(opts.extraItems ?? [])
+          .filter((i) => i.amountCents > 0)
+          .map((i) => ({
+            name: i.name.slice(0, 200),
+            quantity: "1",
+            unit_amount: { currency_code: currency, value: centsToUsd(i.amountCents) },
+          })),
       ],
+      ...(opts.allowTip ? { configuration: { allow_tip: true } } : {}),
+    },
+    {
+      "PayPal-Request-Id":
+        opts.requestId ?? `invoice-${opts.invoiceNumber ?? `${opts.recipientEmail}-${value}`}`,
     },
   );
 
@@ -500,6 +540,7 @@ export async function createAndSendInvoice(opts: {
     "POST",
     `/v2/invoicing/invoices/${encodeURIComponent(invoiceId)}/send`,
     { send_to_recipient: true, send_to_invoicer: false },
+    { "PayPal-Request-Id": `invoice-send-${invoiceId}` },
   );
 
   const href =
@@ -543,12 +584,22 @@ export async function getInvoice(invoiceId: string): Promise<{
   return out;
 }
 
-export async function remindInvoice(invoiceId: string, subject?: string, note?: string) {
-  await paypalFetch("POST", `/v2/invoicing/invoices/${encodeURIComponent(invoiceId)}/remind`, {
-    subject: subject ?? "Reminder: invoice still open",
-    note: note?.slice(0, 4000),
-    send_to_recipient: true,
-  });
+export async function remindInvoice(
+  invoiceId: string,
+  subject?: string,
+  note?: string,
+  requestId?: string,
+) {
+  await paypalFetch(
+    "POST",
+    `/v2/invoicing/invoices/${encodeURIComponent(invoiceId)}/remind`,
+    {
+      subject: subject ?? "Reminder: invoice still open",
+      note: note?.slice(0, 4000),
+      send_to_recipient: true,
+    },
+    requestId ? { "PayPal-Request-Id": requestId } : undefined,
+  );
   return { ok: true as const };
 }
 

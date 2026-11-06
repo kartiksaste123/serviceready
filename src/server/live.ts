@@ -48,6 +48,24 @@ import {
 import { chatJson, hasLlm, llmDisclosure, LlmError } from "./llm";
 import { findPriceOverrides, GUARDRAIL_MESSAGE } from "../lib/guardrails";
 import { collectionsRisk, historyFor, TONE_GUIDE } from "../lib/risk";
+import {
+  CANCEL_REASONS,
+  decideCancel,
+  describeCancelPolicy,
+  normalizePolicy,
+  policyForAgents,
+  type CancelPolicy,
+  type CancelReason,
+  type DepositState,
+} from "../lib/cancel-policy";
+import { finalBill, tipError, tipFromPct, MAX_TIP_PCT } from "../lib/tip";
+import {
+  orderFingerprint,
+  quoteMathErrors,
+  quoteSig,
+  safeEqualHex,
+  type TamperCheck,
+} from "./fingerprint";
 import { z } from "zod";
 
 const DEMO_SLUG = "maya-rao-studio";
@@ -65,6 +83,9 @@ type SellerRow = {
   max_reminders: number;
   wait_days_before_nudge: number;
   auth_user_id?: string | null;
+  free_cancel_hours?: number | null;
+  late_cancel_keep_pct?: number | null;
+  no_show_keep_pct?: number | null;
 };
 type ServiceRow = {
   id: string;
@@ -96,6 +117,11 @@ type QuoteRow = {
   approval_url: string;
   created_at: string;
   updated_at: string;
+  tip_cents?: number | null;
+  cancel_policy?: Partial<CancelPolicy> | null;
+  deposit_paid_at?: string | null;
+  work_started_at?: string | null;
+  price_sig?: string | null;
 };
 type PaymentRow = {
   id: string;
@@ -110,6 +136,9 @@ type PaymentRow = {
   updated_at: string;
   intent?: string | null;
   paypal_authorization_id?: string | null;
+  fingerprint?: string | null;
+  kept_cents?: number | null;
+  refunded_cents?: number | null;
 };
 type EventRow = {
   id: string;
@@ -155,8 +184,21 @@ function mapSeller(r: SellerRow): Seller {
       reminder_tone: r.reminder_tone,
       max_reminders: r.max_reminders,
       wait_days_before_nudge: r.wait_days_before_nudge,
+      cancel_policy: sellerPolicy(r),
     },
   };
+}
+function sellerPolicy(r: SellerRow): CancelPolicy {
+  return normalizePolicy({
+    ...(r.free_cancel_hours != null ? { free_cancel_hours: r.free_cancel_hours } : {}),
+    ...(r.late_cancel_keep_pct != null ? { late_cancel_keep_pct: r.late_cancel_keep_pct } : {}),
+    ...(r.no_show_keep_pct != null ? { no_show_keep_pct: r.no_show_keep_pct } : {}),
+  });
+}
+function quoteIntegrity(r: QuoteRow): "signed" | "unsigned" | "tampered" {
+  if (quoteMathErrors(r).length) return "tampered";
+  if (!r.price_sig) return "unsigned";
+  return safeEqualHex(r.price_sig, quoteSig(r)) ? "signed" : "tampered";
 }
 function mapService(r: ServiceRow): Service {
   const deliverables = Array.isArray(r.deliverables)
@@ -196,6 +238,11 @@ function mapQuote(r: QuoteRow): Quote {
     created_at: r.created_at,
     updated_at: r.updated_at,
     deposit_intent: depositIntentFor(r.deposit_cents, authorizeMinDepositCents()),
+    tip_cents: r.tip_cents ?? 0,
+    cancel_policy: normalizePolicy(r.cancel_policy ?? null),
+    deposit_paid_at: r.deposit_paid_at ?? null,
+    work_started_at: r.work_started_at ?? null,
+    integrity: quoteIntegrity(r),
   };
 }
 function mapPayment(r: PaymentRow): Payment {
@@ -212,6 +259,9 @@ function mapPayment(r: PaymentRow): Payment {
       : {}),
     ...(r.paypal_invoice_id ? { paypal_invoice_id: r.paypal_invoice_id } : {}),
     ...(r.invoice_url ? { invoice_url: r.invoice_url } : {}),
+    ...(r.fingerprint ? { fingerprint_short: r.fingerprint.slice(0, 12) } : {}),
+    ...(r.kept_cents != null ? { kept_cents: r.kept_cents } : {}),
+    ...(r.refunded_cents != null ? { refunded_cents: r.refunded_cents } : {}),
     updated_at: r.updated_at,
   };
 }
@@ -494,6 +544,13 @@ export async function putRules(rules: SellerRules, request?: Request): Promise<S
       reminder_tone: rules.reminder_tone,
       max_reminders: rules.max_reminders,
       wait_days_before_nudge: rules.wait_days_before_nudge,
+      ...(rules.cancel_policy
+        ? {
+            free_cancel_hours: rules.cancel_policy.free_cancel_hours,
+            late_cancel_keep_pct: rules.cancel_policy.late_cancel_keep_pct,
+            no_show_keep_pct: rules.cancel_policy.no_show_keep_pct,
+          }
+        : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", seller.id)
@@ -563,6 +620,7 @@ export async function getPublic(slug: string, request?: Request): Promise<Public
       mcp_url: `${origin}/mcp/${seller.slug}`,
       webmcp_tools: WEBMCP_TOOLS,
     },
+    cancel_policy: policyForAgents(sellerPolicy(seller)),
   };
 }
 
@@ -616,15 +674,18 @@ export async function postPublicQuote(
       status: "quoted",
       source: b.source,
       approval_url: "",
+      cancel_policy: sellerPolicy(seller),
     })
     .select("*")
     .single();
   if (error) throw new HttpError(error.message, 500);
   const quote = inserted as QuoteRow;
   const approval_url = `${publicOrigin(request)}/q/${quote.id}`;
+  // Sign the catalog-derived amounts; any later edit to the row breaks this HMAC.
+  const price_sig = quoteSig(quote);
   const { data: updated, error: uErr } = await db()
     .from("quotes")
-    .update({ approval_url })
+    .update({ approval_url, price_sig })
     .eq("id", quote.id)
     .select("*")
     .single();
@@ -653,6 +714,7 @@ export async function listQuotes(request?: Request): Promise<Quote[]> {
 
 export async function getQuote(id: string, refresh = false): Promise<QuoteDetail> {
   if (refresh) {
+    await reconcileDeposit(id);
     await refreshInvoiceStatus(id);
   }
   return detail(id);
@@ -679,6 +741,279 @@ export async function paypalClientToken(request?: Request) {
   return { client_token: t.client_token, expires_at: new Date(sdkTokenCache.exp).toISOString() };
 }
 
+/* ---------- tamper-proofing (src/server/fingerprint.ts) ---------- */
+
+async function tamperBlocked(q: QuoteRow, step: string, problems: string[]): Promise<never> {
+  await pushEvent({
+    quote_id: q.id,
+    seller_id: q.seller_id,
+    actor: "system",
+    kind: "decision",
+    tool: "guardrail.tamper_blocked",
+    input: { step },
+    output: { blocked: true, problems },
+    text: `Blocked ${step}: ${problems.join("; ")}`,
+  }).catch(() => undefined);
+  throw new HttpError(
+    `Tamper check failed — ${problems.join("; ")}. No money was moved.`,
+    409,
+  );
+}
+
+/**
+ * Re-price + signature check before any PayPal money call. Signed quotes must match their HMAC;
+ * legacy unsigned quotes are re-priced from the live catalog and then signed (trust on first use).
+ */
+async function assertQuoteIntegrity(q: QuoteRow, step: string): Promise<void> {
+  const problems = quoteMathErrors(q);
+  if (q.price_sig) {
+    if (!safeEqualHex(q.price_sig, quoteSig(q))) problems.push("quote amounts don't match their signature");
+  } else {
+    const { data: svc } = await db()
+      .from("services")
+      .select("price_cents,deposit_pct")
+      .eq("id", q.service_id)
+      .maybeSingle();
+    const s = svc as { price_cents: number; deposit_pct: number } | null;
+    if (s && s.price_cents === q.total_cents && depositOf(s.price_cents, s.deposit_pct) !== q.deposit_cents) {
+      problems.push(
+        `deposit ${money(q.deposit_cents)} ≠ catalog deposit ${money(depositOf(s.price_cents, s.deposit_pct))}`,
+      );
+    }
+    if (!problems.length) {
+      q.price_sig = quoteSig(q);
+      await db().from("quotes").update({ price_sig: q.price_sig }).eq("id", q.id);
+    }
+  }
+  if (problems.length) await tamperBlocked(q, step, problems);
+}
+
+/** Re-read the order from PayPal and compare its fingerprint with the one stored at create time. */
+async function verifyOrderBeforeMoney(
+  q: QuoteRow,
+  p: Payment,
+  order_id: string,
+  intent: DepositIntent,
+  step: string,
+): Promise<void> {
+  await assertQuoteIntegrity(q, step);
+  const expected = orderFingerprint({
+    quote_id: q.id,
+    kind: "deposit",
+    amount_cents: q.deposit_cents,
+    currency: "USD",
+    intent,
+  });
+  const problems: string[] = [];
+  const { data: row } = await db().from("payments").select("fingerprint").eq("id", p.id).maybeSingle();
+  const stored = (row as { fingerprint?: string | null } | null)?.fingerprint ?? null;
+  if (stored && !safeEqualHex(stored, expected)) problems.push("stored order fingerprint ≠ signed quote");
+  const o = await paypal.getOrder(order_id).catch(() => null);
+  if (o) {
+    if (o.customId && o.customId !== q.id) problems.push("PayPal order belongs to a different quote");
+    if (o.amountCents !== undefined) {
+      const fromPayPal = orderFingerprint({
+        quote_id: o.customId ?? q.id,
+        kind: "deposit",
+        amount_cents: o.amountCents,
+        currency: o.currency ?? "USD",
+        intent: o.intent ?? intent,
+      });
+      if (!safeEqualHex(fromPayPal, expected)) {
+        problems.push(
+          `PayPal order is ${money(o.amountCents)} ${o.currency ?? "USD"} ${o.intent ?? ""}`.trim() +
+            `, signed deposit is ${money(q.deposit_cents)} USD ${intent}`,
+        );
+      }
+    }
+  }
+  if (problems.length) await tamperBlocked(q, step, problems);
+  await pushEvent({
+    quote_id: q.id,
+    seller_id: q.seller_id,
+    actor: "system",
+    kind: "decision",
+    tool: "guardrail.fingerprint_verified",
+    input: { step, order_id },
+    output: {
+      quote_signature: "ok",
+      order_fingerprint: stored ? "match" : "recomputed",
+      paypal_amount: o?.amountCents !== undefined ? o.amountCents / 100 : null,
+    },
+    text: `Order fingerprint verified against PayPal before ${step.replace("paypal.", "")}`,
+  });
+}
+
+/**
+ * GET/POST /api/judges/tamper-demo — shows the three money locks rejecting "make it $1".
+ * Pure checks on a synthetic quote (nothing is written); optionally verifies a real quote's signature.
+ */
+export async function tamperDemo(quoteId?: string): Promise<{ checks: TamperCheck[]; quote?: unknown }> {
+  const checks: TamperCheck[] = [];
+  // 1. Agent tries to pass an amount.
+  const agentArgs = { service_id: "svc_brand_kit", client_email: "judge@example.com", deposit_usd: 1 };
+  const fields = findPriceOverrides(agentArgs);
+  checks.push({
+    check: "MCP/agent passes deposit_usd: 1",
+    ok: fields.length > 0,
+    detail: fields.length ? `Rejected before any tool runs (${fields.join(", ")})` : "NOT blocked",
+  });
+  // 2. Someone edits the quote row to a $1 deposit.
+  const signed = {
+    id: "demo-quote",
+    service_id: "svc_brand_kit",
+    total_cents: 1350_00,
+    deposit_cents: 675_00,
+    balance_cents: 675_00,
+    line_items: [{ label: "Brand kit", amount_cents: 1350_00 }],
+  };
+  const sig = quoteSig(signed);
+  const tampered = { ...signed, deposit_cents: 1_00, balance_cents: 1349_00 };
+  const sigOk = safeEqualHex(sig, quoteSig(tampered));
+  checks.push({
+    check: "Quote row edited to a $1.00 deposit",
+    ok: !sigOk,
+    detail: !sigOk
+      ? "HMAC signature over the catalog amounts no longer verifies → order creation blocked (409)"
+      : "NOT blocked",
+  });
+  // 3. PayPal order amount differs from what we signed.
+  const expected = orderFingerprint({
+    quote_id: signed.id,
+    kind: "deposit",
+    amount_cents: signed.deposit_cents,
+    currency: "USD",
+    intent: "AUTHORIZE",
+  });
+  const fromPayPal = orderFingerprint({
+    quote_id: signed.id,
+    kind: "deposit",
+    amount_cents: 1_00,
+    currency: "USD",
+    intent: "AUTHORIZE",
+  });
+  const fpOk = safeEqualHex(expected, fromPayPal);
+  checks.push({
+    check: "PayPal order shows $1.00 instead of $675.00",
+    ok: !fpOk,
+    detail: !fpOk
+      ? `Order fingerprint ${expected.slice(0, 10)}… ≠ ${fromPayPal.slice(0, 10)}… → capture/authorize rejected`
+      : "NOT blocked",
+  });
+  // 4. Client tries a tip over the cap.
+  const tipErr = tipError(1350_00, tipFromPct(1350_00, 90));
+  checks.push({
+    check: "Client adds a 90% tip",
+    ok: !!tipErr,
+    detail: tipErr ?? "NOT blocked",
+  });
+  let quote: unknown;
+  if (quoteId) {
+    try {
+      const r = await getQuoteRow(quoteId);
+      const integrity = quoteIntegrity(r);
+      quote = {
+        id: r.id,
+        integrity,
+        total: money(r.total_cents),
+        deposit: money(r.deposit_cents),
+      };
+      checks.push({
+        check: `Live quote ${r.id.slice(0, 8)}… signature`,
+        ok: integrity !== "tampered",
+        detail:
+          integrity === "signed"
+            ? "HMAC verifies — amounts are exactly what the catalog priced"
+            : integrity === "unsigned"
+              ? "Legacy quote — re-priced from the catalog and signed on first payment"
+              : "Signature mismatch — payments on this quote are blocked",
+      });
+    } catch {
+      /* unknown quote id: just skip the live check */
+    }
+  }
+  return { checks, ...(quote ? { quote } : {}) };
+}
+
+/** Public: client picks a tip for the final bill (before the balance invoice is sent). */
+export async function setTip(
+  id: string,
+  body: { tip_cents?: unknown; tip_pct?: unknown },
+): Promise<QuoteDetail> {
+  const q = await getQuoteRow(id);
+  if (!["quoted", "deposit_paid", "delivered"].includes(q.status)) {
+    throw new HttpError(
+      q.status === "cancelled"
+        ? "This booking was cancelled"
+        : "The final bill was already sent — add a tip on the PayPal invoice instead",
+      400,
+    );
+  }
+  let tip: number;
+  if (typeof body.tip_pct === "number") {
+    if (!Number.isFinite(body.tip_pct) || body.tip_pct < 0 || body.tip_pct > MAX_TIP_PCT) {
+      throw new HttpError(`Tip % must be between 0 and ${MAX_TIP_PCT}`, 400);
+    }
+    tip = tipFromPct(q.total_cents, body.tip_pct);
+  } else if (typeof body.tip_cents === "number") {
+    tip = Math.round(body.tip_cents);
+  } else {
+    throw new HttpError("Send tip_cents or tip_pct", 400);
+  }
+  const err = tipError(q.total_cents, tip);
+  if (err) throw new HttpError(err, 400);
+  await db().from("quotes").update({ tip_cents: tip, updated_at: new Date().toISOString() }).eq("id", id);
+  await pushEvent({
+    quote_id: id,
+    seller_id: q.seller_id,
+    actor: "client",
+    kind: "decision",
+    tool: "final_bill.tip",
+    input: typeof body.tip_pct === "number" ? { tip_pct: body.tip_pct } : { tip_cents: tip },
+    output: { tip: tip / 100, final_bill: finalBill(q.balance_cents, tip).total_cents / 100 },
+    text: tip > 0 ? `Client added a ${money(tip)} tip to the final bill` : "Client removed the tip",
+  });
+  return detail(id);
+}
+
+/**
+ * "Check PayPal" fallback: if a webhook was missed, re-read open deposit orders from PayPal and
+ * finish the capture/authorization server-side. Idempotent; PayPal is the source of truth.
+ */
+async function reconcileDeposit(id: string): Promise<void> {
+  const q = await getQuoteRow(id);
+  if (q.status !== "quoted") return;
+  const pays = await paymentsFor(id);
+  const open = pays.filter((p) => p.kind === "deposit" && p.status === "CREATED" && p.paypal_order_id);
+  for (const p of open) {
+    const o = await paypal.getOrder(p.paypal_order_id!).catch(() => null);
+    if (!o) continue;
+    await pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "paypal",
+      kind: "tool_call",
+      tool: "paypal.orders.get",
+      input: { id: p.paypal_order_id, reason: "Check PayPal (webhook fallback)" },
+      output: { status: o.status },
+    });
+    if (o.status === "APPROVED") {
+      await captureDeposit(id, p.paypal_order_id!);
+      return;
+    }
+    if (o.status === "COMPLETED") {
+      const fresh = await getQuoteRow(id);
+      if (fresh.status !== "quoted") return;
+      if (o.authorizationId && !o.captureId) {
+        await markDepositAuthorized(fresh, p.id, p.paypal_order_id!, o.authorizationId, "authorize_api");
+      } else {
+        await markDepositPaid(fresh, p.id, p.paypal_order_id!, o.captureId, "capture_api");
+      }
+      return;
+    }
+  }
+}
+
 export async function createDepositOrder(
   id: string,
   request?: Request,
@@ -687,6 +1022,8 @@ export async function createDepositOrder(
   if (q.status === "cancelled") throw new HttpError("This quote was cancelled", 400);
   if (q.status !== "quoted") throw new HttpError("The deposit for this quote is already paid", 400);
   if (q.deposit_cents <= 0) throw new HttpError("This quote has no deposit to pay", 400);
+  // Tamper-proofing: re-price from the catalog + verify the signed amounts before PayPal is called.
+  await assertQuoteIntegrity(q, "paypal.orders.create");
   const origin = publicOrigin(request);
   const quote_url = `${origin}/q/${q.id}`;
 
@@ -747,6 +1084,13 @@ export async function createDepositOrder(
     status: "CREATED",
     paypal_order_id: order.id,
     intent,
+    fingerprint: orderFingerprint({
+      quote_id: q.id,
+      kind: "deposit",
+      amount_cents: q.deposit_cents,
+      currency: "USD",
+      intent,
+    }),
   });
   if (error) throw new HttpError(error.message, 500);
 
@@ -756,8 +1100,8 @@ export async function createDepositOrder(
     actor: "system",
     kind: "tool_call",
     tool: "paypal.orders.create",
-    input: { amount: q.deposit_cents / 100, currency: "USD", intent },
-    output: { id: order.id, status: order.status },
+    input: { amount: q.deposit_cents / 100, currency: "USD", intent, priced_from: "signed quote" },
+    output: { id: order.id, status: order.status, fingerprint: "stored (HMAC: quote+amount+currency+intent)" },
     text:
       intent === "AUTHORIZE"
         ? `Deposit order created with intent=AUTHORIZE — funds are held on approval and captured when work starts`
@@ -793,7 +1137,7 @@ async function markDepositPaid(
 
   const { data: updated, error: qErr } = await db()
     .from("quotes")
-    .update({ status: "deposit_paid", updated_at: now })
+    .update({ status: "deposit_paid", updated_at: now, deposit_paid_at: q.deposit_paid_at ?? now })
     .eq("id", q.id)
     .select("*")
     .single();
@@ -834,7 +1178,7 @@ async function markDepositAuthorized(
   if (pErr) throw new HttpError(pErr.message, 500);
   const { data: updated, error: qErr } = await db()
     .from("quotes")
-    .update({ status: "deposit_paid", updated_at: now })
+    .update({ status: "deposit_paid", updated_at: now, deposit_paid_at: q.deposit_paid_at ?? now })
     .eq("id", q.id)
     .select("*")
     .single();
@@ -858,9 +1202,10 @@ async function markDepositAuthorized(
 }
 
 async function authorizeDeposit(q: QuoteRow, p: Payment, order_id: string): Promise<Quote> {
+  await verifyOrderBeforeMoney(q, p, order_id, "AUTHORIZE", "paypal.orders.authorize");
   let res: Awaited<ReturnType<typeof paypal.authorizeOrder>>;
   try {
-    res = await paypal.authorizeOrder(order_id);
+    res = await paypal.authorizeOrder(order_id, `authorize-${order_id}`);
   } catch (e) {
     const o = await paypal.getOrder(order_id).catch(() => null);
     if (o?.authorizationId) {
@@ -899,6 +1244,9 @@ async function captureHeldDepositRow(q: QuoteRow, reason: "start_work" | "delive
   const pays = await paymentsFor(q.id);
   const dep = pays.find((p) => p.kind === "deposit" && p.status === "AUTHORIZED");
   if (!dep?.paypal_authorization_id) return false;
+  if (dep.paypal_order_id) {
+    await verifyOrderBeforeMoney(q, dep, dep.paypal_order_id, "AUTHORIZE", "paypal.authorizations.capture");
+  }
   const cap = await paypal.captureAuthorization({
     authorizationId: dep.paypal_authorization_id,
     requestId: `capture-auth-${dep.paypal_authorization_id}`,
@@ -936,6 +1284,12 @@ export async function startWork(id: string, request?: Request): Promise<QuoteDet
     );
   }
   const captured = await captureHeldDepositRow(q, "start_work");
+  if (!q.work_started_at) {
+    await db()
+      .from("quotes")
+      .update({ work_started_at: new Date().toISOString() })
+      .eq("id", id);
+  }
   if (!captured) {
     await pushEvent({
       quote_id: id,
@@ -956,6 +1310,7 @@ export async function payDepositWithVault(id: string, vaultId: string): Promise<
   const q = await getQuoteRow(id);
   if (q.status !== "quoted") throw new HttpError("Deposit already handled or quote cancelled", 400);
   if (q.deposit_cents <= 0) throw new HttpError("This quote has no deposit to pay", 400);
+  await assertQuoteIntegrity(q, "paypal.orders.create(vault_id)");
   const order = await paypal.createVaultedCaptureOrder({
     amountCents: q.deposit_cents,
     customId: q.id,
@@ -965,7 +1320,7 @@ export async function payDepositWithVault(id: string, vaultId: string): Promise<
   });
   let captureId = order.captureId;
   if (order.status === "APPROVED" || order.status === "CREATED") {
-    const c = await paypal.captureOrder(order.id);
+    const c = await paypal.captureOrder(order.id, `capture-${order.id}`);
     if (c.status !== "COMPLETED") throw new HttpError(`PayPal capture status is ${c.status}`, 502);
     captureId = c.captureId;
   } else if (order.status !== "COMPLETED") {
@@ -983,6 +1338,13 @@ export async function payDepositWithVault(id: string, vaultId: string): Promise<
       status: "CREATED",
       paypal_order_id: order.id,
       intent: "CAPTURE",
+      fingerprint: orderFingerprint({
+        quote_id: q.id,
+        kind: "deposit",
+        amount_cents: q.deposit_cents,
+        currency: "USD",
+        intent: "CAPTURE",
+      }),
     })
     .select("id")
     .single();
@@ -1022,9 +1384,10 @@ export async function captureDeposit(id: string, order_id: string): Promise<Quot
     );
   }
 
+  await verifyOrderBeforeMoney(q, p, order_id, "CAPTURE", "paypal.orders.capture");
   let captured: Awaited<ReturnType<typeof paypal.captureOrder>>;
   try {
-    captured = await paypal.captureOrder(order_id);
+    captured = await paypal.captureOrder(order_id, `capture-${order_id}`);
   } catch (e) {
     // A webhook (or another tab) may have captured it first — re-read PayPal before failing.
     const o = await paypal.getOrder(order_id).catch(() => null);
@@ -1250,7 +1613,9 @@ export async function deliver(id: string, request?: Request): Promise<QuoteDetai
   });
 
   const now = new Date().toISOString();
-  if (q.balance_cents <= 0) {
+  const tip = q.tip_cents ?? 0;
+  const bill = finalBill(q.balance_cents, tip);
+  if (bill.total_cents <= 0) {
     await db().from("quotes").update({ status: "paid", updated_at: now }).eq("id", id);
     await pushEvent({
       quote_id: id,
@@ -1267,14 +1632,19 @@ export async function deliver(id: string, request?: Request): Promise<QuoteDetai
     .select("name")
     .eq("id", q.seller_id)
     .maybeSingle();
+  const invoiceNumber = `SR-${q.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`;
   const inv = await paypal.createAndSendInvoice({
     ...(sellerRow?.name ? { businessName: String(sellerRow.name) } : {}),
-    amountCents: q.balance_cents,
+    // Balance line + tip line; if the deposit covered the price, the tip is the only line.
+    amountCents: q.balance_cents > 0 ? q.balance_cents : tip,
     recipientEmail: q.client_email,
     recipientName: q.client_name,
-    itemName: `${q.service_title} — balance`,
-    note: `Balance due for ${q.service_title}. Quote ${q.id}.`,
-    invoiceNumber: `SR-${q.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`,
+    itemName: q.balance_cents > 0 ? `${q.service_title} — balance` : "Tip — thank you",
+    extraItems: tip > 0 && q.balance_cents > 0 ? [{ name: "Tip — thank you", amountCents: tip }] : [],
+    allowTip: true,
+    note: `Final bill for ${q.service_title}. Quote ${q.id}.${tip > 0 ? ` Includes your ${money(tip)} tip — thank you!` : ""}`,
+    invoiceNumber,
+    requestId: `invoice-${invoiceNumber}`,
   });
 
   const { error: pErr } = await db()
@@ -1282,7 +1652,7 @@ export async function deliver(id: string, request?: Request): Promise<QuoteDetai
     .insert({
       quote_id: id,
       kind: "balance",
-      amount_cents: q.balance_cents,
+      amount_cents: bill.total_cents,
       status: "UNPAID",
       paypal_invoice_id: inv.invoiceId,
       invoice_url: inv.href ?? null,
@@ -1297,9 +1667,17 @@ export async function deliver(id: string, request?: Request): Promise<QuoteDetai
     actor: "seller_agent",
     kind: "tool_call",
     tool: "paypal.create_and_send_invoice",
-    input: { amount: q.balance_cents / 100, recipient: q.client_email },
+    input: {
+      lines: bill.lines.map((l) => ({ label: l.label, amount: l.amount_cents / 100 })),
+      amount: bill.total_cents / 100,
+      recipient: q.client_email,
+      allow_tip: true,
+    },
     output: { invoice_id: inv.invoiceId, status: inv.status },
-    text: `Balance invoice for ${money(q.balance_cents)} sent to ${q.client_email}`,
+    text:
+      tip > 0
+        ? `Final bill ${money(bill.total_cents)} (balance ${money(q.balance_cents)} + tip ${money(tip)}) sent to ${q.client_email}`
+        : `Balance invoice for ${money(q.balance_cents)} sent to ${q.client_email}`,
   });
 
   return detail(id);
@@ -1372,95 +1750,191 @@ export async function refreshInvoiceStatus(id: string): Promise<QuoteDetail> {
   return detail(id);
 }
 
-export async function cancelQuote(id: string, request?: Request): Promise<QuoteDetail> {
+export async function cancelQuote(
+  id: string,
+  request?: Request,
+  body: { reason?: unknown } = {},
+): Promise<QuoteDetail> {
   const { quote: q } = await assertOwnsQuote(request, id);
+  const reason: CancelReason = CANCEL_REASONS.includes(body.reason as CancelReason)
+    ? (body.reason as CancelReason)
+    : "client_cancel";
+  if (!["quoted", "deposit_paid", "delivered"].includes(q.status)) {
+    throw new HttpError(
+      q.status === "balance_invoiced" || q.status === "paid"
+        ? "Cancel is only available before the final bill is sent. Refund the balance in PayPal if needed."
+        : "This booking is already cancelled.",
+      400,
+    );
+  }
   const pays = await paymentsFor(id);
   const deposit =
     pays.find((p) => p.kind === "deposit" && (p.status === "COMPLETED" || p.status === "AUTHORIZED")) ??
-    pays.find((p) => p.kind === "deposit");
+    null;
   const now = new Date().toISOString();
+  const policy = normalizePolicy(q.cancel_policy ?? null);
+  const deposit_state: DepositState = !deposit
+    ? "none"
+    : deposit.status === "AUTHORIZED"
+      ? "held"
+      : "captured";
+  const work_started =
+    !!q.work_started_at ||
+    q.status === "delivered" ||
+    (deposit?.intent === "AUTHORIZE" && deposit.status === "COMPLETED");
+  const decision = decideCancel({
+    policy,
+    reason,
+    deposit_cents: deposit?.amount_cents ?? 0,
+    deposit_state,
+    deposit_paid_at: q.deposit_paid_at ?? deposit?.updated_at ?? null,
+    work_started,
+  });
 
-  // Unpaid quote — void open orders and cancel.
-  if (q.status === "quoted") {
-    await db().from("quotes").update({ status: "cancelled", updated_at: now }).eq("id", id);
+  await pushEvent({
+    quote_id: id,
+    seller_id: q.seller_id,
+    actor: "system",
+    kind: "decision",
+    tool: `cancel_policy.${decision.rule}`,
+    input: { reason, deposit_state, work_started, policy },
+    output: {
+      action: decision.action,
+      keep: decision.keep_cents / 100,
+      release: decision.release_cents / 100,
+    },
+    text: `Policy rule fired: ${decision.rule.replace(/_/g, " ")} — ${decision.explanation}`,
+  });
+
+  const voidOpenOrders = async () => {
     for (const p of pays) {
       if (p.status === "CREATED") {
         await db().from("payments").update({ status: "VOIDED", updated_at: now }).eq("id", p.id);
       }
     }
+  };
+  const closeQuote = async (tool: string, text: string, output?: unknown) => {
+    await db().from("quotes").update({ status: "cancelled", updated_at: now }).eq("id", id);
     await pushEvent({
       quote_id: id,
       seller_id: q.seller_id,
       actor: "seller",
       kind: "approval",
-      text: "Quote cancelled",
+      tool,
+      ...(output ? { output } : {}),
+      text,
     });
     return detail(id);
+  };
+
+  if (decision.action === "cancel_only" || !deposit) {
+    await voidOpenOrders();
+    return closeQuote("booking.cancel", "Quote cancelled");
   }
 
-  // Held (AUTHORIZED) deposit — void the authorization; nothing was captured, nothing to refund.
-  if (
-    deposit &&
-    deposit.status === "AUTHORIZED" &&
-    deposit.paypal_authorization_id &&
-    q.status === "deposit_paid"
-  ) {
-    await paypal.voidAuthorization(deposit.paypal_authorization_id);
-    await db().from("payments").update({ status: "VOIDED", updated_at: now }).eq("id", deposit.id);
-    await db().from("quotes").update({ status: "cancelled", updated_at: now }).eq("id", id);
+  const dep = deposit;
+  // ---- Held deposit: void, or capture the kept share (final_capture releases the rest).
+  if (decision.action === "void" && dep.paypal_authorization_id) {
+    await paypal.voidAuthorization(dep.paypal_authorization_id, `void-${dep.paypal_authorization_id}`);
+    await db()
+      .from("payments")
+      .update({ status: "VOIDED", kept_cents: 0, refunded_cents: dep.amount_cents, updated_at: now })
+      .eq("id", dep.id);
     await pushEvent({
       quote_id: id,
       seller_id: q.seller_id,
       actor: "paypal",
       kind: "tool_call",
       tool: "paypal.authorizations.void",
-      input: { authorization_id: deposit.paypal_authorization_id },
+      input: { authorization_id: dep.paypal_authorization_id },
       output: { status: "VOIDED" },
       text: "Held deposit voided on PayPal — the client was never charged",
     });
+    return closeQuote("booking.cancel_void", "Booking cancelled — held deposit released");
+  }
+  if (
+    (decision.action === "capture_full" || decision.action === "capture_partial") &&
+    dep.paypal_authorization_id
+  ) {
+    if (dep.paypal_order_id) {
+      await verifyOrderBeforeMoney(q, dep, dep.paypal_order_id, "AUTHORIZE", "paypal.authorizations.capture");
+    }
+    const cap = await paypal.captureAuthorization({
+      authorizationId: dep.paypal_authorization_id,
+      requestId: `cancel-capture-${dep.paypal_authorization_id}`,
+      finalCapture: true,
+      ...(decision.action === "capture_partial" ? { amountCents: decision.keep_cents } : {}),
+      noteToPayer: `Cancellation fee per ${q.service_title} booking policy`,
+    });
+    await db()
+      .from("payments")
+      .update({
+        status: decision.action === "capture_full" ? "COMPLETED" : "PARTIALLY_CAPTURED",
+        paypal_capture_id: cap.id,
+        kept_cents: decision.keep_cents,
+        refunded_cents: decision.release_cents,
+        updated_at: now,
+      })
+      .eq("id", dep.id);
     await pushEvent({
       quote_id: id,
       seller_id: q.seller_id,
-      actor: "seller",
-      kind: "approval",
-      tool: "booking.cancel_void",
-      text: "Booking cancelled — held deposit released",
+      actor: "paypal",
+      kind: "tool_call",
+      tool: "paypal.authorizations.capture",
+      input: {
+        authorization_id: dep.paypal_authorization_id,
+        amount: decision.keep_cents / 100,
+        final_capture: true,
+      },
+      output: { capture_id: cap.id, status: cap.status },
+      text:
+        decision.release_cents > 0
+          ? `Captured ${money(decision.keep_cents)} cancellation fee; PayPal released the remaining ${money(decision.release_cents)}`
+          : `Captured the full ${money(decision.keep_cents)} hold per policy`,
     });
-    return detail(id);
+    return closeQuote("booking.cancel_policy_capture", `Booking cancelled — ${decision.explanation}`, {
+      kept: decision.keep_cents / 100,
+      released: decision.release_cents / 100,
+    });
   }
 
-  // Deposit paid (or later, before balance paid) — refund capture via Agent Toolkit, then cancel.
-  const refundable =
-    deposit &&
-    deposit.status === "COMPLETED" &&
-    deposit.paypal_capture_id &&
-    (q.status === "deposit_paid" || q.status === "delivered");
-  if (!refundable) {
-    throw new HttpError(
-      q.status === "balance_invoiced" || q.status === "paid"
-        ? "Cancel with refund is only available before the balance invoice is paid. Refund the balance in PayPal if needed."
-        : "This booking cannot be cancelled with an automatic deposit refund in its current state.",
-      400,
-    );
+  // ---- Captured deposit: refund all / part, or keep it.
+  if (decision.action === "keep_full") {
+    await db()
+      .from("payments")
+      .update({ kept_cents: dep.amount_cents, refunded_cents: 0, updated_at: now })
+      .eq("id", dep.id);
+    return closeQuote("booking.cancel_keep", `Booking cancelled — ${decision.explanation}`, {
+      kept: dep.amount_cents / 100,
+    });
   }
-
+  if (!dep.paypal_capture_id) {
+    throw new HttpError("No PayPal capture on this deposit to refund", 400);
+  }
+  const partial = decision.action === "refund_partial";
+  const refundCents = decision.release_cents;
   let refundId: string | undefined;
   let refundStatus: string | undefined;
   let toolkitTrace: Awaited<ReturnType<typeof toolkitCreateRefund>>["trace"] | null = null;
+  const note = partial
+    ? `ServiceReady booking ${id} cancelled — ${money(refundCents)} refunded per cancellation policy`
+    : `ServiceReady booking ${id} cancelled — deposit refunded`;
   try {
     const r = await toolkitCreateRefund({
-      captureId: deposit!.paypal_capture_id!,
-      noteToPayer: `ServiceReady booking ${id} cancelled — deposit refunded`,
+      captureId: dep.paypal_capture_id,
+      noteToPayer: note,
+      ...(partial ? { amountCents: refundCents } : {}),
     });
     refundId = r.refundId;
     refundStatus = r.status;
     toolkitTrace = r.trace;
-  } catch (e) {
-    // Fallback to Payments v2 REST if toolkit fails
+  } catch {
     const r = await paypal.refundCapture({
-      captureId: deposit!.paypal_capture_id!,
-      requestId: `refund-${id}-${deposit!.paypal_capture_id}`,
-      noteToPayer: `ServiceReady booking ${id} cancelled — deposit refunded`,
+      captureId: dep.paypal_capture_id,
+      requestId: `refund-${id}-${dep.paypal_capture_id}-${refundCents}`,
+      noteToPayer: note,
+      ...(partial ? { amountCents: refundCents } : {}),
     });
     refundId = r.id;
     refundStatus = r.status;
@@ -1470,9 +1944,9 @@ export async function cancelQuote(id: string, request?: Request): Promise<QuoteD
       actor: "paypal",
       kind: "tool_call",
       tool: "paypal.payments.refund",
-      input: { capture_id: deposit!.paypal_capture_id },
+      input: { capture_id: dep.paypal_capture_id, amount: refundCents / 100 },
       output: { refund_id: r.id, status: r.status },
-      text: `Deposit refunded via Payments v2 (${r.status})`,
+      text: `${partial ? `Refunded ${money(refundCents)}` : "Deposit refunded"} via Payments v2 (${r.status})`,
     });
   }
   if (toolkitTrace) {
@@ -1484,25 +1958,25 @@ export async function cancelQuote(id: string, request?: Request): Promise<QuoteD
       tool: toolkitTrace.tool,
       input: toolkitTrace.input,
       output: toolkitTrace.output,
-      text: `Deposit refunded via PayPal Agent Toolkit create_refund (${refundStatus ?? "ok"})`,
+      text: `${partial ? `Refunded ${money(refundCents)}` : "Deposit refunded"} via PayPal Agent Toolkit create_refund (${refundStatus ?? "ok"})`,
     });
   }
-
   await db()
     .from("payments")
-    .update({ status: "REFUNDED", updated_at: now })
-    .eq("id", deposit!.id);
-  await db().from("quotes").update({ status: "cancelled", updated_at: now }).eq("id", id);
-  await pushEvent({
-    quote_id: id,
-    seller_id: q.seller_id,
-    actor: "seller",
-    kind: "approval",
-    tool: "booking.cancel_refund",
-    output: { refund_id: refundId, capture_id: deposit!.paypal_capture_id, status: refundStatus },
-    text: "Booking cancelled — deposit refunded on PayPal evidence",
-  });
-  return detail(id);
+    .update({
+      status: partial ? "PARTIALLY_REFUNDED" : "REFUNDED",
+      kept_cents: decision.keep_cents,
+      refunded_cents: refundCents,
+      updated_at: now,
+    })
+    .eq("id", dep.id);
+  return closeQuote(
+    partial ? "booking.cancel_partial_refund" : "booking.cancel_refund",
+    partial
+      ? `Booking cancelled — ${decision.explanation}`
+      : "Booking cancelled — deposit refunded on PayPal evidence",
+    { refund_id: refundId, capture_id: dep.paypal_capture_id, status: refundStatus, refunded: refundCents / 100 },
+  );
 }
 
 export async function postReply(
@@ -1863,6 +2337,7 @@ export async function approveProposal(
           bal.paypal_invoice_id,
           "Reminder from ServiceReady",
           draft_message,
+          `remind-${p.id}`,
         );
         await pushEvent({
           quote_id: p.quote_id,
@@ -2002,6 +2477,11 @@ export async function health() {
     money_guardrails: "agents cannot set amounts (rejected + audited)",
     collections_risk: "deterministic score → warm/firm/final tone",
     catalog_cache_ttl_ms: CATALOG_TTL_MS,
+    cancel_policy_engine: "deterministic free-window / late-cancel / no-show → void, partial capture or refund",
+    final_bill_tip: "client tip line on the Invoicing v2 final bill (+ allow_tip)",
+    tamper_proofing: "HMAC-signed quote amounts + order fingerprint re-checked against PayPal before capture",
+    idempotency: "PayPal-Request-Id on every money write",
+    webhook_fallback: "Check PayPal re-reads open orders/invoices",
   };
   return out;
 }
@@ -2315,7 +2795,15 @@ const AgentPlanSchema = z.object({
           tool: z
             .string()
             .transform((t) => t.trim().match(/^[a-z_]+/i)?.[0]?.toLowerCase() ?? "")
-            .pipe(z.enum(["list_services", "get_service", "request_quote", "get_quote_status"])),
+            .pipe(
+              z.enum([
+                "list_services",
+                "get_service",
+                "request_quote",
+                "get_quote_status",
+                "get_cancellation_policy",
+              ]),
+            ),
           service_id: z.string().optional(),
           quote_id: z.string().optional(),
           client_name: z.string().optional(),
@@ -2331,7 +2819,15 @@ const AgentPlanSchema = z.object({
 /** Deterministic client-facing quote summary — amounts copied from the catalog-built quote, never the model. */
 function quoteReply(created: Quote, svc: Service, sellerName: string): string {
   const held = created.deposit_intent === "AUTHORIZE";
-  return `I've requested a quote for **${svc.title}** from ${sellerName}.\n\n- Total: **${money(created.total_cents)}**\n- Deposit due now: **${money(created.deposit_cents)}** (${svc.deposit_pct}%)${held ? " — PayPal holds it and it's only captured when work starts" : ""}\n- Balance on delivery: ${money(created.balance_cents)}\n- Turnaround: ~${svc.lead_time_days} days\n- Quote reference: **${created.id}**\n\nPay the deposit with PayPal using the button below to confirm.`;
+  return `I've requested a quote for **${svc.title}** from ${sellerName}.\n\n- Total: **${money(created.total_cents)}**\n- Deposit due now: **${money(created.deposit_cents)}** (${svc.deposit_pct}%)${held ? " — PayPal holds it and it's only captured when work starts" : ""}\n- Balance on delivery: ${money(created.balance_cents)}\n- Turnaround: ~${svc.lead_time_days} days\n- Quote reference: **${created.id}**\n- Cancellation: ${describeCancelPolicy(created.cancel_policy ?? normalizePolicy(null))}\n\nPay the deposit with PayPal using the button below to confirm.`;
+}
+
+const POLICY_Q = /\b(cancel|cancellation|refund|no[- ]?show|reschedul|policy|money back)/i;
+function policyReply(store: PublicStore): string {
+  const p = store.cancel_policy;
+  return p
+    ? `**${store.seller.name} cancellation policy** (enforced automatically on PayPal):\n\n- Free cancellation within **${p.free_cancel_hours}h** of paying the deposit, before work starts\n- Later cancellation: **${p.late_cancel_keep_pct}%** of the deposit is kept\n- No-show: **${p.no_show_keep_pct}%** of the deposit is kept\n- If the seller cancels, the deposit is always fully released\n\nHeld deposits are voided or partially captured; paid deposits are refunded via PayPal.`
+    : "This seller hasn't published a cancellation policy yet.";
 }
 
 /** Deterministic storefront agent — used when no LLM key is set. */
@@ -2386,6 +2882,15 @@ async function agentChatHeuristic(
   let quote: Quote | null = null;
   let reply: string;
 
+  if (POLICY_Q.test(last) && !emailMatch) {
+    tool_calls.push({ tool: "get_cancellation_policy", input: {}, output: store.cancel_policy ?? null });
+    return {
+      messages: [...messages, { role: "assistant", content: policyReply(store) }],
+      tool_calls,
+      quote,
+      engine: { kind: "heuristic", reason },
+    };
+  }
   if (match && emailMatch && isEmail(emailMatch[0]!)) {
     const client_name = nameMatch?.[1] ?? emailMatch[0]!.split("@")[0]!;
     const created = await postPublicQuote(slug, {
@@ -2461,6 +2966,7 @@ Tools (put intended calls in "actions"; the server runs them):
 - get_service — fields: service_id
 - request_quote — fields: service_id, client_name, client_email, brief
 - get_quote_status — fields: quote_id
+- get_cancellation_policy — no fields (use for any cancel / refund / no-show question; the server writes the policy text)
 Action shape: {"tool":"request_quote","service_id":"<catalog id>","client_name":"...","client_email":"...","brief":"..."}
 Rules: use catalog ids; never invent or set prices/amounts (the server rejects money fields); never claim payment succeeded.
 As soon as the client gave a name, a valid email and a need that matches a service, call request_quote (brief = their need) — don't ask for more.
@@ -2469,7 +2975,7 @@ Return JSON only: {"reply":"...","actions":[...]}`,
         },
         {
           role: "user",
-          content: `CATALOG:\n${JSON.stringify(catalog)}\n\nCONVERSATION:\n${history || "(empty)"}`,
+          content: `CATALOG:\n${JSON.stringify(catalog)}\n\nCANCELLATION POLICY (structured, read-only): ${JSON.stringify(store.cancel_policy ?? null)}\n\nCONVERSATION:\n${history || "(empty)"}`,
         },
       ],
       AgentPlanSchema,
@@ -2492,6 +2998,10 @@ Return JSON only: {"reply":"...","actions":[...]}`,
     let quoteRequested = false;
     for (const action of plan.actions) {
       if (action.tool === "list_services") continue;
+      if (action.tool === "get_cancellation_policy") {
+        if (!actions.some((a) => a.tool === "get_cancellation_policy")) actions.push(action);
+        continue;
+      }
       const { tool: _tool, ...rest } = action;
       void _tool;
       const fields = findPriceOverrides(rest);
@@ -2514,6 +3024,9 @@ Return JSON only: {"reply":"...","actions":[...]}`,
     // Independent tools run in parallel.
     const results = await Promise.all(
       actions.map(async (action): Promise<ToolTrace> => {
+        if (action.tool === "get_cancellation_policy") {
+          return { tool: "get_cancellation_policy", input: {}, output: store.cancel_policy ?? null };
+        }
         if (action.tool === "get_service") {
           const svc =
             store.services.find((s) => s.id === action.service_id) ??
@@ -2599,7 +3112,10 @@ Return JSON only: {"reply":"...","actions":[...]}`,
       const status = results.find((t) => t.tool === "get_quote_status")?.output as
         | { id?: string; status?: string; deposit_cents?: number; balance_cents?: number; error?: string }
         | undefined;
-      if (status?.id && status.status) {
+      if (results.some((t) => t.tool === "get_cancellation_policy")) {
+        // Policy wording is deterministic — never the model's paraphrase.
+        reply = policyReply(store);
+      } else if (status?.id && status.status) {
         reply = `Quote **${status.id}** is **${status.status.replace(/_/g, " ")}** (deposit ${money(status.deposit_cents ?? 0)}, balance ${money(status.balance_cents ?? 0)}). Status only changes on PayPal evidence.`;
       }
     }

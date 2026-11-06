@@ -4,7 +4,7 @@
  * Any tool call that tries to pass a money field is rejected (and audited) — never silently ignored.
  */
 const MONEY_KEY =
-  /^(amount|amounts|amount_cents|amount_usd|price|prices|price_cents|price_usd|unit_price|total|total_cents|total_usd|deposit|deposit_cents|deposit_usd|deposit_pct|deposit_percent|balance|balance_cents|balance_usd|discount|discount_pct|discount_cents|value|cost|cost_cents|rate|fee|fees|override_price|custom_price|currency_value)$/i;
+  /^(amount|amounts|amount_cents|amount_usd|price|prices|price_cents|price_usd|unit_price|total|total_cents|total_usd|deposit|deposit_cents|deposit_usd|deposit_pct|deposit_percent|balance|balance_cents|balance_usd|discount|discount_pct|discount_cents|value|cost|cost_cents|rate|fee|fees|override_price|custom_price|currency_value|tip|tip_cents|tip_usd|tip_pct|keep_pct|keep_cents|refund|refund_cents|refund_usd)$/i;
 
 /** Returns dotted paths of money-like keys found anywhere in tool args. */
 export function findPriceOverrides(args: unknown, path = ""): string[] {

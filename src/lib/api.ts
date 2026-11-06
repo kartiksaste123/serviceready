@@ -18,6 +18,7 @@ import type {
   Stats,
   ToolTrace,
 } from "./types";
+import type { CancelReason } from "./cancel-policy";
 
 export const USE_MOCKS = import.meta.env["VITE_USE_MOCKS"] !== "false";
 // Optional absolute origin for an external backend. Defaults to same-origin (Render serves UI + /api).
@@ -127,8 +128,19 @@ export const api = {
       `/api/quotes/${enc(id)}/deposit/capture`,
       { order_id },
     ),
-  cancelQuote: (id: string) =>
-    m<QuoteDetail>(() => mock.cancelQuote(id), "POST", `/api/quotes/${enc(id)}/cancel`),
+  cancelQuote: (id: string, reason: CancelReason = "client_cancel") =>
+    m<QuoteDetail>(() => mock.cancelQuote(id, reason), "POST", `/api/quotes/${enc(id)}/cancel`, {
+      reason,
+    }),
+  /** Client-chosen tip on the final bill (amount or % of the total). */
+  setTip: (id: string, b: { tip_cents?: number; tip_pct?: number }) =>
+    m<QuoteDetail>(() => mock.setTip(id, b), "POST", `/api/quotes/${enc(id)}/tip`, b),
+  tamperDemo: (quote_id?: string) =>
+    m<{ checks: { check: string; ok: boolean; detail: string }[]; quote?: unknown }>(
+      () => mock.tamperDemo(),
+      "GET",
+      `/api/judges/tamper-demo${quote_id ? `?quote_id=${enc(quote_id)}` : ""}`,
+    ),
   /** Demo/sandbox only: simulates the INVOICING.INVOICE.PAID webhook. Real mode relies on PayPal webhooks. */
   simulateBalancePaid: (id: string) =>
     m<QuoteDetail>(

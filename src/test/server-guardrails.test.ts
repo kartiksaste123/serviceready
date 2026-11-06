@@ -183,3 +183,71 @@ describe("collections risk + deposit intent policy", () => {
     expect(depositIntentFor(600_00, 0)).toBe("CAPTURE");
   });
 });
+
+const { quoteSig, orderFingerprint } = await import("../server/fingerprint");
+describe("tamper-proofing on the live money path", () => {
+  const seedQuote = (patch: Record<string, unknown> = {}) => {
+    const q = {
+      id: "q-t1",
+      seller_id: "sel",
+      service_id: "svc",
+      service_title: "Brand kit",
+      client_name: "Sam",
+      client_email: "sam@example.com",
+      line_items: [{ label: "Brand kit", amount_cents: 1350_00 }],
+      total_cents: 1350_00,
+      deposit_cents: 675_00,
+      balance_cents: 675_00,
+      status: "quoted",
+      source: "mcp",
+      approval_url: "",
+    };
+    const row = { ...q, price_sig: quoteSig(q), ...patch };
+    tables["quotes"]!.push(row);
+    return row;
+  };
+
+  it("refuses to create a PayPal order for a quote edited to $1", async () => {
+    seedQuote({ deposit_cents: 1_00, balance_cents: 1349_00 });
+    await expect(live.createDepositOrder("q-t1")).rejects.toMatchObject({ status: 409 });
+    expect(tables["agent_events"]!.some((e) => e["tool"] === "guardrail.tamper_blocked")).toBe(true);
+    expect(tables["payments"]).toHaveLength(0);
+  });
+
+  it("refuses to capture when PayPal's order amount doesn't match the stored fingerprint", async () => {
+    seedQuote();
+    tables["payments"]!.push({
+      id: "pay-1",
+      quote_id: "q-t1",
+      kind: "deposit",
+      amount_cents: 675_00,
+      status: "CREATED",
+      paypal_order_id: "ORDER-T",
+      intent: "CAPTURE",
+      fingerprint: orderFingerprint({
+        quote_id: "q-t1",
+        kind: "deposit",
+        amount_cents: 675_00,
+        currency: "USD",
+        intent: "CAPTURE",
+      }),
+    });
+    getOrder.mockResolvedValue({
+      id: "ORDER-T",
+      status: "APPROVED",
+      intent: "CAPTURE",
+      customId: "q-t1",
+      amountCents: 1_00,
+      currency: "USD",
+    });
+    await expect(live.captureDeposit("q-t1", "ORDER-T")).rejects.toMatchObject({ status: 409 });
+    const q = tables["quotes"]!.find((r) => r["id"] === "q-t1")!;
+    expect(q["status"]).toBe("quoted");
+  });
+
+  it("tamper demo reports every lock as blocking", async () => {
+    const r = await live.tamperDemo();
+    expect(r.checks.length).toBeGreaterThanOrEqual(4);
+    expect(r.checks.every((c) => c.ok)).toBe(true);
+  });
+});

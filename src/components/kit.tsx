@@ -89,6 +89,10 @@ const payLabels: Record<string, string> = {
   CREATED: "Checkout started",
   VOIDED: "Voided",
   SENT: "Sent",
+  AUTHORIZED: "Held",
+  REFUNDED: "Refunded",
+  PARTIALLY_REFUNDED: "Part refunded",
+  PARTIALLY_CAPTURED: "Fee captured",
 };
 export function PayStatus({ status }: { status?: string | undefined }) {
   const ok = status === "COMPLETED" || status === "PAID";

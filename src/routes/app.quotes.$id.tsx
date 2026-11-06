@@ -11,8 +11,17 @@ import {
   Play,
   RefreshCw,
   Send,
+  ShieldCheck,
+  ShieldAlert,
   XCircle,
 } from "lucide-react";
+import {
+  decideCancel,
+  describeCancelPolicy,
+  normalizePolicy,
+  type CancelReason,
+} from "@/lib/cancel-policy";
+import { finalBill } from "@/lib/tip";
 import { toast } from "sonner";
 import { api, USE_MOCKS } from "@/lib/api";
 import type { AgentRun, Quote, QuoteDetail } from "@/lib/types";
@@ -86,6 +95,7 @@ function Detail() {
     meta: { silent: true },
   });
   const [confirm, setConfirm] = useState<null | "deliver" | "cancel">(null);
+  const [reason, setReason] = useState<CancelReason>("client_cancel");
   const [paste, setPaste] = useState("");
   const [run, setRun] = useState<AgentRun | null>(null);
   useEffect(() => {
@@ -114,17 +124,11 @@ function Detail() {
     },
   });
   const cancel = useMutation({
-    mutationFn: () => api.cancelQuote(id),
+    mutationFn: () => api.cancelQuote(id, reason),
     onSuccess: (d) => {
       applyDetail(d);
-      toast(
-        d.payments.some((p) => p.kind === "deposit" && p.status === "REFUNDED")
-          ? "Booking cancelled — deposit refunded on PayPal"
-          : d.payments.some((p) => p.kind === "deposit" && p.status === "VOIDED") &&
-              d.events.some((e) => e.tool === "paypal.authorizations.void")
-            ? "Booking cancelled — held deposit voided on PayPal"
-            : "Quote cancelled",
-      );
+      const rule = [...d.events].reverse().find((e) => e.tool?.startsWith("cancel_policy."));
+      toast(rule?.text?.replace(/^Policy rule fired: /, "Cancelled · ") ?? "Quote cancelled");
     },
   });
   const startWork = useMutation({
@@ -193,6 +197,23 @@ function Detail() {
   const heldDeposit = data.payments.find((p) => p.kind === "deposit" && p.status === "AUTHORIZED");
   const canCollect = !!bal && q.status !== "cancelled";
   const quoteLink = absoluteUrl(q.approval_url);
+  const paidDeposit = data.payments.find(
+    (p) => p.kind === "deposit" && (p.status === "COMPLETED" || p.status === "AUTHORIZED"),
+  );
+  const policy = normalizePolicy(q.cancel_policy);
+  const preview = decideCancel({
+    policy,
+    reason,
+    deposit_cents: paidDeposit?.amount_cents ?? 0,
+    deposit_state: !paidDeposit ? "none" : paidDeposit.status === "AUTHORIZED" ? "held" : "captured",
+    deposit_paid_at: q.deposit_paid_at ?? paidDeposit?.updated_at ?? null,
+    work_started:
+      !!q.work_started_at ||
+      q.status === "delivered" ||
+      (paidDeposit?.intent === "AUTHORIZE" && paidDeposit.status === "COMPLETED"),
+  });
+  const tip = q.tip_cents ?? 0;
+  const bill = finalBill(q.balance_cents, tip);
 
   return (
     <>
@@ -209,6 +230,19 @@ function Detail() {
             <h1 className="text-2xl font-bold tracking-tight">{q.client_name}</h1>
             <StatusBadge status={q.status} />
             <SourceBadge source={q.source} />
+            {q.integrity === "tampered" ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-danger-bg px-2 py-1 text-xs font-semibold text-danger">
+                <ShieldAlert className="size-3.5" aria-hidden="true" /> Amounts tampered · payments blocked
+              </span>
+            ) : (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground"
+                title="Amounts are HMAC-signed from the catalog and re-checked against the PayPal order before any capture"
+              >
+                <ShieldCheck className="size-3.5" aria-hidden="true" />
+                {q.integrity === "signed" ? "Signed amounts" : "Catalog-priced"}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {q.service_title} · <span className="tabular-nums">{money(q.total_cents)}</span> ·
@@ -221,13 +255,14 @@ function Detail() {
             className="btn-glass btn-sm"
             disabled={refresh.isPending}
             onClick={() => refresh.mutate()}
+            title="Re-reads the PayPal order / invoice — use if a webhook was missed"
           >
             {refresh.isPending ? (
               <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
             ) : (
               <RefreshCw className="size-3.5" aria-hidden="true" />
             )}
-            Check payment status
+            Check PayPal
           </button>
           {(q.status === "quoted" ||
             q.status === "deposit_paid" ||
@@ -243,11 +278,7 @@ function Detail() {
               ) : (
                 <XCircle className="size-3.5" aria-hidden="true" />
               )}
-              {q.status === "quoted"
-                ? "Cancel quote"
-                : heldDeposit
-                  ? "Cancel & void hold"
-                  : "Cancel & refund deposit"}
+              {q.status === "quoted" ? "Cancel quote" : "Cancel booking…"}
             </button>
           )}
           {heldDeposit && q.status === "deposit_paid" && (
@@ -308,7 +339,14 @@ function Detail() {
             </div>
             <div className="bg-card p-3">
               <dt className="text-xs text-muted-foreground">Balance</dt>
-              <dd className="mt-0.5 font-semibold tabular-nums">{money(q.balance_cents)}</dd>
+              <dd className="mt-0.5 font-semibold tabular-nums">
+                {money(q.balance_cents)}
+                {tip > 0 && (
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    + {money(tip)} tip
+                  </span>
+                )}
+              </dd>
             </div>
           </dl>
           {data.payments.length === 0 ? (
@@ -331,7 +369,20 @@ function Detail() {
                     {p.paypal_order_id && <span>Order {p.paypal_order_id}</span>}
                     {p.paypal_capture_id && <span>Capture {p.paypal_capture_id}</span>}
                     {p.paypal_invoice_id && <span>Invoice {p.paypal_invoice_id}</span>}
+                    {p.fingerprint_short && (
+                      <span title="HMAC(quote id + amount + currency + intent), re-checked against PayPal before capture">
+                        Fingerprint {p.fingerprint_short}…
+                      </span>
+                    )}
                   </div>
+                  {(p.kept_cents != null || p.refunded_cents != null) && (
+                    <p className="mt-2 text-xs">
+                      Policy outcome: kept{" "}
+                      <span className="font-semibold tabular-nums">{money(p.kept_cents ?? 0)}</span> ·
+                      returned to client{" "}
+                      <span className="font-semibold tabular-nums">{money(p.refunded_cents ?? 0)}</span>
+                    </p>
+                  )}
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                     <span className="flex items-center gap-2">
                       <PayStatus status={p.status} />
@@ -394,6 +445,10 @@ function Detail() {
               <dd className="mt-0.5 text-muted-foreground">{q.scope_summary}</dd>
             </div>
           </dl>
+          <p className="mt-4 border-t border-border pt-4 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Cancellation policy: </span>
+            {describeCancelPolicy(policy)}
+          </p>
           {q.status !== "cancelled" && (
             <div className="mt-4 border-t border-border pt-4">
               <p className="text-xs font-medium text-muted-foreground">Client quote link</p>
@@ -519,27 +574,94 @@ function Detail() {
           {confirm === "cancel" ? (
             <AlertDialogHeader>
               <AlertDialogTitle>
-                {q.status === "quoted"
-                  ? "Cancel this quote?"
-                  : heldDeposit
-                    ? "Cancel booking and void the held deposit?"
-                    : "Cancel booking and refund deposit?"}
+                {q.status === "quoted" ? "Cancel this quote?" : "Cancel this booking?"}
               </AlertDialogTitle>
-              <AlertDialogDescription className="text-muted-foreground">
-                {q.status === "quoted"
-                  ? `${q.client_name} will no longer be able to pay the deposit. No money has been taken.`
-                  : heldDeposit
-                    ? `PayPal is only holding ${money(heldDeposit.amount_cents)} for ${q.client_name} — the authorization is voided and they're never charged.`
-                    : `PayPal Agent Toolkit will refund the deposit capture for ${q.client_name}. Status flips to cancelled from PayPal refund evidence.`}
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  {q.status === "quoted" ? (
+                    <p>
+                      {q.client_name} will no longer be able to pay the deposit. No money has been
+                      taken.
+                    </p>
+                  ) : (
+                    <>
+                      <fieldset>
+                        <legend className="mb-1.5 font-medium text-foreground">Why?</legend>
+                        <div className="grid gap-1.5 sm:grid-cols-3" role="radiogroup">
+                          {(
+                            [
+                              ["client_cancel", "Client cancelled"],
+                              ["no_show", "Client no-show"],
+                              ["seller_cancel", "I'm cancelling"],
+                            ] as const
+                          ).map(([r, l]) => (
+                            <button
+                              key={r}
+                              type="button"
+                              role="radio"
+                              aria-checked={reason === r}
+                              onClick={() => setReason(r)}
+                              className={`rounded-lg border px-2.5 py-2 text-left text-xs font-semibold ${reason === r ? "border-foreground bg-primary text-primary-foreground" : "border-input hover:bg-muted"}`}
+                            >
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </fieldset>
+                      <div className="glass-row p-3 text-foreground" aria-live="polite">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Rule that will fire: {preview.rule.replace(/_/g, " ")}
+                        </p>
+                        <p className="mt-1">{preview.explanation}</p>
+                        <p className="mt-2 grid grid-cols-2 gap-2 text-xs tabular-nums">
+                          <span>
+                            You keep <b>{money(preview.keep_cents)}</b>
+                          </span>
+                          <span>
+                            Client gets back <b>{money(preview.release_cents)}</b>
+                          </span>
+                        </p>
+                      </div>
+                      <p className="text-xs">{describeCancelPolicy(policy)}</p>
+                    </>
+                  )}
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
           ) : (
             <AlertDialogHeader>
-              <AlertDialogTitle>Mark delivered and invoice the balance?</AlertDialogTitle>
-              <AlertDialogDescription className="text-muted-foreground">
-                {q.balance_cents > 0
-                  ? `${heldDeposit ? `The held ${money(heldDeposit.amount_cents)} deposit is captured first, then a` : "A"} PayPal invoice for ${money(q.balance_cents)} will be sent to ${q.client_email}.`
-                  : "The deposit covered the full price, so the booking will be closed as paid."}
+              <AlertDialogTitle>Mark delivered and send the final bill?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  {heldDeposit && (
+                    <p>The held {money(heldDeposit.amount_cents)} deposit is captured first.</p>
+                  )}
+                  {bill.total_cents > 0 ? (
+                    <>
+                      <dl className="glass-row space-y-1 p-3 tabular-nums text-foreground">
+                        {bill.lines
+                          .filter((l) => l.amount_cents > 0)
+                          .map((l) => (
+                            <div key={l.label} className="flex justify-between">
+                              <dt>{l.label}</dt>
+                              <dd>{money(l.amount_cents)}</dd>
+                            </div>
+                          ))}
+                        <div className="flex justify-between border-t border-border pt-1 font-semibold">
+                          <dt>PayPal invoice to {q.client_email}</dt>
+                          <dd>{money(bill.total_cents)}</dd>
+                        </div>
+                      </dl>
+                      <p className="text-xs">
+                        {tip > 0
+                          ? "Tip was chosen by the client on their quote page."
+                          : "No tip yet — the client can still add one on the PayPal invoice."}
+                      </p>
+                    </>
+                  ) : (
+                    <p>The deposit covered the full price, so the booking will be closed as paid.</p>
+                  )}
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
           )}
@@ -554,11 +676,17 @@ function Detail() {
               {confirm === "cancel"
                 ? q.status === "quoted"
                   ? "Cancel quote"
-                  : heldDeposit
-                    ? "Void & cancel"
-                    : "Refund & cancel"
-                : q.balance_cents > 0
-                  ? "Send invoice"
+                  : preview.action === "void"
+                    ? "Void hold & cancel"
+                    : preview.action === "refund_full"
+                      ? "Refund & cancel"
+                      : preview.action === "keep_full"
+                        ? "Keep deposit & cancel"
+                        : preview.action === "capture_full"
+                          ? "Capture hold & cancel"
+                          : "Apply policy & cancel"
+                : bill.total_cents > 0
+                  ? `Send ${money(bill.total_cents)} invoice`
                   : "Close booking"}
             </AlertDialogAction>
           </AlertDialogFooter>

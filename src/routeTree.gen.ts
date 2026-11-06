@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
+import { Route as JudgesRouteImport } from './routes/judges'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardRouteImport } from './routes/onboard'
 import { Route as ApiEventsRouteImport } from './routes/api.events'
@@ -35,6 +36,7 @@ import { Route as ApiAgentChatRouteImport } from './routes/api.agent.chat'
 import { Route as ApiCatalogParseRouteImport } from './routes/api.catalog.parse'
 import { Route as ApiCatalogPublishRouteImport } from './routes/api.catalog.publish'
 import { Route as ApiDemoResetRouteImport } from './routes/api.demo.reset'
+import { Route as ApiJudgesTamperDemoRouteImport } from './routes/api.judges.tamper-demo'
 import { Route as ApiPaypalClientTokenRouteImport } from './routes/api.paypal.client-token'
 import { Route as ApiPaypalConfigRouteImport } from './routes/api.paypal.config'
 import { Route as ApiPaypalWebhookRouteImport } from './routes/api.paypal.webhook'
@@ -53,6 +55,7 @@ import { Route as ApiQuotesIdDeliverRouteImport } from './routes/api.quotes.$id.
 import { Route as ApiQuotesIdInvoiceRouteImport } from './routes/api.quotes.$id.invoice'
 import { Route as ApiQuotesIdRepliesRouteImport } from './routes/api.quotes.$id.replies'
 import { Route as ApiQuotesIdStartWorkRouteImport } from './routes/api.quotes.$id.start-work'
+import { Route as ApiQuotesIdTipRouteImport } from './routes/api.quotes.$id.tip'
 import { Route as ApiDemoQuotesIdPayBalanceRouteImport } from './routes/api.demo.quotes.$id.pay-balance'
 import { Route as ApiQuotesIdCollectionsRunRouteImport } from './routes/api.quotes.$id.collections.run'
 import { Route as ApiQuotesIdDepositCaptureRouteImport } from './routes/api.quotes.$id.deposit.capture'
@@ -66,6 +69,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppRoute = AppRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JudgesRoute = JudgesRouteImport.update({
+  id: '/judges',
+  path: '/judges',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -188,6 +196,11 @@ const ApiDemoResetRoute = ApiDemoResetRouteImport.update({
   path: '/api/demo/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiJudgesTamperDemoRoute = ApiJudgesTamperDemoRouteImport.update({
+  id: '/api/judges/tamper-demo',
+  path: '/api/judges/tamper-demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPaypalClientTokenRoute = ApiPaypalClientTokenRouteImport.update({
   id: '/api/paypal/client-token',
   path: '/api/paypal/client-token',
@@ -278,6 +291,11 @@ const ApiQuotesIdStartWorkRoute = ApiQuotesIdStartWorkRouteImport.update({
   path: '/start-work',
   getParentRoute: () => ApiQuotesIdRoute,
 } as any)
+const ApiQuotesIdTipRoute = ApiQuotesIdTipRouteImport.update({
+  id: '/tip',
+  path: '/tip',
+  getParentRoute: () => ApiQuotesIdRoute,
+} as any)
 const ApiDemoQuotesIdPayBalanceRoute =
   ApiDemoQuotesIdPayBalanceRouteImport.update({
     id: '/api/demo/quotes/$id/pay-balance',
@@ -305,6 +323,7 @@ const ApiQuotesIdDepositOrderRoute = ApiQuotesIdDepositOrderRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/judges': typeof JudgesRoute
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/api/events': typeof ApiEventsRoute
@@ -329,6 +348,7 @@ export interface FileRoutesByFullPath {
   '/api/catalog/parse': typeof ApiCatalogParseRoute
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
+  '/api/judges/tamper-demo': typeof ApiJudgesTamperDemoRoute
   '/api/paypal/client-token': typeof ApiPaypalClientTokenRoute
   '/api/paypal/config': typeof ApiPaypalConfigRoute
   '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
@@ -347,6 +367,7 @@ export interface FileRoutesByFullPath {
   '/api/quotes/$id/invoice': typeof ApiQuotesIdInvoiceRoute
   '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
   '/api/quotes/$id/start-work': typeof ApiQuotesIdStartWorkRoute
+  '/api/quotes/$id/tip': typeof ApiQuotesIdTipRoute
   '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
   '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
   '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
@@ -354,6 +375,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/judges': typeof JudgesRoute
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/api/events': typeof ApiEventsRoute
@@ -378,6 +400,7 @@ export interface FileRoutesByTo {
   '/api/catalog/parse': typeof ApiCatalogParseRoute
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
+  '/api/judges/tamper-demo': typeof ApiJudgesTamperDemoRoute
   '/api/paypal/client-token': typeof ApiPaypalClientTokenRoute
   '/api/paypal/config': typeof ApiPaypalConfigRoute
   '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
@@ -396,6 +419,7 @@ export interface FileRoutesByTo {
   '/api/quotes/$id/invoice': typeof ApiQuotesIdInvoiceRoute
   '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
   '/api/quotes/$id/start-work': typeof ApiQuotesIdStartWorkRoute
+  '/api/quotes/$id/tip': typeof ApiQuotesIdTipRoute
   '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
   '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
   '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
@@ -405,6 +429,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/judges': typeof JudgesRoute
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/api/events': typeof ApiEventsRoute
@@ -429,6 +454,7 @@ export interface FileRoutesById {
   '/api/catalog/parse': typeof ApiCatalogParseRoute
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
+  '/api/judges/tamper-demo': typeof ApiJudgesTamperDemoRoute
   '/api/paypal/client-token': typeof ApiPaypalClientTokenRoute
   '/api/paypal/config': typeof ApiPaypalConfigRoute
   '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
@@ -447,6 +473,7 @@ export interface FileRoutesById {
   '/api/quotes/$id/invoice': typeof ApiQuotesIdInvoiceRoute
   '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
   '/api/quotes/$id/start-work': typeof ApiQuotesIdStartWorkRoute
+  '/api/quotes/$id/tip': typeof ApiQuotesIdTipRoute
   '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
   '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
   '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
@@ -457,6 +484,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/judges'
     | '/login'
     | '/onboard'
     | '/api/events'
@@ -481,6 +509,7 @@ export interface FileRouteTypes {
     | '/api/catalog/parse'
     | '/api/catalog/publish'
     | '/api/demo/reset'
+    | '/api/judges/tamper-demo'
     | '/api/paypal/client-token'
     | '/api/paypal/config'
     | '/api/paypal/webhook'
@@ -499,6 +528,7 @@ export interface FileRouteTypes {
     | '/api/quotes/$id/invoice'
     | '/api/quotes/$id/replies'
     | '/api/quotes/$id/start-work'
+    | '/api/quotes/$id/tip'
     | '/api/demo/quotes/$id/pay-balance'
     | '/api/quotes/$id/collections/run'
     | '/api/quotes/$id/deposit/capture'
@@ -506,6 +536,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/judges'
     | '/login'
     | '/onboard'
     | '/api/events'
@@ -530,6 +561,7 @@ export interface FileRouteTypes {
     | '/api/catalog/parse'
     | '/api/catalog/publish'
     | '/api/demo/reset'
+    | '/api/judges/tamper-demo'
     | '/api/paypal/client-token'
     | '/api/paypal/config'
     | '/api/paypal/webhook'
@@ -548,6 +580,7 @@ export interface FileRouteTypes {
     | '/api/quotes/$id/invoice'
     | '/api/quotes/$id/replies'
     | '/api/quotes/$id/start-work'
+    | '/api/quotes/$id/tip'
     | '/api/demo/quotes/$id/pay-balance'
     | '/api/quotes/$id/collections/run'
     | '/api/quotes/$id/deposit/capture'
@@ -556,6 +589,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/judges'
     | '/login'
     | '/onboard'
     | '/api/events'
@@ -580,6 +614,7 @@ export interface FileRouteTypes {
     | '/api/catalog/parse'
     | '/api/catalog/publish'
     | '/api/demo/reset'
+    | '/api/judges/tamper-demo'
     | '/api/paypal/client-token'
     | '/api/paypal/config'
     | '/api/paypal/webhook'
@@ -598,6 +633,7 @@ export interface FileRouteTypes {
     | '/api/quotes/$id/invoice'
     | '/api/quotes/$id/replies'
     | '/api/quotes/$id/start-work'
+    | '/api/quotes/$id/tip'
     | '/api/demo/quotes/$id/pay-balance'
     | '/api/quotes/$id/collections/run'
     | '/api/quotes/$id/deposit/capture'
@@ -607,6 +643,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  JudgesRoute: typeof JudgesRoute
   LoginRoute: typeof LoginRoute
   OnboardRoute: typeof OnboardRoute
   ApiEventsRoute: typeof ApiEventsRoute
@@ -624,6 +661,7 @@ export interface RootRouteChildren {
   ApiCatalogParseRoute: typeof ApiCatalogParseRoute
   ApiCatalogPublishRoute: typeof ApiCatalogPublishRoute
   ApiDemoResetRoute: typeof ApiDemoResetRoute
+  ApiJudgesTamperDemoRoute: typeof ApiJudgesTamperDemoRoute
   ApiPaypalClientTokenRoute: typeof ApiPaypalClientTokenRoute
   ApiPaypalConfigRoute: typeof ApiPaypalConfigRoute
   ApiPaypalWebhookRoute: typeof ApiPaypalWebhookRoute
@@ -646,6 +684,13 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/judges': {
+      id: '/judges'
+      path: '/judges'
+      fullPath: '/judges'
+      preLoaderRoute: typeof JudgesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -816,6 +861,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDemoResetRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/judges/tamper-demo': {
+      id: '/api/judges/tamper-demo'
+      path: '/api/judges/tamper-demo'
+      fullPath: '/api/judges/tamper-demo'
+      preLoaderRoute: typeof ApiJudgesTamperDemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/paypal/client-token': {
       id: '/api/paypal/client-token'
       path: '/api/paypal/client-token'
@@ -942,6 +994,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiQuotesIdStartWorkRouteImport
       parentRoute: typeof ApiQuotesIdRoute
     }
+    '/api/quotes/$id/tip': {
+      id: '/api/quotes/$id/tip'
+      path: '/tip'
+      fullPath: '/api/quotes/$id/tip'
+      preLoaderRoute: typeof ApiQuotesIdTipRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
     '/api/demo/quotes/$id/pay-balance': {
       id: '/api/demo/quotes/$id/pay-balance'
       path: '/api/demo/quotes/$id/pay-balance'
@@ -1017,6 +1076,7 @@ interface ApiQuotesIdRouteChildren {
   ApiQuotesIdInvoiceRoute: typeof ApiQuotesIdInvoiceRoute
   ApiQuotesIdRepliesRoute: typeof ApiQuotesIdRepliesRoute
   ApiQuotesIdStartWorkRoute: typeof ApiQuotesIdStartWorkRoute
+  ApiQuotesIdTipRoute: typeof ApiQuotesIdTipRoute
   ApiQuotesIdCollectionsRunRoute: typeof ApiQuotesIdCollectionsRunRoute
   ApiQuotesIdDepositCaptureRoute: typeof ApiQuotesIdDepositCaptureRoute
   ApiQuotesIdDepositOrderRoute: typeof ApiQuotesIdDepositOrderRoute
@@ -1028,6 +1088,7 @@ const ApiQuotesIdRouteChildren: ApiQuotesIdRouteChildren = {
   ApiQuotesIdInvoiceRoute: ApiQuotesIdInvoiceRoute,
   ApiQuotesIdRepliesRoute: ApiQuotesIdRepliesRoute,
   ApiQuotesIdStartWorkRoute: ApiQuotesIdStartWorkRoute,
+  ApiQuotesIdTipRoute: ApiQuotesIdTipRoute,
   ApiQuotesIdCollectionsRunRoute: ApiQuotesIdCollectionsRunRoute,
   ApiQuotesIdDepositCaptureRoute: ApiQuotesIdDepositCaptureRoute,
   ApiQuotesIdDepositOrderRoute: ApiQuotesIdDepositOrderRoute,
@@ -1090,6 +1151,7 @@ const ApiPublicSlugRouteWithChildren = ApiPublicSlugRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  JudgesRoute: JudgesRoute,
   LoginRoute: LoginRoute,
   OnboardRoute: OnboardRoute,
   ApiEventsRoute: ApiEventsRoute,
@@ -1107,6 +1169,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCatalogParseRoute: ApiCatalogParseRoute,
   ApiCatalogPublishRoute: ApiCatalogPublishRoute,
   ApiDemoResetRoute: ApiDemoResetRoute,
+  ApiJudgesTamperDemoRoute: ApiJudgesTamperDemoRoute,
   ApiPaypalClientTokenRoute: ApiPaypalClientTokenRoute,
   ApiPaypalConfigRoute: ApiPaypalConfigRoute,
   ApiPaypalWebhookRoute: ApiPaypalWebhookRoute,

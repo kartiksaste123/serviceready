@@ -1,3 +1,4 @@
+import type { CancelPolicy } from "./cancel-policy";
 export type QuoteStatus =
   "quoted" | "deposit_paid" | "delivered" | "balance_invoiced" | "paid" | "cancelled";
 export type Source = "web" | "mcp" | "webmcp" | "agent_sim";
@@ -6,6 +7,8 @@ export interface SellerRules {
   reminder_tone: "friendly" | "neutral" | "firm";
   max_reminders: number;
   wait_days_before_nudge: number;
+  /** Deterministic cancellation / no-show policy (src/lib/cancel-policy.ts). */
+  cancel_policy?: CancelPolicy;
 }
 export interface Seller {
   id: string;
@@ -66,6 +69,14 @@ export interface Quote {
   updated_at: string;
   /** How the deposit is taken: CAPTURE now, or AUTHORIZE (held) and captured when work starts. */
   deposit_intent?: "CAPTURE" | "AUTHORIZE";
+  /** Client-chosen tip added to the final bill (cents). */
+  tip_cents?: number;
+  /** Policy snapshot taken when the quote was priced — later rule edits never apply retroactively. */
+  cancel_policy?: CancelPolicy;
+  deposit_paid_at?: string | null;
+  work_started_at?: string | null;
+  /** "signed" when the server HMAC over the amounts verifies. */
+  integrity?: "signed" | "unsigned" | "tampered";
 }
 export interface Payment {
   id: string;
@@ -79,6 +90,11 @@ export interface Payment {
   intent?: "CAPTURE" | "AUTHORIZE";
   paypal_invoice_id?: string;
   invoice_url?: string;
+  /** Short prefix of the server order fingerprint (HMAC) — full value never leaves the server. */
+  fingerprint_short?: string;
+  /** Cancellation outcome: what the seller kept vs. what went back to the client. */
+  kept_cents?: number;
+  refunded_cents?: number;
   updated_at: string;
 }
 export interface AgentEvent {
@@ -150,6 +166,7 @@ export interface PublicStore {
   seller: Pick<Seller, "name" | "slug" | "tagline">;
   services: Service[];
   agent: { mcp_url: string; webmcp_tools: string[] };
+  cancel_policy?: CancelPolicy & { summary: string };
 }
 export interface ChatMsg {
   role: "user" | "assistant";

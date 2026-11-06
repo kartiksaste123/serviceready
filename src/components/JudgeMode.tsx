@@ -5,17 +5,17 @@ import { copyText } from "@/lib/clipboard";
 import { USE_MOCKS } from "@/lib/api";
 
 /** Public PayPal sandbox buyer (already published in README / Devpost for judges). Sandbox only. */
-const SANDBOX_BUYER_EMAIL =
+export const SANDBOX_BUYER_EMAIL =
   String(import.meta.env["VITE_PAYPAL_SANDBOX_BUYER_EMAIL"] ?? "") ||
   "sb-flkqr53721283@personal.example.com";
-const SANDBOX_BUYER_PASSWORD = "PcS5.(%K";
+export const SANDBOX_BUYER_PASSWORD = "PcS5.(%K";
 const KEY = "sr_judge_mode_v2";
 
 const STEPS: Array<{ label: string; to: string }> = [
   { label: "Ask the storefront AI for a logo or brand kit (give a name + email)", to: "/s/maya-rao-studio" },
   { label: "Pay or authorize the deposit with the sandbox buyer below", to: "/s/maya-rao-studio" },
   { label: "Seller desk: Start work → Mark delivered (PayPal invoice)", to: "/login?demo=1&next=/app" },
-  { label: "Pay invoice as the buyer, then Check payment status", to: "/login?demo=1&next=/app" },
+  { label: "Pay invoice as the buyer, then Check PayPal", to: "/login?demo=1&next=/app" },
 ];
 
 /**
@@ -99,6 +99,9 @@ export function JudgeMode() {
           </button>
         </span>
       </div>
+      <a href="/judges" className="mb-2 block font-semibold text-link">
+        Full judge page (MCP snippet, tamper test) →
+      </a>
       <ol className="mb-2 list-decimal space-y-1 pl-4">
         {STEPS.map((s) => (
           <li key={s.label}>

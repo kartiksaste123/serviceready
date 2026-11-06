@@ -70,6 +70,8 @@
 
 ---
 
+**Optional (5s):** on the quote page pick a **15% tip** — “the tip becomes its own line on the PayPal invoice.”
+
 ### 1:20–1:50 — Deliver + PayPal Invoicing v2
 
 **On screen:** `/login` → Continue as demo → seller desk `/app` → open the booking → **Mark delivered & invoice balance**. Overlay: `PayPal Invoicing v2`.
@@ -77,7 +79,7 @@
 **Say:**  
 “As the seller, I mark the work delivered. ServiceReady creates and sends a real **PayPal invoice** for the remaining balance.”
 
-**Do:** Show invoice link / invoice id in the UI. Optionally open the sandbox invoice page briefly.
+**Do:** Show the final-bill breakdown in the confirm dialog (balance + tip), then the invoice link / id. Optionally open the sandbox invoice page briefly.
 
 ---
 
@@ -97,6 +99,20 @@
 
 ---
 
+### Optional 10s — Cancellation policy (use a second paid booking)
+
+**On screen:** desk → **Cancel booking…** → pick **Client no-show**. Dialog previews “Rule that will fire: no show — you keep $X”. Confirm → timeline shows `cancel_policy.no_show` then `paypal.authorizations.capture` (or `create_refund`).
+
+**Say:**  
+“Cancellations follow the seller’s policy — deterministic, not AI. PayPal voids, partially captures or refunds, and the audit trail shows which rule fired.”
+
+### Optional 8s — Tamper test
+
+**On screen:** `/judges` → **Run tamper test** → four green “Blocked” rows.
+
+**Say:**  
+“Try to make it a dollar: agent price fields are rejected, the quote is HMAC-signed, and the PayPal order fingerprint is re-checked before capture.”
+
 ### 2:20–2:35 — MCP mandate (10–15s, optional if tight)
 
 **On screen:** Terminal or Connect page — `create_payment_mandate` → `create_deposit_link` with `mandate_key`. Overlay: `Spend limit · revocable`.
@@ -114,7 +130,8 @@
 ServiceReady
 AI (xAI Grok): catalog · agent chat · collections drafts
 Agents: MCP mandate → create_deposit_link · Vault rebooking · price-override guardrail
-PayPal: Orders v2 capture/authorize · JS SDK v6 · Invoicing v2 · Agent Toolkit · signed Webhooks
+PayPal: Orders v2 capture/authorize · JS SDK v6 · Invoicing v2 (+tip) · Agent Toolkit · signed Webhooks
+Rules: cancel/no-show policy → void · partial capture · refund · HMAC-signed amounts
 Supabase + TanStack Start on Render · MIT
 Demo: serviceready.onrender.com
 Repo: github.com/kartiksaste123/serviceready

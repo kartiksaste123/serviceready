@@ -148,6 +148,9 @@ function Home() {
                   Open demo workspace
                 </Link>
               </div>
+              <a href="/judges" className="mt-3 inline-block text-sm text-link">
+                Judges: step-by-step path, Claude MCP snippet &amp; “make it $1” tamper test →
+              </a>
               <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
                 <ShieldCheck className="size-4" />
                 Demo signs you into Maya Rao Studio — create your own account anytime.

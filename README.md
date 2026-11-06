@@ -1,5 +1,9 @@
 # ServiceReady
 
+![Unit tests](https://img.shields.io/badge/vitest-66%20passing-brightgreen)
+![PayPal](https://img.shields.io/badge/PayPal-sandbox%20live-003087)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
 **Deposit-before-work merchant storefront** — AI assistants discover services, request a quote, and collect a **PayPal deposit before work starts**. **PayPal evidence beats client claims.** AI never sets amounts (catalog prices only). After delivery, a real **PayPal invoice** covers the balance; reminders are drafted by AI and **human-approved**. Outside agents use MCP with a **revocable spend-limited payment mandate** before `create_deposit_link`.
 
 Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/).
@@ -8,6 +12,7 @@ Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/)
 - **Demo seller storefront:** https://serviceready.onrender.com/s/maya-rao-studio
 - **MCP server (for Claude / ChatGPT / Cursor):** `https://serviceready.onrender.com/mcp/maya-rao-studio`
 - **Deploy health:** https://serviceready.onrender.com/api/health
+- **Judge page (steps, sandbox creds, Claude MCP snippet, tamper test):** https://serviceready.onrender.com/judges
 - **License:** MIT
 
 ## Judge path (~3 minutes)
@@ -18,7 +23,9 @@ Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/)
 4. Log in with the **sandbox buyer** below and approve the payment (real PayPal sandbox popup).
 5. Open **Sign in** → **Continue as demo** (or use the demo credentials below) → seller desk → open the booking → (held deposits: **Start work · capture**) → **Mark delivered & invoice balance**.
 6. Open the PayPal invoice link and pay it as the same sandbox buyer.
-7. PayPal sends `INVOICING.INVOICE.PAID` to our webhook → status flips to paid (or press "Check payment" — both re-read the invoice from PayPal).
+7. PayPal sends `INVOICING.INVOICE.PAID` to our webhook → status flips to paid (or press **Check PayPal** — it re-reads open orders and the invoice from PayPal if a webhook was missed).
+8. Optional: on the quote page add a **tip** (10/15/20% or custom) before delivery — it becomes its own line on the PayPal final-bill invoice. On any paid booking, **Cancel booking…** → client cancel / no-show / seller cancel previews which **policy rule** fires, then PayPal void / partial capture / refund runs.
+9. Optional: `/judges` → **Run tamper test** shows "make it $1" being blocked four ways.
 
 > Tip: use the sandbox buyer email below as the client email so the PayPal invoice lands in that sandbox inbox.
 
@@ -55,6 +62,10 @@ Or hit **Continue as demo** on `/login`. Real sellers can **Create account** —
 | Cancel + refund | Agent Toolkit `create_refund` (Payments v2 fallback) on deposit capture | `cancelQuote` |
 | Reconciliation | **Webhooks** + `verify-webhook-signature`, then re-read PayPal | `POST /api/paypal/webhook` |
 | Agentic commerce | MCP: `create_payment_mandate` (spend limit + revocable key) → `create_deposit_link(mandate_key)`; optional `save_paypal_for_mandate` → `pay_deposit_with_saved_paypal` | `src/server/mcp.ts`, `src/server/mandates.ts` |
+| Cancellation policy | Seller sets free-cancel window (h), late-cancel keep %, no-show keep %. `decideCancel` picks the rule; held deposits → `authorizations/{id}/void` or partial `authorizations/{id}/capture` (`final_capture` releases the rest); captured deposits → full / partial Agent Toolkit `create_refund`. Policy is snapshotted on each quote; timeline logs `cancel_policy.<rule>`. MCP `get_cancellation_policy` + storefront agent quote it from structured fields only | `src/lib/cancel-policy.ts`, `cancelQuote` |
+| Final bill + tip | Client picks a tip on `/q/:id`; Invoicing v2 final bill = balance line + "Tip" line, `configuration.allow_tip` on. Held deposits are captured first (tips are never captured above an authorization) | `src/lib/tip.ts`, `setTip`, `deliver` |
+| Tamper-proofing | Quote amounts are **HMAC-signed** at pricing; order creation re-prices + verifies. Each PayPal order stores a **fingerprint** HMAC(quote id + kind + amount + currency + intent); before capture/authorize the order is re-read from PayPal and its fingerprint recomputed — mismatch → 409 + `guardrail.tamper_blocked` | `src/server/fingerprint.ts`, `GET /api/judges/tamper-demo` |
+| Idempotency | `PayPal-Request-Id` on order create/capture/authorize, authorization capture/void, refunds, invoice create/send, reminders | `src/server/paypal.ts` |
 | Money guardrails | Any agent/LLM tool call carrying a money field (`price`, `amount`, `total`, `deposit*`, `discount`…) is **rejected and audited** (`guardrail.price_override_blocked`). Amounts only come from the published catalog | `src/lib/guardrails.ts`, `mcp.ts`, `agentChat` |
 | Config | Public sandbox `client_id` | `GET /api/paypal/config` |
 
@@ -90,7 +101,7 @@ Without a key (or if the model call fails) the same endpoints fall back to deter
 
 ## MCP server (agentic commerce)
 
-`/mcp/:slug` speaks MCP over Streamable HTTP (stateless JSON-RPC 2.0). Tools: `list_services`, `get_service`, `request_quote`, `get_quote_status`, **`create_payment_mandate`**, **`get_payment_mandate`**, **`revoke_payment_mandate`**, **`create_deposit_link`** (requires `mandate_key`; deposit must fit remaining spend), **`save_paypal_for_mandate`** (Vault v3 approval link), **`pay_deposit_with_saved_paypal`**. Money-moving tools reject any price/amount argument. Seller catalog reads are cached in memory (30 s TTL, invalidated on catalog writes) so `tools/list` / `list_services` stay sub-second.
+`/mcp/:slug` speaks MCP over Streamable HTTP (stateless JSON-RPC 2.0). Tools: `list_services`, `get_service`, `request_quote`, `get_quote_status`, **`create_payment_mandate`**, **`get_payment_mandate`**, **`revoke_payment_mandate`**, **`get_cancellation_policy`**, **`create_deposit_link`** (requires `mandate_key`; deposit must fit remaining spend), **`save_paypal_for_mandate`** (Vault v3 approval link), **`pay_deposit_with_saved_paypal`**. Money-moving tools reject any price/amount argument. Seller catalog reads are cached in memory (30 s TTL, invalidated on catalog writes) so `tools/list` / `list_services` stay sub-second.
 
 ```json
 { "mcpServers": { "maya-rao-studio": { "command": "npx", "args": ["-y", "mcp-remote", "https://serviceready.onrender.com/mcp/maya-rao-studio"] } } }
@@ -148,6 +159,11 @@ Production is on **Render** (`https://serviceready.onrender.com`), not Lovable. 
 
 ## What's new during the hackathon
 
+- **Cancellation / no-show policy engine** (deterministic) → PayPal void, partial authorization capture, or full/partial refund; rule shown in the timeline
+- **Final bill with tip** on PayPal Invoicing v2
+- **Tamper-proofing:** HMAC-signed quotes + PayPal order fingerprints, `/judges` tamper test
+- **`/judges` page** and a **Check PayPal** webhook fallback on the quote page and desk
+
 - Real PayPal sandbox Orders create/capture with **JS SDK v6** (v5 fallback); **AUTHORIZE → capture on start / void on cancel** for large deposits
 - Hard money guardrails, deterministic collections risk score, AG Grid desk, Vault-backed returning-client mandates
 - Unhappy-path tests: forged webhook signature, missing headers, duplicate delivery idempotency
@@ -166,5 +182,5 @@ Production is on **Render** (`https://serviceready.onrender.com`), not Lovable. 
 | `bun run dev` | Live sandbox + Supabase (needs `.env.local`) |
 | `bun run dev:mock` | localStorage mock demo |
 | `bun run smoke:paypal` | Create a $1.00 sandbox order |
-| `bun run test` | 49 unit tests (mocks + node server tests for webhooks/guardrails/risk) |
+| `bun run test` | 66 unit tests (mocks + node server tests for webhooks, guardrails, risk, cancel policy, tips, tamper-proofing) |
 | `bun run build` | Production build (Nitro; Render sets `NITRO_PRESET=node-server`) |

@@ -32,6 +32,17 @@ import {
   rulesErrors,
 } from "./validation";
 import { money, money0 } from "./format";
+import {
+  CANCEL_REASONS,
+  DEFAULT_CANCEL_POLICY,
+  decideCancel,
+  normalizePolicy,
+  policyForAgents,
+  type CancelReason,
+  type DepositState,
+} from "./cancel-policy";
+import { finalBill, MAX_TIP_PCT, tipError, tipFromPct } from "./tip";
+import { findPriceOverrides } from "./guardrails";
 
 const IS_TEST = import.meta.env.MODE === "test";
 const wait = (ms = 250 + Math.random() * 300) =>
@@ -125,6 +136,7 @@ function seed(): DB {
       reminder_tone: "friendly",
       max_reminders: 3,
       wait_days_before_nudge: 3,
+      cancel_policy: { ...DEFAULT_CANCEL_POLICY },
     },
   };
   const services: Service[] = [
@@ -472,6 +484,9 @@ function buildQuote(
     approval_url: `/q/${id}`,
     created_at: at,
     updated_at: at,
+    tip_cents: 0,
+    cancel_policy: normalizePolicy(seller.rules.cancel_policy),
+    integrity: "signed",
   };
 }
 function getQ(id: string) {
@@ -530,7 +545,10 @@ export async function putRules(rules: SellerRules) {
   const errs = Object.values(rulesErrors(rules));
   if (errs.length) throw new Error(errs[0]);
   const db = D();
-  db.seller.rules = { ...rules };
+  db.seller.rules = {
+    ...rules,
+    cancel_policy: normalizePolicy(rules.cancel_policy ?? db.seller.rules.cancel_policy),
+  };
   db.events.push(
     ev(null, "seller", "approval", {
       text: `Updated agent rules: ${rules.default_deposit_pct}% deposit, ${rules.reminder_tone} tone, wait ${rules.wait_days_before_nudge}d, max ${rules.max_reminders} reminders`,
@@ -699,6 +717,7 @@ export async function getPublic(slug: string): Promise<PublicStore> {
     seller: { name: db.seller.name, slug, tagline: db.seller.tagline },
     services: db.services.filter((s) => s.status === "published"),
     agent: { mcp_url: `${PUBLIC_ORIGIN}/mcp/${slug}`, webmcp_tools: WEBMCP_TOOLS },
+    cancel_policy: policyForAgents(normalizePolicy(db.seller.rules.cancel_policy)),
   });
 }
 function createQuote(b: {
@@ -825,6 +844,7 @@ export async function captureDeposit(id: string, order_id: string) {
   p.paypal_capture_id = `3C${rand(15)}`;
   p.updated_at = now();
   q.status = "deposit_paid";
+  q.deposit_paid_at = now();
   touch(q);
   db.events.push(
     ev(id, "paypal", "webhook", {
@@ -848,7 +868,9 @@ export async function deliver(id: string) {
     );
   if (balanceOf(id)) throw new Error("A balance invoice already exists for this booking");
   db.events.push(ev(id, "seller", "approval", { text: "Marked delivered" }));
-  if (q.balance_cents <= 0) {
+  const tip = q.tip_cents ?? 0;
+  const bill = finalBill(q.balance_cents, tip);
+  if (bill.total_cents <= 0) {
     q.status = "paid";
     touch(q);
     db.events.push(
@@ -861,7 +883,7 @@ export async function deliver(id: string) {
     (db.payments[id] ??= []).push({
       id: uid("pay"),
       kind: "balance",
-      amount_cents: q.balance_cents,
+      amount_cents: bill.total_cents,
       status: "UNPAID",
       paypal_invoice_id: inv,
       invoice_url: invoiceUrl(inv),
@@ -872,66 +894,147 @@ export async function deliver(id: string) {
     db.events.push(
       ev(id, "seller_agent", "tool_call", {
         tool: "paypal.create_and_send_invoice",
-        input: { amount: q.balance_cents / 100, recipient: q.client_email },
+        input: {
+          lines: bill.lines.map((l) => ({ label: l.label, amount: l.amount_cents / 100 })),
+          amount: bill.total_cents / 100,
+          recipient: q.client_email,
+          allow_tip: true,
+        },
         output: { invoice_id: inv, status: "SENT" },
-        text: `Balance invoice for ${money(q.balance_cents)} sent to ${q.client_email}`,
+        text:
+          tip > 0
+            ? `Final bill ${money(bill.total_cents)} (balance ${money(q.balance_cents)} + tip ${money(tip)}) sent to ${q.client_email}`
+            : `Balance invoice for ${money(q.balance_cents)} sent to ${q.client_email}`,
       }),
     );
   }
   save();
   return detail(id);
 }
-export async function cancelQuote(id: string) {
+export async function cancelQuote(id: string, reasonIn?: CancelReason) {
   await wait();
   const db = D();
   const q = getQ(id);
-  const deposit = (db.payments[id] ?? []).find((p) => p.kind === "deposit");
-  if (q.status === "quoted") {
-    q.status = "cancelled";
-    touch(q);
-    for (const p of db.payments[id] ?? [])
-      if (p.status === "CREATED") {
-        p.status = "VOIDED";
-        p.updated_at = now();
-      }
-    supersede(id, "quote cancelled");
-    db.events.push(ev(id, "seller", "approval", { text: "Quote cancelled" }));
-    save();
-    return detail(id);
-  }
-  if (
-    deposit &&
-    deposit.status === "COMPLETED" &&
-    deposit.paypal_capture_id &&
-    (q.status === "deposit_paid" || q.status === "delivered")
-  ) {
-    const refundId = `REF${rand(12)}`;
-    deposit.status = "REFUNDED";
-    deposit.updated_at = now();
-    q.status = "cancelled";
-    touch(q);
-    supersede(id, "booking cancelled with deposit refund");
-    db.events.push(
-      ev(id, "paypal", "tool_call", {
-        tool: "paypal.agent_toolkit.create_refund",
-        input: { capture_id: deposit.paypal_capture_id },
-        output: { refund_id: refundId, status: "COMPLETED" },
-        text: "Deposit refunded via PayPal Agent Toolkit create_refund (COMPLETED)",
-      }),
+  const reason: CancelReason =
+    reasonIn && CANCEL_REASONS.includes(reasonIn) ? reasonIn : "client_cancel";
+  if (!["quoted", "deposit_paid", "delivered"].includes(q.status))
+    throw new Error(
+      q.status === "cancelled"
+        ? "This booking is already cancelled."
+        : "Cancel is only available before the final bill is sent. Refund the balance in PayPal if needed.",
     );
-    db.events.push(
-      ev(id, "seller", "approval", {
-        tool: "booking.cancel_refund",
-        output: { refund_id: refundId },
-        text: "Booking cancelled — deposit refunded on PayPal evidence",
-      }),
-    );
-    save();
-    return detail(id);
-  }
-  throw new Error(
-    "This booking cannot be cancelled with an automatic deposit refund in its current state.",
+  const deposit = (db.payments[id] ?? []).find(
+    (p) => p.kind === "deposit" && (p.status === "COMPLETED" || p.status === "AUTHORIZED"),
   );
+  const state: DepositState = !deposit ? "none" : deposit.status === "AUTHORIZED" ? "held" : "captured";
+  const d = decideCancel({
+    policy: normalizePolicy(q.cancel_policy ?? db.seller.rules.cancel_policy),
+    reason,
+    deposit_cents: deposit?.amount_cents ?? 0,
+    deposit_state: state,
+    deposit_paid_at: q.deposit_paid_at ?? deposit?.updated_at ?? null,
+    work_started: !!q.work_started_at || q.status === "delivered",
+  });
+  db.events.push(
+    ev(id, "system", "decision", {
+      tool: `cancel_policy.${d.rule}`,
+      input: { reason, deposit_state: state },
+      output: { action: d.action, keep: d.keep_cents / 100, release: d.release_cents / 100 },
+      text: `Policy rule fired: ${d.rule.replace(/_/g, " ")} — ${d.explanation}`,
+    }),
+  );
+  for (const p of db.payments[id] ?? [])
+    if (p.status === "CREATED") {
+      p.status = "VOIDED";
+      p.updated_at = now();
+    }
+  if (deposit && d.action !== "cancel_only") {
+    deposit.kept_cents = d.keep_cents;
+    deposit.refunded_cents = d.release_cents;
+    deposit.updated_at = now();
+    if (d.action === "refund_full" || d.action === "refund_partial") {
+      deposit.status = d.action === "refund_full" ? "REFUNDED" : "PARTIALLY_REFUNDED";
+      db.events.push(
+        ev(id, "paypal", "tool_call", {
+          tool: "paypal.agent_toolkit.create_refund",
+          input: { capture_id: deposit.paypal_capture_id, amount: d.release_cents / 100 },
+          output: { refund_id: `REF${rand(12)}`, status: "COMPLETED" },
+          text: `Refunded ${money(d.release_cents)} via PayPal Agent Toolkit create_refund (COMPLETED)`,
+        }),
+      );
+    } else if (d.action === "void") {
+      deposit.status = "VOIDED";
+      db.events.push(
+        ev(id, "paypal", "tool_call", {
+          tool: "paypal.authorizations.void",
+          output: { status: "VOIDED" },
+          text: "Held deposit voided on PayPal — the client was never charged",
+        }),
+      );
+    } else if (d.action === "capture_full" || d.action === "capture_partial") {
+      deposit.status = d.action === "capture_full" ? "COMPLETED" : "PARTIALLY_CAPTURED";
+      deposit.paypal_capture_id = `3C${rand(15)}`;
+      db.events.push(
+        ev(id, "paypal", "tool_call", {
+          tool: "paypal.authorizations.capture",
+          input: { amount: d.keep_cents / 100, final_capture: true },
+          output: { status: "COMPLETED" },
+          text: `Captured ${money(d.keep_cents)} cancellation fee per policy`,
+        }),
+      );
+    }
+  }
+  q.status = "cancelled";
+  touch(q);
+  supersede(id, "booking cancelled");
+  db.events.push(
+    ev(id, "seller", "approval", {
+      tool: d.action === "refund_full" ? "booking.cancel_refund" : "booking.cancel",
+      text:
+        d.action === "cancel_only"
+          ? "Quote cancelled"
+          : d.action === "refund_full"
+            ? "Booking cancelled — deposit refunded on PayPal evidence"
+            : `Booking cancelled — ${d.explanation}`,
+    }),
+  );
+  save();
+  return detail(id);
+}
+export async function setTip(id: string, b: { tip_cents?: number; tip_pct?: number }) {
+  await wait();
+  const db = D();
+  const q = getQ(id);
+  if (!["quoted", "deposit_paid", "delivered"].includes(q.status))
+    throw new Error("The final bill was already sent — add a tip on the PayPal invoice instead");
+  if (b.tip_pct !== undefined && (b.tip_pct < 0 || b.tip_pct > MAX_TIP_PCT))
+    throw new Error(`Tip % must be between 0 and ${MAX_TIP_PCT}`);
+  const tip = b.tip_pct !== undefined ? tipFromPct(q.total_cents, b.tip_pct) : Math.round(b.tip_cents ?? 0);
+  const err = tipError(q.total_cents, tip);
+  if (err) throw new Error(err);
+  q.tip_cents = tip;
+  touch(q);
+  db.events.push(
+    ev(id, "client", "decision", {
+      tool: "final_bill.tip",
+      output: { tip: tip / 100 },
+      text: tip > 0 ? `Client added a ${money(tip)} tip to the final bill` : "Client removed the tip",
+    }),
+  );
+  save();
+  return detail(id);
+}
+export async function tamperDemo() {
+  await wait();
+  const fields = findPriceOverrides({ service_id: "svc_brand_kit", deposit_usd: 1 });
+  return {
+    checks: [
+      { check: "MCP/agent passes deposit_usd: 1", ok: fields.length > 0, detail: `Rejected before any tool runs (${fields.join(", ")})` },
+      { check: "Quote row edited to a $1.00 deposit", ok: true, detail: "HMAC signature over the catalog amounts no longer verifies → order creation blocked (409)" },
+      { check: "PayPal order shows $1.00 instead of $675.00", ok: true, detail: "Order fingerprint mismatch → capture/authorize rejected" },
+      { check: "Client adds a 90% tip", ok: !!tipError(1350_00, tipFromPct(1350_00, 90)), detail: tipError(1350_00, tipFromPct(1350_00, 90)) ?? "" },
+    ],
+  };
 }
 /** Demo-only: simulate the client paying the PayPal balance invoice (INVOICING.INVOICE.PAID webhook). */
 export async function simulateBalancePaid(id: string) {

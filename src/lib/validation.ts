@@ -1,6 +1,7 @@
 // Shared validation rules used by both the UI and the mock backend so the
 // client can never publish/save something the backend would reject.
 import type { Flag, SellerRules, ServiceDraft } from "./types";
+import { cancelPolicyErrors } from "./cancel-policy";
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export const isEmail = (v: string) => EMAIL_RE.test(v.trim());
@@ -57,8 +58,14 @@ export function draftErrors(d: ServiceDraft): Flag[] {
   return out;
 }
 
-export function rulesErrors(r: SellerRules): Partial<Record<keyof SellerRules, string>> {
-  const e: Partial<Record<keyof SellerRules, string>> = {};
+export type RulesErrorKey =
+  | keyof SellerRules
+  | "free_cancel_hours"
+  | "late_cancel_keep_pct"
+  | "no_show_keep_pct";
+export function rulesErrors(r: SellerRules): Partial<Record<RulesErrorKey, string>> {
+  const e: Partial<Record<RulesErrorKey, string>> = {};
+  if (r.cancel_policy) Object.assign(e, cancelPolicyErrors(r.cancel_policy));
   const int = (v: number) => Number.isFinite(v) && Number.isInteger(v);
   if (!int(r.default_deposit_pct) || r.default_deposit_pct < 1 || r.default_deposit_pct > 100)
     e.default_deposit_pct = "Use a whole number from 1 to 100.";

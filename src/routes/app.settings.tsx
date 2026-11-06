@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api, USE_MOCKS } from "@/lib/api";
 import type { SellerRules } from "@/lib/types";
 import { rulesErrors } from "@/lib/validation";
+import { DEFAULT_CANCEL_POLICY, describeCancelPolicy } from "@/lib/cancel-policy";
 import { ErrorState, Field, PageHeader } from "@/components/kit";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -45,19 +46,33 @@ type Draft = {
   max_reminders: string;
   wait_days_before_nudge: string;
   reminder_tone: SellerRules["reminder_tone"];
+  free_cancel_hours: string;
+  late_cancel_keep_pct: string;
+  no_show_keep_pct: string;
 };
-const toDraft = (r: SellerRules): Draft => ({
-  default_deposit_pct: String(r.default_deposit_pct),
-  max_reminders: String(r.max_reminders),
-  wait_days_before_nudge: String(r.wait_days_before_nudge),
-  reminder_tone: r.reminder_tone,
-});
+const toDraft = (r: SellerRules): Draft => {
+  const cp = r.cancel_policy ?? DEFAULT_CANCEL_POLICY;
+  return {
+    default_deposit_pct: String(r.default_deposit_pct),
+    max_reminders: String(r.max_reminders),
+    wait_days_before_nudge: String(r.wait_days_before_nudge),
+    reminder_tone: r.reminder_tone,
+    free_cancel_hours: String(cp.free_cancel_hours),
+    late_cancel_keep_pct: String(cp.late_cancel_keep_pct),
+    no_show_keep_pct: String(cp.no_show_keep_pct),
+  };
+};
 const num = (s: string) => (s.trim() === "" ? NaN : Number(s));
 const toRules = (d: Draft): SellerRules => ({
   default_deposit_pct: num(d.default_deposit_pct),
   max_reminders: num(d.max_reminders),
   wait_days_before_nudge: num(d.wait_days_before_nudge),
   reminder_tone: d.reminder_tone,
+  cancel_policy: {
+    free_cancel_hours: num(d.free_cancel_hours),
+    late_cancel_keep_pct: num(d.late_cancel_keep_pct),
+    no_show_keep_pct: num(d.no_show_keep_pct),
+  },
 });
 
 function SettingsPage() {
@@ -196,6 +211,78 @@ function SettingsPage() {
                 </Field>
               </div>
             </div>
+          </div>
+          <div className="mt-6 border-t border-border pt-6">
+            <h2 className="font-semibold">Cancellation &amp; no-show policy</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Enforced automatically on cancel: held deposits are voided or partially captured, paid
+              deposits are refunded. Agents can quote it but never change it.
+            </p>
+            <div className="mt-4 grid gap-5 sm:grid-cols-3">
+              <Field
+                htmlFor="fch"
+                label="Free-cancel window (hours)"
+                hint="After the deposit is paid, before work starts."
+                error={errors.free_cancel_hours}
+              >
+                <input
+                  id="fch"
+                  type="number"
+                  min={0}
+                  max={720}
+                  step={1}
+                  aria-invalid={!!errors.free_cancel_hours}
+                  className={`field tabular-nums ${errors.free_cancel_hours ? "border-danger" : ""}`}
+                  value={d.free_cancel_hours}
+                  onChange={(e) => set({ free_cancel_hours: e.target.value })}
+                />
+              </Field>
+              <Field
+                htmlFor="lck"
+                label="Late cancel: keep (% of deposit)"
+                hint="0 = full refund, 100 = keep all."
+                error={errors.late_cancel_keep_pct}
+              >
+                <input
+                  id="lck"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  aria-invalid={!!errors.late_cancel_keep_pct}
+                  className={`field tabular-nums ${errors.late_cancel_keep_pct ? "border-danger" : ""}`}
+                  value={d.late_cancel_keep_pct}
+                  onChange={(e) => set({ late_cancel_keep_pct: e.target.value })}
+                />
+              </Field>
+              <Field
+                htmlFor="nsk"
+                label="No-show: keep (% of deposit)"
+                hint="Client unreachable or didn't show."
+                error={errors.no_show_keep_pct}
+              >
+                <input
+                  id="nsk"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  aria-invalid={!!errors.no_show_keep_pct}
+                  className={`field tabular-nums ${errors.no_show_keep_pct ? "border-danger" : ""}`}
+                  value={d.no_show_keep_pct}
+                  onChange={(e) => set({ no_show_keep_pct: e.target.value })}
+                />
+              </Field>
+            </div>
+            {rules?.cancel_policy && valid && (
+              <p className="glass-row mt-4 p-3 text-sm" aria-live="polite">
+                <span className="font-medium">Clients and agents see: </span>
+                {describeCancelPolicy(rules.cancel_policy)}
+              </p>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              Applies to new quotes; existing quotes keep the policy they were booked under.
+            </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-border pt-5">
             <button

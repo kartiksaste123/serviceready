@@ -59,9 +59,9 @@ describe("quote → deposit → deliver → balance lifecycle", () => {
     await mock.cancelQuote(q.id);
     await expect(mock.createDepositOrder(q.id)).rejects.toThrow(/cancelled/i);
     // balance_invoiced / paid cannot auto-refund-cancel
-    await expect(mock.cancelQuote("q_hannah")).rejects.toThrow(/cannot be cancelled/i);
-    // deposit_paid can cancel with Agent Toolkit refund simulation
-    const refunded = await mock.cancelQuote("q_priya");
+    await expect(mock.cancelQuote("q_hannah")).rejects.toThrow(/final bill/i);
+    // seller cancel on a paid deposit → full Agent Toolkit refund
+    const refunded = await mock.cancelQuote("q_priya", "seller_cancel");
     expect(refunded.quote.status).toBe("cancelled");
     expect(refunded.payments.some((p) => p.kind === "deposit" && p.status === "REFUNDED")).toBe(
       true,
@@ -324,5 +324,40 @@ describe("edge-case financial invariants", () => {
       lead_time_days: 7,
     };
     await expect(mock.publishCatalog([d, { ...d, tmp_id: "t2" }])).rejects.toThrow();
+  });
+});
+
+describe("cancel policy + tip (mock backend)", () => {
+  it("late client cancel on a paid deposit refunds only the policy share", async () => {
+    const d = await mock.cancelQuote("q_priya", "client_cancel");
+    const dep = d.payments.find((p) => p.kind === "deposit")!;
+    expect(dep.status).toBe("PARTIALLY_REFUNDED");
+    expect((dep.kept_cents ?? 0) + (dep.refunded_cents ?? 0)).toBe(dep.amount_cents);
+    expect(d.events.some((e) => e.tool === "cancel_policy.late_cancel")).toBe(true);
+  });
+  it("client cancel right after paying is free (full refund)", async () => {
+    const q = await newQuote();
+    const { order_id } = await mock.createDepositOrder(q.id);
+    await mock.captureDeposit(q.id, order_id);
+    const d = await mock.cancelQuote(q.id, "client_cancel");
+    expect(d.payments.find((p) => p.kind === "deposit")?.status).toBe("REFUNDED");
+    expect(d.events.some((e) => e.tool === "cancel_policy.free_cancel_window")).toBe(true);
+  });
+  it("puts the client's tip on the final bill", async () => {
+    const q = await newQuote();
+    const { order_id } = await mock.createDepositOrder(q.id);
+    await mock.captureDeposit(q.id, order_id);
+    const t = await mock.setTip(q.id, { tip_pct: 10 });
+    expect(t.quote.tip_cents).toBe(Math.round(q.total_cents * 0.1));
+    await expect(mock.setTip(q.id, { tip_pct: 80 })).rejects.toThrow();
+    const d = await mock.deliver(q.id);
+    const bal = d.payments.find((p) => p.kind === "balance")!;
+    expect(bal.amount_cents).toBe(q.balance_cents + (t.quote.tip_cents ?? 0));
+    await expect(mock.setTip(q.id, { tip_pct: 5 })).rejects.toThrow(/final bill/);
+  });
+  it("exposes the structured policy on the public store", async () => {
+    const store = await mock.getPublic(SLUG);
+    expect(store.cancel_policy?.free_cancel_hours).toBe(48);
+    expect(store.cancel_policy?.summary).toMatch(/Free cancellation/);
   });
 });
