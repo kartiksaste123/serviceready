@@ -34,6 +34,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Client budget for /api/services/image — above server worst case (150s + 90s retry). */
+export const IMAGE_TIMEOUT_MS = 270_000;
+
 async function http<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
@@ -46,9 +49,19 @@ async function http<T>(method: string, path: string, body?: unknown): Promise<T>
       headers,
       body: body !== undefined ? JSON.stringify(body) : null,
       credentials: "include",
-      signal: AbortSignal.timeout(path.includes("/image") ? 120_000 : 45_000),
+      // AI cover generation can take 20–90s (plus one server-side retry), so give it room.
+      signal: AbortSignal.timeout(path.includes("/image") ? IMAGE_TIMEOUT_MS : 45_000),
     });
-  } catch {
+  } catch (e) {
+    const name = e instanceof Error ? e.name : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new ApiError(
+        path.includes("/image")
+          ? "Image generation is taking longer than usual — please try again"
+          : "The request timed out — please try again",
+        0,
+      );
+    }
     throw new ApiError("Network error — check your connection and try again", 0);
   }
   if (!res.ok) {
@@ -215,6 +228,7 @@ export const api = {
     mode: "upload" | "generate" | "clear";
     title?: string;
     description?: string;
+    deliverables?: string[];
     data_url?: string;
     service_id?: string;
   }) =>

@@ -9,7 +9,10 @@ function htmlPage(title: string, body: string, status = 200): Response {
   const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   return new Response(
     `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><body style="font-family:system-ui;max-width:520px;margin:12vh auto;padding:0 20px;line-height:1.5"><h1 style="font-size:22px">${esc(title)}</h1><p>${esc(body)}</p><p><a href="/">Back to ServiceReady</a></p></body>`,
-    { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
+    {
+      status,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+    },
   );
 }
 
@@ -103,8 +106,9 @@ export async function dispatchApi(request: Request): Promise<Response> {
       const body = await readJson<{
         title?: string;
         description?: string;
+        deliverables?: string[];
         data_url?: string;
-        mode?: "upload" | "generate";
+        mode?: "upload" | "generate" | "clear";
         service_id?: string;
       }>(request);
       return json(await live.setServiceImage(request, body ?? {}));
@@ -220,11 +224,7 @@ export async function dispatchApi(request: Request): Promise<Response> {
       if (m && method === "POST") {
         const body = await readJson<{ draft_message?: string }>(request);
         return json(
-          await live.approveProposal(
-            decodeURIComponent(m[1]!),
-            body.draft_message ?? "",
-            request,
-          ),
+          await live.approveProposal(decodeURIComponent(m[1]!), body.draft_message ?? "", request),
         );
       }
     }

@@ -73,6 +73,7 @@ function Catalog() {
                 <ServiceImageField
                   title={s.title}
                   description={s.description}
+                  deliverables={s.deliverables}
                   imageUrl={s.image_url ?? null}
                   serviceId={s.id}
                   signedIn

@@ -383,6 +383,7 @@ function Onboard() {
                       <ServiceImageField
                         title={d.title}
                         description={d.description}
+                        deliverables={d.deliverables}
                         imageUrl={d.image_url ?? null}
                         requireAuth
                         signedIn={signedIn}

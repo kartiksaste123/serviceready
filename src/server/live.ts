@@ -341,7 +341,10 @@ export async function sellerFromRequest(request?: Request): Promise<SellerRow> {
   return data as SellerRow;
 }
 
-async function assertOwnsQuote(request: Request | undefined, quoteId: string): Promise<{
+async function assertOwnsQuote(
+  request: Request | undefined,
+  quoteId: string,
+): Promise<{
   seller: SellerRow;
   quote: QuoteRow;
 }> {
@@ -372,11 +375,7 @@ export async function bootstrapSeller(
   if (authErr || !authData.user) throw new HttpError("Your session expired — sign in again", 401);
   const user = authData.user;
 
-  const existing = await db()
-    .from("sellers")
-    .select("*")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
+  const existing = await db().from("sellers").select("*").eq("auth_user_id", user.id).maybeSingle();
   if (existing.error) throw new HttpError(existing.error.message, 500);
   if (existing.data) return mapSeller(existing.data as SellerRow);
 
@@ -530,7 +529,6 @@ export async function getSellerIdBySlug(slug: string): Promise<string> {
   if (!data) throw new HttpError(`Unknown storefront: ${slug}`, 404);
   return (data as { id: string }).id;
 }
-
 
 export async function putRules(rules: SellerRules, request?: Request): Promise<Seller> {
   const errs = rulesErrors(rules);
@@ -734,7 +732,10 @@ let sdkTokenCache: { token: string; exp: number; host: string } | null = null;
 export async function paypalClientToken(request?: Request) {
   const host = new URL(publicOrigin(request)).host;
   if (sdkTokenCache && sdkTokenCache.host === host && sdkTokenCache.exp > Date.now() + 120_000) {
-    return { client_token: sdkTokenCache.token, expires_at: new Date(sdkTokenCache.exp).toISOString() };
+    return {
+      client_token: sdkTokenCache.token,
+      expires_at: new Date(sdkTokenCache.exp).toISOString(),
+    };
   }
   const t = await paypal.createSdkClientToken([host]);
   sdkTokenCache = { token: t.client_token, exp: Date.now() + t.expires_in * 1000, host };
@@ -754,10 +755,7 @@ async function tamperBlocked(q: QuoteRow, step: string, problems: string[]): Pro
     output: { blocked: true, problems },
     text: `Blocked ${step}: ${problems.join("; ")}`,
   }).catch(() => undefined);
-  throw new HttpError(
-    `Tamper check failed — ${problems.join("; ")}. No money was moved.`,
-    409,
-  );
+  throw new HttpError(`Tamper check failed — ${problems.join("; ")}. No money was moved.`, 409);
 }
 
 /**
@@ -767,7 +765,8 @@ async function tamperBlocked(q: QuoteRow, step: string, problems: string[]): Pro
 async function assertQuoteIntegrity(q: QuoteRow, step: string): Promise<void> {
   const problems = quoteMathErrors(q);
   if (q.price_sig) {
-    if (!safeEqualHex(q.price_sig, quoteSig(q))) problems.push("quote amounts don't match their signature");
+    if (!safeEqualHex(q.price_sig, quoteSig(q)))
+      problems.push("quote amounts don't match their signature");
   } else {
     const { data: svc } = await db()
       .from("services")
@@ -775,7 +774,11 @@ async function assertQuoteIntegrity(q: QuoteRow, step: string): Promise<void> {
       .eq("id", q.service_id)
       .maybeSingle();
     const s = svc as { price_cents: number; deposit_pct: number } | null;
-    if (s && s.price_cents === q.total_cents && depositOf(s.price_cents, s.deposit_pct) !== q.deposit_cents) {
+    if (
+      s &&
+      s.price_cents === q.total_cents &&
+      depositOf(s.price_cents, s.deposit_pct) !== q.deposit_cents
+    ) {
       problems.push(
         `deposit ${money(q.deposit_cents)} ≠ catalog deposit ${money(depositOf(s.price_cents, s.deposit_pct))}`,
       );
@@ -805,12 +808,18 @@ async function verifyOrderBeforeMoney(
     intent,
   });
   const problems: string[] = [];
-  const { data: row } = await db().from("payments").select("fingerprint").eq("id", p.id).maybeSingle();
+  const { data: row } = await db()
+    .from("payments")
+    .select("fingerprint")
+    .eq("id", p.id)
+    .maybeSingle();
   const stored = (row as { fingerprint?: string | null } | null)?.fingerprint ?? null;
-  if (stored && !safeEqualHex(stored, expected)) problems.push("stored order fingerprint ≠ signed quote");
+  if (stored && !safeEqualHex(stored, expected))
+    problems.push("stored order fingerprint ≠ signed quote");
   const o = await paypal.getOrder(order_id).catch(() => null);
   if (o) {
-    if (o.customId && o.customId !== q.id) problems.push("PayPal order belongs to a different quote");
+    if (o.customId && o.customId !== q.id)
+      problems.push("PayPal order belongs to a different quote");
     if (o.amountCents !== undefined) {
       const fromPayPal = orderFingerprint({
         quote_id: o.customId ?? q.id,
@@ -848,10 +857,16 @@ async function verifyOrderBeforeMoney(
  * GET/POST /api/judges/tamper-demo — shows the three money locks rejecting "make it $1".
  * Pure checks on a synthetic quote (nothing is written); optionally verifies a real quote's signature.
  */
-export async function tamperDemo(quoteId?: string): Promise<{ checks: TamperCheck[]; quote?: unknown }> {
+export async function tamperDemo(
+  quoteId?: string,
+): Promise<{ checks: TamperCheck[]; quote?: unknown }> {
   const checks: TamperCheck[] = [];
   // 1. Agent tries to pass an amount.
-  const agentArgs = { service_id: "svc_brand_kit", client_email: "judge@example.com", deposit_usd: 1 };
+  const agentArgs = {
+    service_id: "svc_brand_kit",
+    client_email: "judge@example.com",
+    deposit_usd: 1,
+  };
   const fields = findPriceOverrides(agentArgs);
   checks.push({
     check: "MCP/agent passes deposit_usd: 1",
@@ -962,7 +977,10 @@ export async function setTip(
   }
   const err = tipError(q.total_cents, tip);
   if (err) throw new HttpError(err, 400);
-  await db().from("quotes").update({ tip_cents: tip, updated_at: new Date().toISOString() }).eq("id", id);
+  await db()
+    .from("quotes")
+    .update({ tip_cents: tip, updated_at: new Date().toISOString() })
+    .eq("id", id);
   await pushEvent({
     quote_id: id,
     seller_id: q.seller_id,
@@ -984,7 +1002,9 @@ async function reconcileDeposit(id: string): Promise<void> {
   const q = await getQuoteRow(id);
   if (q.status !== "quoted") return;
   const pays = await paymentsFor(id);
-  const open = pays.filter((p) => p.kind === "deposit" && p.status === "CREATED" && p.paypal_order_id);
+  const open = pays.filter(
+    (p) => p.kind === "deposit" && p.status === "CREATED" && p.paypal_order_id,
+  );
   for (const p of open) {
     const o = await paypal.getOrder(p.paypal_order_id!).catch(() => null);
     if (!o) continue;
@@ -1005,7 +1025,13 @@ async function reconcileDeposit(id: string): Promise<void> {
       const fresh = await getQuoteRow(id);
       if (fresh.status !== "quoted") return;
       if (o.authorizationId && !o.captureId) {
-        await markDepositAuthorized(fresh, p.id, p.paypal_order_id!, o.authorizationId, "authorize_api");
+        await markDepositAuthorized(
+          fresh,
+          p.id,
+          p.paypal_order_id!,
+          o.authorizationId,
+          "authorize_api",
+        );
       } else {
         await markDepositPaid(fresh, p.id, p.paypal_order_id!, o.captureId, "capture_api");
       }
@@ -1077,21 +1103,23 @@ export async function createDepositOrder(
     ...(sellerRow?.name ? { brandName: String(sellerRow.name) } : {}),
   });
 
-  const { error } = await db().from("payments").insert({
-    quote_id: q.id,
-    kind: "deposit",
-    amount_cents: q.deposit_cents,
-    status: "CREATED",
-    paypal_order_id: order.id,
-    intent,
-    fingerprint: orderFingerprint({
+  const { error } = await db()
+    .from("payments")
+    .insert({
       quote_id: q.id,
       kind: "deposit",
       amount_cents: q.deposit_cents,
-      currency: "USD",
+      status: "CREATED",
+      paypal_order_id: order.id,
       intent,
-    }),
-  });
+      fingerprint: orderFingerprint({
+        quote_id: q.id,
+        kind: "deposit",
+        amount_cents: q.deposit_cents,
+        currency: "USD",
+        intent,
+      }),
+    });
   if (error) throw new HttpError(error.message, 500);
 
   await pushEvent({
@@ -1101,7 +1129,11 @@ export async function createDepositOrder(
     kind: "tool_call",
     tool: "paypal.orders.create",
     input: { amount: q.deposit_cents / 100, currency: "USD", intent, priced_from: "signed quote" },
-    output: { id: order.id, status: order.status, fingerprint: "stored (HMAC: quote+amount+currency+intent)" },
+    output: {
+      id: order.id,
+      status: order.status,
+      fingerprint: "stored (HMAC: quote+amount+currency+intent)",
+    },
     text:
       intent === "AUTHORIZE"
         ? `Deposit order created with intent=AUTHORIZE — funds are held on approval and captured when work starts`
@@ -1217,7 +1249,10 @@ async function authorizeDeposit(q: QuoteRow, p: Payment, order_id: string): Prom
     throw e;
   }
   if (!res.authorizationId || (res.authorizationStatus && res.authorizationStatus !== "CREATED")) {
-    throw new HttpError(`PayPal authorization status is ${res.authorizationStatus ?? res.status}`, 502);
+    throw new HttpError(
+      `PayPal authorization status is ${res.authorizationStatus ?? res.status}`,
+      502,
+    );
   }
   if (res.customId && res.customId !== q.id) {
     throw new HttpError("PayPal order does not match this quote", 400);
@@ -1234,19 +1269,35 @@ async function authorizeDeposit(q: QuoteRow, p: Payment, order_id: string): Prom
     input: { order_id },
     output: { authorization_id: res.authorizationId, status: res.authorizationStatus },
   });
-  return markDepositAuthorized(q, p.id, order_id, res.authorizationId, "authorize_api", res.expiresAt);
+  return markDepositAuthorized(
+    q,
+    p.id,
+    order_id,
+    res.authorizationId,
+    "authorize_api",
+    res.expiresAt,
+  );
 }
 
 /**
  * Capture a held (AUTHORIZED) deposit — the seller starts work. Idempotent.
  * Called explicitly ("Start work") or automatically before the balance invoice.
  */
-async function captureHeldDepositRow(q: QuoteRow, reason: "start_work" | "deliver"): Promise<boolean> {
+async function captureHeldDepositRow(
+  q: QuoteRow,
+  reason: "start_work" | "deliver",
+): Promise<boolean> {
   const pays = await paymentsFor(q.id);
   const dep = pays.find((p) => p.kind === "deposit" && p.status === "AUTHORIZED");
   if (!dep?.paypal_authorization_id) return false;
   if (dep.paypal_order_id) {
-    await verifyOrderBeforeMoney(q, dep, dep.paypal_order_id, "AUTHORIZE", "paypal.authorizations.capture");
+    await verifyOrderBeforeMoney(
+      q,
+      dep,
+      dep.paypal_order_id,
+      "AUTHORIZE",
+      "paypal.authorizations.capture",
+    );
   }
   const cap = await paypal.captureAuthorization({
     authorizationId: dep.paypal_authorization_id,
@@ -1286,10 +1337,7 @@ export async function startWork(id: string, request?: Request): Promise<QuoteDet
   }
   const captured = await captureHeldDepositRow(q, "start_work");
   if (!q.work_started_at) {
-    await db()
-      .from("quotes")
-      .update({ work_started_at: new Date().toISOString() })
-      .eq("id", id);
+    await db().from("quotes").update({ work_started_at: new Date().toISOString() }).eq("id", id);
   }
   if (!captured) {
     await pushEvent({
@@ -1505,11 +1553,7 @@ export async function handlePaypalWebhook(request: Request): Promise<{
           .eq("paypal_order_id", orderId)
           .maybeSingle();
         const payStatus = (pay as PaymentRow | null)?.status;
-        if (
-          pay &&
-          payStatus === "AUTHORIZED" &&
-          event_type === "PAYMENT.CAPTURE.COMPLETED"
-        ) {
+        if (pay && payStatus === "AUTHORIZED" && event_type === "PAYMENT.CAPTURE.COMPLETED") {
           // Held deposit captured outside the desk (e.g. PayPal dashboard) — re-read and sync.
           const payment = pay as PaymentRow;
           const order = await paypal.getOrder(orderId);
@@ -1536,7 +1580,9 @@ export async function handlePaypalWebhook(request: Request): Promise<{
             } else if (order.status === "APPROVED") {
               await captureDeposit(q.id, orderId);
               handled =
-                payment.intent === "AUTHORIZE" ? "authorized_from_webhook" : "captured_from_webhook";
+                payment.intent === "AUTHORIZE"
+                  ? "authorized_from_webhook"
+                  : "captured_from_webhook";
             } else if (order.status === "COMPLETED" && order.authorizationId && !order.captureId) {
               await markDepositAuthorized(q, payment.id, orderId, order.authorizationId, "webhook");
               handled = "deposit_marked_authorized";
@@ -1649,7 +1695,8 @@ export async function deliver(id: string, request?: Request): Promise<QuoteDetai
     recipientEmail: q.client_email,
     recipientName: q.client_name,
     itemName: q.balance_cents > 0 ? `${q.service_title} — balance` : "Tip — thank you",
-    extraItems: tip > 0 && q.balance_cents > 0 ? [{ name: "Tip — thank you", amountCents: tip }] : [],
+    extraItems:
+      tip > 0 && q.balance_cents > 0 ? [{ name: "Tip — thank you", amountCents: tip }] : [],
     allowTip: true,
     note: `Final bill for ${q.service_title}. Quote ${q.id}.${tip > 0 ? ` Includes your ${money(tip)} tip — thank you!` : ""}`,
     invoiceNumber,
@@ -1779,8 +1826,9 @@ export async function cancelQuote(
   }
   const pays = await paymentsFor(id);
   const deposit =
-    pays.find((p) => p.kind === "deposit" && (p.status === "COMPLETED" || p.status === "AUTHORIZED")) ??
-    null;
+    pays.find(
+      (p) => p.kind === "deposit" && (p.status === "COMPLETED" || p.status === "AUTHORIZED"),
+    ) ?? null;
   const now = new Date().toISOString();
   const policy = normalizePolicy(q.cancel_policy ?? null);
   const deposit_state: DepositState = !deposit
@@ -1845,10 +1893,18 @@ export async function cancelQuote(
   const dep = deposit;
   // ---- Held deposit: void, or capture the kept share (final_capture releases the rest).
   if (decision.action === "void" && dep.paypal_authorization_id) {
-    await paypal.voidAuthorization(dep.paypal_authorization_id, `void-${dep.paypal_authorization_id}`);
+    await paypal.voidAuthorization(
+      dep.paypal_authorization_id,
+      `void-${dep.paypal_authorization_id}`,
+    );
     await db()
       .from("payments")
-      .update({ status: "VOIDED", kept_cents: 0, refunded_cents: dep.amount_cents, updated_at: now })
+      .update({
+        status: "VOIDED",
+        kept_cents: 0,
+        refunded_cents: dep.amount_cents,
+        updated_at: now,
+      })
       .eq("id", dep.id);
     await pushEvent({
       quote_id: id,
@@ -1867,7 +1923,13 @@ export async function cancelQuote(
     dep.paypal_authorization_id
   ) {
     if (dep.paypal_order_id) {
-      await verifyOrderBeforeMoney(q, dep, dep.paypal_order_id, "AUTHORIZE", "paypal.authorizations.capture");
+      await verifyOrderBeforeMoney(
+        q,
+        dep,
+        dep.paypal_order_id,
+        "AUTHORIZE",
+        "paypal.authorizations.capture",
+      );
     }
     const cap = await paypal.captureAuthorization({
       authorizationId: dep.paypal_authorization_id,
@@ -1903,10 +1965,14 @@ export async function cancelQuote(
           ? `Captured ${money(decision.keep_cents)} cancellation fee; PayPal released the remaining ${money(decision.release_cents)}`
           : `Captured the full ${money(decision.keep_cents)} hold per policy`,
     });
-    return closeQuote("booking.cancel_policy_capture", `Booking cancelled — ${decision.explanation}`, {
-      kept: decision.keep_cents / 100,
-      released: decision.release_cents / 100,
-    });
+    return closeQuote(
+      "booking.cancel_policy_capture",
+      `Booking cancelled — ${decision.explanation}`,
+      {
+        kept: decision.keep_cents / 100,
+        released: decision.release_cents / 100,
+      },
+    );
   }
 
   // ---- Captured deposit: refund all / part, or keep it.
@@ -2007,7 +2073,12 @@ export async function cancelQuote(
     partial
       ? `Booking cancelled — ${decision.explanation}`
       : "Booking cancelled — deposit refunded on PayPal evidence",
-    { refund_id: refundId, capture_id: captureId, status: refundStatus, refunded: refundCents / 100 },
+    {
+      refund_id: refundId,
+      capture_id: captureId,
+      status: refundStatus,
+      refunded: refundCents / 100,
+    },
   );
 }
 
@@ -2034,7 +2105,11 @@ export async function postReply(
   return { reply, agent_run };
 }
 
-export async function runCollections(id: string, trigger?: string, request?: Request): Promise<AgentRun> {
+export async function runCollections(
+  id: string,
+  trigger?: string,
+  request?: Request,
+): Promise<AgentRun> {
   const q = bearerToken(request)
     ? (await assertOwnsQuote(request, id)).quote
     : await getQuoteRow(id);
@@ -2267,7 +2342,12 @@ Include the invoice URL verbatim. Keep under 1200 characters. No subject line.`,
           actor: "collections_agent",
           kind: "tool_call",
           tool: "llm.draft_reminder",
-          input: { tone, risk_tone: risk.tone, risk_score: risk.score, claims_paid_but_paypal_open: claimsPaid },
+          input: {
+            tone,
+            risk_tone: risk.tone,
+            risk_score: risk.score,
+            claims_paid_but_paypal_open: claimsPaid,
+          },
           output: { provider: disc?.provider, model: disc?.model, chars: draft.length },
         });
       } catch {
@@ -2509,9 +2589,11 @@ export async function health() {
     money_guardrails: "agents cannot set amounts (rejected + audited)",
     collections_risk: "deterministic score → warm/firm/final tone",
     catalog_cache_ttl_ms: CATALOG_TTL_MS,
-    cancel_policy_engine: "deterministic free-window / late-cancel / no-show → void, partial capture or refund",
+    cancel_policy_engine:
+      "deterministic free-window / late-cancel / no-show → void, partial capture or refund",
     final_bill_tip: "client tip line on the Invoicing v2 final bill (+ allow_tip)",
-    tamper_proofing: "HMAC-signed quote amounts + order fingerprint re-checked against PayPal before capture",
+    tamper_proofing:
+      "HMAC-signed quote amounts + order fingerprint re-checked against PayPal before capture",
     idempotency: "PayPal-Request-Id on every money write",
     webhook_fallback: "Check PayPal re-reads open orders/invoices",
   };
@@ -2826,7 +2908,13 @@ const AgentPlanSchema = z.object({
           // Lenient: models sometimes write "request_quote(...)" — normalize to the bare tool name.
           tool: z
             .string()
-            .transform((t) => t.trim().match(/^[a-z_]+/i)?.[0]?.toLowerCase() ?? "")
+            .transform(
+              (t) =>
+                t
+                  .trim()
+                  .match(/^[a-z_]+/i)?.[0]
+                  ?.toLowerCase() ?? "",
+            )
             .pipe(
               z.enum([
                 "list_services",
@@ -2915,7 +3003,11 @@ async function agentChatHeuristic(
   let reply: string;
 
   if (POLICY_Q.test(last) && !emailMatch) {
-    tool_calls.push({ tool: "get_cancellation_policy", input: {}, output: store.cancel_policy ?? null });
+    tool_calls.push({
+      tool: "get_cancellation_policy",
+      input: {},
+      output: store.cancel_policy ?? null,
+    });
     return {
       messages: [...messages, { role: "assistant", content: policyReply(store) }],
       tool_calls,
@@ -3057,7 +3149,11 @@ Return JSON only: {"reply":"...","actions":[...]}`,
     const results = await Promise.all(
       actions.map(async (action): Promise<ToolTrace> => {
         if (action.tool === "get_cancellation_policy") {
-          return { tool: "get_cancellation_policy", input: {}, output: store.cancel_policy ?? null };
+          return {
+            tool: "get_cancellation_policy",
+            input: {},
+            output: store.cancel_policy ?? null,
+          };
         }
         if (action.tool === "get_service") {
           const svc =
@@ -3067,7 +3163,11 @@ Return JSON only: {"reply":"...","actions":[...]}`,
                 action.service_id &&
                 s.title.toLowerCase().includes(action.service_id.toLowerCase()),
             );
-          return { tool: "get_service", input: { id: action.service_id }, output: svc ?? { error: "not_found" } };
+          return {
+            tool: "get_service",
+            input: { id: action.service_id },
+            output: svc ?? { error: "not_found" },
+          };
         }
         if (action.tool === "request_quote") {
           const svc = store.services.find((s) => s.id === (action.service_id ?? ""));
@@ -3142,7 +3242,13 @@ Return JSON only: {"reply":"...","actions":[...]}`,
       reply = quoteReply(q, qs, store.seller.name);
     } else {
       const status = results.find((t) => t.tool === "get_quote_status")?.output as
-        | { id?: string; status?: string; deposit_cents?: number; balance_cents?: number; error?: string }
+        | {
+            id?: string;
+            status?: string;
+            deposit_cents?: number;
+            balance_cents?: number;
+            error?: string;
+          }
         | undefined;
       if (results.some((t) => t.tool === "get_cancellation_policy")) {
         // Policy wording is deterministic — never the model's paraphrase.
@@ -3164,14 +3270,12 @@ Return JSON only: {"reply":"...","actions":[...]}`,
   }
 }
 
-
 async function uploadCoverBytes(
   bytes: Uint8Array,
   contentType: string,
   pathHint: string,
 ): Promise<string> {
-  const ext =
-    contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+  const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
   const path = `${pathHint.replace(/[^a-zA-Z0-9/_-]+/g, "-").slice(0, 80)}.${ext}`;
   const { error } = await db().storage.from("service-covers").upload(path, bytes, {
     contentType,
@@ -3192,34 +3296,157 @@ function parseDataUrl(dataUrl: string): { bytes: Uint8Array; contentType: string
   return { bytes: new Uint8Array(raw), contentType };
 }
 
-async function generateCoverWithGrok(title: string, description: string): Promise<Uint8Array> {
-  const key = (typeof process !== "undefined" ? process.env?.["XAI_API_KEY"] : undefined)?.trim();
-  if (!key) throw new HttpError("Image generation needs XAI_API_KEY on the server", 503);
-  const prompt =
-    `Professional freelance service cover image for "${title}". ` +
-    `${description ? `Service: ${description.slice(0, 220)}. ` : ""}` +
-    `Clean modern product photography / brand mockup style, soft studio light, ` +
-    `no text, no logos, no watermarks, square-friendly 16:9 composition, premium freelance marketplace look.`;
+type CoverBrief = { title: string; description: string; deliverables: string[] };
+
+/** Map a service to a concrete, on-topic visual subject for its cover. */
+function coverSubject(b: CoverBrief): { subject: string; avoid: string } {
+  const hay = `${b.title} ${b.description} ${b.deliverables.join(" ")}`.toLowerCase();
+  const has = (...k: string[]) =>
+    k.some((w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}s?\\b`).test(hay));
+  if (has("logo", "logomark", "monogram", "wordmark"))
+    return {
+      subject:
+        "a logo design presentation: a clean abstract geometric logo mark shown on a branded business card, a sketchbook with pencil logo iterations and a laptop showing vector logo grid construction, on a tidy designer desk",
+      avoid: "people's faces, food, landscapes, random products",
+    };
+  if (
+    has(
+      "social media",
+      "instagram",
+      "tiktok",
+      "social pack",
+      "posts",
+      "carousel",
+      "reels",
+      "linkedin post",
+    )
+  )
+    return {
+      subject:
+        "a social media content pack: a grid of colourful, cohesive Instagram-style post tiles and story frames displayed on two smartphones and a tablet, flat-lay on a pastel desk",
+      avoid: "printed logos of real social networks, landscapes, unrelated objects",
+    };
+  if (
+    has(
+      "landing page",
+      "website",
+      "web design",
+      "web page",
+      "webflow",
+      "wordpress",
+      "ui",
+      "ux",
+      "figma",
+      "framer",
+    )
+  )
+    return {
+      subject:
+        "a modern website / landing page UI mockup with a hero section, feature cards and a call-to-action button, shown on a laptop and a phone side by side, with a Figma-like wireframe layer softly visible",
+      avoid: "people, nature scenes, physical products unrelated to the web",
+    };
+  if (
+    has("brand kit", "brand identity", "branding", "brand guide", "style guide", "visual identity")
+  )
+    return {
+      subject:
+        "a brand identity kit flat-lay: colour swatch cards, typography specimen sheet, stationery (business cards, letterhead, envelope), a tote bag and packaging all in one cohesive palette",
+      avoid: "people, food, landscapes",
+    };
+  if (has("pitch deck", "presentation", "slides", "deck", "keynote", "investor"))
+    return {
+      subject:
+        "a polished pitch deck: presentation slides with charts and clean layouts shown on a large monitor and laptop in a bright meeting room, printed slide thumbnails on the table",
+      avoid: "crowds, landscapes, unrelated products",
+    };
+  if (has("mobile app", "ios", "android", "app design", "app development"))
+    return {
+      subject:
+        "a mobile app UI shown across three floating smartphone screens with onboarding, dashboard and checkout views",
+      avoid: "people, landscapes",
+    };
+  if (has("video", "video editing", "youtube", "motion", "animation", "reel"))
+    return {
+      subject:
+        "a video editing workstation: timeline with clips and colour grading panels on a wide monitor, camera and headphones on the desk",
+      avoid: "real brand logos, landscapes",
+    };
+  if (has("photo", "photography", "headshot", "product shoot"))
+    return {
+      subject:
+        "a professional photography setup: camera on tripod, softbox lighting and a styled product on a seamless backdrop",
+      avoid: "text, unrelated scenes",
+    };
+  if (has("copywriting", "blog", "content writing", "article", "newsletter", "seo", "copy"))
+    return {
+      subject:
+        "a content writing workspace: laptop with a neatly formatted article draft, notebook with outline, coffee, sticky notes with headline ideas",
+      avoid: "people's faces, landscapes",
+    };
+  if (has("illustration", "drawing", "character", "icon"))
+    return {
+      subject:
+        "an illustrator's desk with a drawing tablet showing colourful vector illustrations and an icon set, printed art proofs around it",
+      avoid: "photographs of people, landscapes",
+    };
+  if (has("packaging", "label", "print", "flyer", "poster", "brochure"))
+    return {
+      subject:
+        "printed design collateral mockups: flyers, poster and packaging boxes arranged on a studio table",
+      avoid: "people, landscapes",
+    };
+  if (has("marketing", "ads", "campaign", "ppc", "email"))
+    return {
+      subject:
+        "a digital marketing dashboard with campaign charts on a laptop, ad creatives and email layouts shown on surrounding screens",
+      avoid: "people, landscapes",
+    };
+  return {
+    subject: `a realistic editorial photo that literally shows the "${b.title}" service — either the professional delivering it in a real setting or its finished result / deliverables, chosen to match the description above`,
+    avoid: "unrelated subjects, generic office stock photos, abstract wallpaper",
+  };
+}
+
+export function buildCoverPrompt(b: CoverBrief): string {
+  const { subject, avoid } = coverSubject(b);
+  const desc = b.description.replace(/\s+/g, " ").trim().slice(0, 320);
+  const deliv = b.deliverables.slice(0, 8).join(", ");
+  return [
+    `Professional portfolio cover photo for a freelancer's service card titled "${b.title}".`,
+    desc ? `The service: ${desc}.` : "",
+    deliv ? `Deliverables the client receives: ${deliv}.` : "",
+    `Show ${subject}.`,
+    `The image must clearly depict this specific service and its deliverables so a buyer instantly understands what they get.`,
+    `Style: high-end product/mockup photography, soft natural studio light, shallow depth of field, modern neutral background with subtle teal accents, crisp detail, premium marketplace look, 16:9 landscape composition with the subject centred.`,
+    `No readable text, no captions, no watermarks, no real brand logos (abstract placeholder marks only).`,
+    `Avoid: ${avoid}, cartoonish clip-art, distorted hands, cluttered collage, stock-photo handshakes.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+async function xaiImageOnce(key: string, model: string, prompt: string, timeoutMs: number) {
+  const body: Record<string, unknown> = {
+    model,
+    prompt,
+    n: 1,
+    aspect_ratio: "16:9",
+    resolution: "1k",
+    response_format: "b64_json",
+  };
+  if (model === "grok-imagine-image-2.0") body["quality"] = "medium";
   const res = await fetch("https://api.x.ai/v1/images/generations", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "grok-imagine-image-2.0",
-      prompt,
-      n: 1,
-      aspect_ratio: "16:9",
-      resolution: "1k",
-      quality: "medium",
-      response_format: "b64_json",
-    }),
-    signal: AbortSignal.timeout(90_000),
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     const t = await res.text().catch(() => "");
-    throw new HttpError(`Image generation failed (${res.status}): ${t.slice(0, 200)}`, 502);
+    const err = new HttpError(`Image generation failed (${res.status}): ${t.slice(0, 200)}`, 502);
+    (err as HttpError & { retryable?: boolean }).retryable =
+      res.status >= 500 || res.status === 429;
+    throw err;
   }
   const j = (await res.json()) as { data?: { b64_json?: string; url?: string }[] };
   const item = j.data?.[0];
@@ -3232,12 +3459,46 @@ async function generateCoverWithGrok(title: string, description: string): Promis
   throw new HttpError("Image generation returned no image", 502);
 }
 
+/** Primary: grok-imagine-image-2.0 (150s). On timeout/5xx/429 retry once with the faster grok-imagine-image (90s). */
+async function generateCoverWithGrok(brief: CoverBrief): Promise<Uint8Array> {
+  const key = (typeof process !== "undefined" ? process.env?.["XAI_API_KEY"] : undefined)?.trim();
+  if (!key) throw new HttpError("Image generation needs XAI_API_KEY on the server", 503);
+  const prompt = buildCoverPrompt(brief);
+  const started = Date.now();
+  try {
+    return await xaiImageOnce(key, "grok-imagine-image-2.0", prompt, 150_000);
+  } catch (e) {
+    const name = e instanceof Error ? e.name : "";
+    const retryable =
+      name === "TimeoutError" ||
+      name === "AbortError" ||
+      (e as { retryable?: boolean })?.retryable === true ||
+      !(e instanceof HttpError);
+    console.warn(
+      `[cover] primary model failed after ${Date.now() - started}ms (${name}): ${e instanceof Error ? e.message : e}`,
+    );
+    if (!retryable) throw e;
+    try {
+      return await xaiImageOnce(key, "grok-imagine-image", prompt, 90_000);
+    } catch (e2) {
+      const n2 = e2 instanceof Error ? e2.name : "";
+      if (n2 === "TimeoutError" || n2 === "AbortError")
+        throw new HttpError(
+          "The image model is busy right now — please try Generate again in a minute",
+          504,
+        );
+      throw e2;
+    }
+  }
+}
+
 /** Upload or AI-generate a service cover; optionally persist onto an existing service row. */
 export async function setServiceImage(
   request: Request,
   body: {
     title?: string;
     description?: string;
+    deliverables?: string[];
     data_url?: string;
     mode?: "upload" | "generate" | "clear";
     service_id?: string;
@@ -3263,8 +3524,27 @@ export async function setServiceImage(
   let bytes: Uint8Array;
   let contentType = "image/jpeg";
   if (mode === "generate") {
-    const title = (body.title ?? "").trim() || "Service";
-    bytes = await generateCoverWithGrok(title, (body.description ?? "").trim());
+    // Prefer the saved service row (authoritative title/description/deliverables) when we have one.
+    let title = (body.title ?? "").trim();
+    let description = (body.description ?? "").trim();
+    let deliverables = Array.isArray(body.deliverables)
+      ? body.deliverables.map((x) => String(x).trim()).filter(Boolean)
+      : [];
+    if (body.service_id) {
+      const { data: row } = await db()
+        .from("services")
+        .select("*")
+        .eq("id", body.service_id)
+        .eq("seller_id", seller.id)
+        .maybeSingle();
+      if (row) {
+        const svc = mapService(row as ServiceRow);
+        title = title || svc.title;
+        description = description || svc.description || "";
+        if (!deliverables.length) deliverables = [...svc.deliverables];
+      }
+    }
+    bytes = await generateCoverWithGrok({ title: title || "Service", description, deliverables });
   } else {
     if (!body.data_url) throw new HttpError("Choose an image to upload", 400);
     const parsed = parseDataUrl(body.data_url);
@@ -3297,7 +3577,6 @@ export async function setServiceImage(
   invalidateCatalogCache();
   return { image_url };
 }
-
 
 export async function resetDemo(request?: Request): Promise<{ ok: true }> {
   invalidateCatalogCache();
