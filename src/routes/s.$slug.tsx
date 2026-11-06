@@ -313,8 +313,8 @@ function AgentBadge({ mcp, tools }: { mcp: string; tools: string[] }) {
         <p className="text-xs font-medium text-muted-foreground">MCP endpoint</p>
         <p className="mt-1 break-all font-mono text-xs text-link">{mcp}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Live MCP server (Streamable HTTP). Tools: list_services, get_service, request_quote,
-          get_quote_status, create_deposit_link (real PayPal sandbox order).
+          Live MCP (Streamable HTTP): list_services, request_quote, create_payment_mandate,
+          create_deposit_link (PayPal sandbox order inside a revocable spend limit).
         </p>
         {USE_MOCKS && (
           <p className="mt-2 text-xs text-muted-foreground">

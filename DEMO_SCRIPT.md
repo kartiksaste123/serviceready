@@ -84,7 +84,7 @@
 **On screen:** **Run payment check** / collections run → proposal card with AI-drafted reminder. Overlay: `AI draft · human approves`.
 
 **Say:**  
-“If the balance isn’t paid yet, **AI** drafts a reminder — a human edits and approves before anything is sent. PayPal stays the source of truth.”
+“Payment check uses the official **PayPal Agent Toolkit** — you can see `get_invoice` in the audit trail. **AI** drafts a reminder; a human approves before **send_invoice_reminder**. PayPal evidence beats client claims.”
 
 **Do:** Approve (or skip send if already showing unpaid invoice) → pay the invoice as the **same sandbox buyer** → **Check payment** / refresh.
 
@@ -95,22 +95,31 @@
 
 ---
 
-### 2:25–2:45 — Architecture card + CTA
+### 2:20–2:35 — MCP mandate (10–15s, optional if tight)
+
+**On screen:** Terminal or Connect page — `create_payment_mandate` → `create_deposit_link` with `mandate_key`. Overlay: `Spend limit · revocable`.
+
+**Say:**  
+“Outside agents need a **payment mandate** with a spend limit before they can mint a PayPal deposit link. Revoke the key anytime.”
+
+---
+
+### 2:35–2:55 — Architecture card + CTA
 
 **On screen:** Simple full-screen card (Canva/slide or README architecture):
 
 ```
 ServiceReady
 AI (xAI Grok): catalog · agent chat · collections drafts
-Agents: MCP server /mcp/maya-rao-studio → create_deposit_link
-PayPal: Orders v2 deposit · Invoicing v2 balance · signed Webhooks
+Agents: MCP mandate → create_deposit_link · Agent Toolkit collections/refund
+PayPal: Orders v2 deposit · Invoicing v2 · create_refund · signed Webhooks
 Supabase + TanStack Start on Render · MIT
 Demo: serviceready.onrender.com
 Repo: github.com/kartiksaste123/serviceready
 ```
 
 **Say:**  
-“**AI** books and drafts — any MCP agent can book too. **PayPal** settles deposits and invoices, and signed webhooks reconcile them. Judges: open the live demo, use the sandbox buyer in the README, and try `/s/maya-rao-studio`. Thanks!”
+“**AI** books within spend limits; **PayPal Agent Toolkit** proves payment; webhooks reconcile. Judges: live demo, sandbox buyer in README, `/s/maya-rao-studio`. Thanks!”
 
 **End card hold ~3s.** Stop by **2:55** max (hard cap 3:00).
 

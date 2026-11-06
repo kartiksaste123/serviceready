@@ -1,8 +1,7 @@
-# Legacy note (Lovable)
+# Legacy note
 
-ServiceReady no longer deploys from Lovable.
+ServiceReady no longer deploys from Lovable or Fly.
 
-**Live demo:** https://serviceready.onrender.com  
-**Source:** https://github.com/kartiksaste123/serviceready  
-
-This file replaces an older Lovable release handoff. Use the Render deployment and the README judge path.
+- Live demo: https://serviceready.onrender.com
+- Repo default branch: `master` (Render auto-deploy)
+- See README.md and render.yaml

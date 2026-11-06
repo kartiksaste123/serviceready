@@ -323,3 +323,29 @@ export async function remindInvoice(invoiceId: string, subject?: string, note?: 
   });
   return { ok: true as const };
 }
+
+/** Payments v2 refund on a capture id (fallback if Agent Toolkit is unavailable). */
+export async function refundCapture(opts: {
+  captureId: string;
+  amountCents?: number;
+  currency?: string;
+  noteToPayer?: string;
+  requestId: string;
+}): Promise<{ id: string; status: string }> {
+  const body: Record<string, unknown> = {};
+  if (opts.amountCents !== undefined) {
+    body["amount"] = {
+      currency_code: opts.currency ?? "USD",
+      value: centsToUsd(opts.amountCents),
+    };
+  }
+  if (opts.noteToPayer) body["note_to_payer"] = opts.noteToPayer.slice(0, 255);
+  const result = await paypalFetch<{ id: string; status: string }>(
+    "POST",
+    `/v2/payments/captures/${encodeURIComponent(opts.captureId)}/refund`,
+    body,
+    { "PayPal-Request-Id": opts.requestId },
+  );
+  return { id: result.id, status: result.status };
+}
+

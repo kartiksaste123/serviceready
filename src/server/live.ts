@@ -38,6 +38,12 @@ import { db } from "./db";
 import { paypalWebhookId, publicOrigin } from "./env";
 import { HttpError } from "./http";
 import * as paypal from "./paypal";
+import {
+  toolkitGetInvoice,
+  toolkitGetOrder,
+  toolkitCreateRefund,
+  toolkitSendInvoiceReminder,
+} from "./paypal-toolkit";
 import { chatCompletion, chatJson, hasLlm, llmDisclosure, LlmError } from "./llm";
 import { z } from "zod";
 
@@ -425,6 +431,15 @@ async function detail(id: string): Promise<QuoteDetail> {
 export async function getSeller(request?: Request): Promise<Seller> {
   return mapSeller(await sellerFromRequest(request));
 }
+
+/** Resolve seller id by public slug (MCP mandates). */
+export async function getSellerIdBySlug(slug: string): Promise<string> {
+  const { data, error } = await db().from("sellers").select("id").eq("slug", slug).maybeSingle();
+  if (error) throw new HttpError(error.message, 500);
+  if (!data) throw new HttpError(`Unknown storefront: ${slug}`, 404);
+  return (data as { id: string }).id;
+}
+
 
 export async function putRules(rules: SellerRules, request?: Request): Promise<Seller> {
   const errs = rulesErrors(rules);
@@ -1019,26 +1034,100 @@ export async function refreshInvoiceStatus(id: string): Promise<QuoteDetail> {
 
 export async function cancelQuote(id: string, request?: Request): Promise<QuoteDetail> {
   const { quote: q } = await assertOwnsQuote(request, id);
-  if (q.status !== "quoted") {
+  const pays = await paymentsFor(id);
+  const deposit = pays.find((p) => p.kind === "deposit");
+  const now = new Date().toISOString();
+
+  // Unpaid quote — void open orders and cancel.
+  if (q.status === "quoted") {
+    await db().from("quotes").update({ status: "cancelled", updated_at: now }).eq("id", id);
+    for (const p of pays) {
+      if (p.status === "CREATED") {
+        await db().from("payments").update({ status: "VOIDED", updated_at: now }).eq("id", p.id);
+      }
+    }
+    await pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "seller",
+      kind: "approval",
+      text: "Quote cancelled",
+    });
+    return detail(id);
+  }
+
+  // Deposit paid (or later, before balance paid) — refund capture via Agent Toolkit, then cancel.
+  const refundable =
+    deposit &&
+    deposit.status === "COMPLETED" &&
+    deposit.paypal_capture_id &&
+    (q.status === "deposit_paid" || q.status === "delivered");
+  if (!refundable) {
     throw new HttpError(
-      "Only quotes without a paid deposit can be cancelled. Refund the deposit in PayPal first.",
+      q.status === "balance_invoiced" || q.status === "paid"
+        ? "Cancel with refund is only available before the balance invoice is paid. Refund the balance in PayPal if needed."
+        : "This booking cannot be cancelled with an automatic deposit refund in its current state.",
       400,
     );
   }
-  const now = new Date().toISOString();
-  await db().from("quotes").update({ status: "cancelled", updated_at: now }).eq("id", id);
-  const pays = await paymentsFor(id);
-  for (const p of pays) {
-    if (p.status === "CREATED") {
-      await db().from("payments").update({ status: "VOIDED", updated_at: now }).eq("id", p.id);
-    }
+
+  let refundId: string | undefined;
+  let refundStatus: string | undefined;
+  let toolkitTrace: Awaited<ReturnType<typeof toolkitCreateRefund>>["trace"] | null = null;
+  try {
+    const r = await toolkitCreateRefund({
+      captureId: deposit!.paypal_capture_id!,
+      noteToPayer: `ServiceReady booking ${id} cancelled — deposit refunded`,
+    });
+    refundId = r.refundId;
+    refundStatus = r.status;
+    toolkitTrace = r.trace;
+  } catch (e) {
+    // Fallback to Payments v2 REST if toolkit fails
+    const r = await paypal.refundCapture({
+      captureId: deposit!.paypal_capture_id!,
+      requestId: `refund-${id}-${deposit!.paypal_capture_id}`,
+      noteToPayer: `ServiceReady booking ${id} cancelled — deposit refunded`,
+    });
+    refundId = r.id;
+    refundStatus = r.status;
+    await pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "paypal",
+      kind: "tool_call",
+      tool: "paypal.payments.refund",
+      input: { capture_id: deposit!.paypal_capture_id },
+      output: { refund_id: r.id, status: r.status },
+      text: `Deposit refunded via Payments v2 (${r.status})`,
+    });
   }
+  if (toolkitTrace) {
+    await pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "paypal",
+      kind: "tool_call",
+      tool: toolkitTrace.tool,
+      input: toolkitTrace.input,
+      output: toolkitTrace.output,
+      text: `Deposit refunded via PayPal Agent Toolkit create_refund (${refundStatus ?? "ok"})`,
+    });
+  }
+
+  await db()
+    .from("payments")
+    .update({ status: "REFUNDED", updated_at: now })
+    .eq("id", deposit!.id);
+  await db().from("quotes").update({ status: "cancelled", updated_at: now }).eq("id", id);
   await pushEvent({
     quote_id: id,
     seller_id: q.seller_id,
     actor: "seller",
     kind: "approval",
-    text: "Quote cancelled",
+    tool: "booking.cancel_refund",
+    output: { refund_id: refundId, capture_id: deposit!.paypal_capture_id, status: refundStatus },
+    text: "Booking cancelled — deposit refunded on PayPal evidence",
   });
   return detail(id);
 }
@@ -1124,20 +1213,58 @@ export async function runCollections(id: string, trigger?: string, request?: Req
       .single();
     if (data) proposal = mapProposal(data as ProposalRow);
   } else {
-    // Refresh from PayPal first
+    // Refresh from PayPal via official Agent Toolkit (visible tool traces).
     try {
       if (bal.paypal_invoice_id) {
-        const inv = await paypal.getInvoice(bal.paypal_invoice_id);
-        await log({
-          quote_id: id,
-          seller_id: q.seller_id,
-          actor: "collections_agent",
-          kind: "tool_call",
-          tool: "paypal.get_invoice",
-          input: { id: bal.paypal_invoice_id },
-          output: { status: inv.status },
-        });
-        if (["PAID", "MARKED_AS_PAID", "PAYMENT_COMPLETED"].includes(inv.status)) {
+        let status = "UNKNOWN";
+        try {
+          const inv = await toolkitGetInvoice(bal.paypal_invoice_id);
+          status = inv.status;
+          await log({
+            quote_id: id,
+            seller_id: q.seller_id,
+            actor: "collections_agent",
+            kind: "tool_call",
+            tool: inv.trace.tool,
+            input: inv.trace.input,
+            output: inv.trace.output,
+            text: `PayPal Agent Toolkit get_invoice → ${status}`,
+          });
+        } catch (toolkitErr) {
+          const inv = await paypal.getInvoice(bal.paypal_invoice_id);
+          status = inv.status;
+          await log({
+            quote_id: id,
+            seller_id: q.seller_id,
+            actor: "collections_agent",
+            kind: "tool_call",
+            tool: "paypal.get_invoice",
+            input: { id: bal.paypal_invoice_id },
+            output: { status: inv.status, fallback: true },
+            text: `PayPal get_invoice fallback → ${status}`,
+          });
+          void toolkitErr;
+        }
+        // Also confirm any deposit order still matches PayPal evidence.
+        const dep = pays.find((p) => p.kind === "deposit" && p.paypal_order_id);
+        if (dep?.paypal_order_id) {
+          try {
+            const ord = await toolkitGetOrder(dep.paypal_order_id);
+            await log({
+              quote_id: id,
+              seller_id: q.seller_id,
+              actor: "collections_agent",
+              kind: "tool_call",
+              tool: ord.trace.tool,
+              input: ord.trace.input,
+              output: ord.trace.output,
+              text: `PayPal Agent Toolkit get_order → ${ord.status}`,
+            });
+          } catch {
+            /* non-fatal */
+          }
+        }
+        if (["PAID", "MARKED_AS_PAID", "PAYMENT_COMPLETED"].includes(status)) {
           await refreshInvoiceStatus(id);
           return runCollections(id, trigger);
         }
@@ -1287,23 +1414,45 @@ export async function approveProposal(
   const pays = await paymentsFor(p.quote_id);
   const bal = pays.find((x) => x.kind === "balance");
 
-  // If reminder + invoice id, call PayPal remind
+  // Human gate: only after approval do we call Agent Toolkit send_invoice_reminder.
   if (p.action === "send_reminder" && bal?.paypal_invoice_id) {
     try {
-      await paypal.remindInvoice(
-        bal.paypal_invoice_id,
-        "Reminder from ServiceReady",
-        draft_message,
-      );
-      await pushEvent({
-        quote_id: p.quote_id,
-        seller_id: q.seller_id,
-        actor: "seller",
-        kind: "approval",
-        tool: "paypal.invoicing.remind",
-        input: { invoice_id: bal.paypal_invoice_id },
-        text: "Reminder approved and sent via PayPal",
-      });
+      let reminded = false;
+      try {
+        const trace = await toolkitSendInvoiceReminder({
+          invoiceId: bal.paypal_invoice_id,
+          subject: "Reminder from ServiceReady",
+          note: draft_message,
+        });
+        await pushEvent({
+          quote_id: p.quote_id,
+          seller_id: q.seller_id,
+          actor: "seller",
+          kind: "approval",
+          tool: trace.tool,
+          input: trace.input,
+          output: trace.output,
+          text: "Reminder approved — sent via PayPal Agent Toolkit send_invoice_reminder",
+        });
+        reminded = true;
+      } catch {
+        await paypal.remindInvoice(
+          bal.paypal_invoice_id,
+          "Reminder from ServiceReady",
+          draft_message,
+        );
+        await pushEvent({
+          quote_id: p.quote_id,
+          seller_id: q.seller_id,
+          actor: "seller",
+          kind: "approval",
+          tool: "paypal.invoicing.remind",
+          input: { invoice_id: bal.paypal_invoice_id, fallback: true },
+          text: "Reminder approved and sent via PayPal Invoicing remind (fallback)",
+        });
+        reminded = true;
+      }
+      void reminded;
     } catch (e) {
       await db()
         .from("proposals")

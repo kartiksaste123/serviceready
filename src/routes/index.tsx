@@ -20,7 +20,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Turn your rate card into services AI assistants can quote and book, with a PayPal deposit collected before work starts.",
+          "Deposit-before-work merchant storefront: AI quotes from your catalog, PayPal takes the deposit first, and PayPal evidence beats client claims.",
       },
       {
         property: "og:title",
@@ -47,11 +47,11 @@ export const Route = createFileRoute("/")({
 });
 
 const tools = [
+  "PayPal Agent Toolkit",
   "PayPal Orders v2",
   "PayPal Invoicing",
   "PayPal Webhooks",
-  "MCP server",
-  "WebMCP",
+  "MCP mandates",
   "xAI Grok",
   "Render",
 ];
@@ -117,13 +117,16 @@ function Home() {
         <section className="border-b border-border">
           <div className="mx-auto grid max-w-7xl items-start gap-8 px-4 py-8 sm:gap-10 sm:px-8 sm:py-10 lg:grid-cols-[1.03fr_.97fr] lg:gap-12 lg:py-14">
             <div>
-              <p className="eyebrow">The agent-ready service desk for freelancers</p>
+              <p className="eyebrow">Deposit-before-work merchant storefront</p>
               <h1 className="mt-3 max-w-3xl text-[1.85rem] font-semibold leading-[1.08] sm:text-5xl lg:text-6xl">
                 Get booked by AI agents. Get paid before you start.
               </h1>
               <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-                Publish services assistants can understand, collect a PayPal deposit before work
-                begins, and keep every client follow-up under your control.
+                Agent-ready storefront with PayPal deposits before work.{" "}
+                <span className="font-medium text-foreground">
+                  PayPal evidence beats client claims
+                </span>
+                — AI never sets your prices, and every reminder stays human-approved.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link to="/onboard" className="btn-mint w-full sm:w-auto">
@@ -205,15 +208,17 @@ function Home() {
               <p className="eyebrow">Why now</p>
               <h2 className="mt-3 text-2xl font-semibold sm:text-4xl">Less chasing. More trust.</h2>
               <p className="mt-4 leading-7 text-muted-foreground">
-                Late-payment follow-up takes time and strains client relationships. At the same
-                time, clients increasingly ask AI to find who to hire.
+                Freelancers lose hours chasing invoices and start work on trust. Industry surveys
+                (e.g. FreshBooks / Intuit small-business reports) routinely find a large share of
+                invoices paid late — illustrative framing, not ServiceReady traction. Meanwhile
+                clients ask AI assistants who to hire.
               </p>
             </div>
             <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
               {[
-                ["1", "catalog for clients and their AI assistants", "One source of truth"],
-                ["0", "client follow-ups sent without your approval", "Human control built in"],
-                ["5", "clear stages from quote to fully paid", "Every step accounted for"],
+                ["$0", "work starts before PayPal confirms the deposit", "Deposit-before-work"],
+                ["0", "reminders sent without your approval", "Human gate on every send"],
+                ["MCP", "mandates with spend limits + revoke", "Agentic commerce guardrails"],
               ].map(([v, c, s]) => (
                 <article key={v} className="bg-card p-6">
                   <div className="text-4xl font-semibold tabular-nums">{v}</div>

@@ -12,9 +12,9 @@ ServiceReady
 
 ## Tagline (≤60 characters)
 
-AI books freelancers; PayPal takes the deposit first
+PayPal evidence first; AI books within spend limits
 
-_(58 characters)_
+_(51 characters)_
 
 Alternate options if the form rejects punctuation:
 
@@ -29,7 +29,7 @@ Paste the Markdown below into the Devpost **Description** field.
 
 ### The problem
 
-Solo freelancers lose hours chasing invoices and start work on trust. Clients ghost after a vague “yes,” deposits never land, and “I already paid” emails have no source of truth. ServiceReady turns a messy rate card into an **agent-ready storefront** where an AI assistant can quote, and **PayPal** is the only evidence that money moved.
+Solo freelancers lose hours chasing invoices and start work on trust. Clients ghost after a vague “yes,” deposits never land, and “I already paid” emails have no source of truth. ServiceReady is a **deposit-before-work merchant storefront**: AI quotes from your catalog (never invents prices), **PayPal evidence beats client claims**, and outside agents can only mint deposit links inside a **revocable spend-limited mandate**.
 
 ### What it does
 
@@ -37,7 +37,8 @@ Solo freelancers lose hours chasing invoices and start work on trust. Clients gh
 2. **Public storefront + AI agent chat** — Buyers (or other agents) talk to the storefront assistant on `/s/maya-rao-studio`. It lists services, requests quotes, and returns a PayPal deposit link — with tool traces in the UI.
 3. **PayPal Orders v2 deposit** — Before work starts, the buyer pays a deposit via the **PayPal JS SDK Buttons** against the sandbox. Server creates and captures the order (`Orders v2`); capture id is stored; status becomes deposit-paid only from PayPal evidence.
 4. **Deliver → PayPal Invoicing v2 balance** — Seller marks delivered; ServiceReady creates and sends a real **PayPal invoice** for the remaining balance.
-5. **AI collections drafts, human approves** — “Run payment check” uses the LLM to draft reminder/follow-up copy. A human edits and approves before any remind goes out. Invoice status is refreshed from PayPal — client claims are never trusted over PayPal evidence.
+5. **AI collections via PayPal Agent Toolkit, human approves** — “Run payment check” calls official `@paypal/agent-toolkit` (`get_invoice` / `get_order`) with tool traces in the audit trail, then drafts reminder copy. A human approves before `send_invoice_reminder`. Cancel & refund uses Agent Toolkit `create_refund`.
+6. **MCP payment mandates** — Outside agents must `create_payment_mandate` (spend limit + revocable key) before `create_deposit_link`. Over-limit or revoked keys are rejected.
 
 ### Live demo (judges)
 
@@ -60,8 +61,8 @@ Solo freelancers lose hours chasing invoices and start work on trust. Clients gh
 |---------|-------|----------------|
 | Catalog parse | xAI/Grok (or OpenAI-compatible) via `POST /api/catalog/parse` | Extracts structured services from messy rate-card text |
 | Storefront agent | Same LLM via `POST /api/agent/chat` | Conversational booking with tool traces (`list_services`, `get_service`, `request_quote`, `get_quote_status`) |
-| Collections drafts | Same LLM via `POST /api/quotes/:id/collections/run` | Drafts reminder/follow-up copy for **human approval** before send |
-| Outside agents | Any MCP client via `/mcp/maya-rao-studio` | `list_services`, `request_quote`, `create_deposit_link` (real PayPal sandbox order + approve link) |
+| Collections drafts | Same LLM + **@paypal/agent-toolkit** via `POST /api/quotes/:id/collections/run` | Toolkit reads invoice/order; LLM drafts copy; **human approval** before `send_invoice_reminder` |
+| Outside agents | Any MCP client via `/mcp/maya-rao-studio` | `create_payment_mandate` → `create_deposit_link(mandate_key)` (spend limit + revoke) |
 
 Keys live only in **server** env (`XAI_API_KEY` / `OPENAI_API_KEY`). Without a key, endpoints fall back to heuristics so tests stay green — the live demo is wired for real LLM when the key is set.
 
@@ -70,8 +71,10 @@ Keys live only in **server** env (`XAI_API_KEY` / `OPENAI_API_KEY`). Without a k
 | Flow | API | Role |
 |------|-----|------|
 | Deposit | **Orders v2** create + capture + **JS SDK Buttons** | Money before work |
-| Balance | **Invoicing v2** create, send, get (+ remind on approval) | Post-delivery balance |
-| Reconciliation | **Webhooks** + `verify-webhook-signature` | `PAYMENT.CAPTURE.COMPLETED`, `INVOICING.INVOICE.PAID` flip status only after re-reading PayPal |
+| Balance | **Invoicing v2** create, send, get | Post-delivery balance |
+| Collections / refund | **@paypal/agent-toolkit** (`get_invoice`, `get_order`, `send_invoice_reminder`, `create_refund`) | Official toolkit tool traces; human gate on send |
+| Agentic commerce | MCP payment **mandate** (spend limit + revoke) | Agent cannot mint deposit links beyond budget |
+| Reconciliation | **Webhooks** + `verify-webhook-signature` | Status flips only after re-reading PayPal |
 | Config | `GET /api/paypal/config` | Public sandbox `client_id` only |
 
 `PAYPAL_CLIENT_SECRET` never appears in `VITE_*` or the client. Sandbox only for the hackathon.
@@ -89,8 +92,11 @@ This project was significantly rebuilt for the hackathon:
 - **Supabase Postgres** persistence so judges share one seeded demo seller across browsers
 - **Server-side LLM** (xAI/Grok / OpenAI-compatible) for catalog parse, storefront agent chat, and collections drafts
 - **PayPal Webhooks** with `verify-webhook-signature`, idempotent on transmission id; every event is re-read from the PayPal API before state changes
-- **MCP server** (`/mcp/maya-rao-studio`, Streamable HTTP) so Claude/ChatGPT/Cursor can list services, request a quote and get a real PayPal deposit link (`create_deposit_link`); WebMCP registration on the storefront
-- Hosted on **Render** (Node web service, blueprint `render.yaml`)
+- **@paypal/agent-toolkit** wired into collections, refunds, and approved invoice reminders (visible tool traces)
+- **MCP payment mandates** (spend limit + revocable key) gating `create_deposit_link`
+- **Deposit refund on cancel** via Agent Toolkit `create_refund`
+- **MCP server** (`/mcp/maya-rao-studio`, Streamable HTTP) + WebMCP on the storefront
+- Hosted on **Render** (Node web service, blueprint `render.yaml`) — tick Render on the form
 - Sandbox buyer credentials in README for Devpost test access
 - Public **GitHub** repo with **MIT** license and a judge-ready README
 
@@ -98,13 +104,13 @@ This project was significantly rebuilt for the hackathon:
 
 ```
 Browser (TanStack Start)
-  ├─ /api/*            →  live.ts (Supabase state machine) + paypal.ts (sandbox REST) + llm.ts (xAI Grok)
-  ├─ /api/paypal/webhook →  signature-verified PayPal events → re-read order/invoice → reconcile
-  └─ /mcp/:slug         →  mcp.ts (MCP tools for outside AI agents → PayPal Orders v2 deposit link)
+  ├─ /api/*            →  live.ts + paypal.ts + paypal-toolkit.ts (@paypal/agent-toolkit) + llm.ts
+  ├─ /api/paypal/webhook →  signature-verified PayPal events → re-read → reconcile
+  └─ /mcp/:slug         →  mcp.ts + mandates.ts (spend-limit keys → Orders v2 deposit link)
 Hosted on Render · Supabase Postgres
 ```
 
-Code pointers: `src/server/mcp.ts`, `src/server/paypal.ts`, `src/components/PayPalDepositButton.tsx`, `src/server/llm.ts`, `src/server/live.ts`.
+Code pointers: `src/server/paypal-toolkit.ts`, `src/server/mandates.ts`, `src/server/mcp.ts`, `src/server/paypal.ts`, `src/server/live.ts`.
 
 ---
 
@@ -112,20 +118,19 @@ Code pointers: `src/server/mcp.ts`, `src/server/paypal.ts`, `src/components/PayP
 
 Tick / list these on the form (comma-separated or multi-select as the UI allows):
 
+- PayPal Agent Toolkit (@paypal/agent-toolkit)
 - PayPal Orders v2
 - PayPal Invoicing v2
+- PayPal Payments v2 (refunds)
 - PayPal JavaScript SDK (Smart Buttons)
 - PayPal REST API (sandbox OAuth2 client credentials)
 - PayPal Webhooks (signature verification)
 - Model Context Protocol (MCP server, Streamable HTTP) + WebMCP
 - xAI Grok API (OpenAI-compatible chat completions)
-- OpenAI API (compatible fallback path)
 - Supabase (Postgres)
 - TanStack Start
-- TanStack Router
 - Nitro
 - Render
-- Lovable (initial UI scaffold)
 - Vite
 - TypeScript
 - Bun
@@ -133,9 +138,9 @@ Tick / list these on the form (comma-separated or multi-select as the UI allows)
 
 **Recommended “Built With” short string for the text box:**
 
-`PayPal Orders v2, PayPal Invoicing v2, PayPal Webhooks, PayPal JS SDK, xAI Grok, MCP, Supabase, Render, TanStack Start, TypeScript, Bun`
+`PayPal Agent Toolkit, PayPal Orders v2, PayPal Invoicing v2, PayPal Webhooks, PayPal Payments refunds, xAI Grok, MCP mandates, Supabase, Render, TanStack Start, TypeScript, Bun`
 
-Sponsor tools: tick **Render** (the live demo is a Render web service — eligible for Best Use of Render).
+Sponsor tools: tick **Render** (live demo is a Render web service — Best Use of Render). Prefer **Best Use of Agentic Commerce** / **Best Use of PayPal + AI** for the mandate + toolkit story.
 
 ---
 

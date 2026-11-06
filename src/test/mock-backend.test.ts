@@ -58,7 +58,14 @@ describe("quote → deposit → deliver → balance lifecycle", () => {
     await expect(mock.captureDeposit(q.id, "bogus")).rejects.toThrow();
     await mock.cancelQuote(q.id);
     await expect(mock.createDepositOrder(q.id)).rejects.toThrow(/cancelled/i);
-    await expect(mock.cancelQuote("q_priya")).rejects.toThrow();
+    // balance_invoiced / paid cannot auto-refund-cancel
+    await expect(mock.cancelQuote("q_hannah")).rejects.toThrow(/cannot be cancelled/i);
+    // deposit_paid can cancel with Agent Toolkit refund simulation
+    const refunded = await mock.cancelQuote("q_priya");
+    expect(refunded.quote.status).toBe("cancelled");
+    expect(refunded.payments.some((p) => p.kind === "deposit" && p.status === "REFUNDED")).toBe(
+      true,
+    );
   });
 
   it("validates public quote requests server-side", async () => {

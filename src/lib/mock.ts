@@ -885,21 +885,53 @@ export async function cancelQuote(id: string) {
   await wait();
   const db = D();
   const q = getQ(id);
-  if (q.status !== "quoted")
-    throw new Error(
-      "Only quotes without a paid deposit can be cancelled. Refund the deposit in PayPal first.",
+  const deposit = (db.payments[id] ?? []).find((p) => p.kind === "deposit");
+  if (q.status === "quoted") {
+    q.status = "cancelled";
+    touch(q);
+    for (const p of db.payments[id] ?? [])
+      if (p.status === "CREATED") {
+        p.status = "VOIDED";
+        p.updated_at = now();
+      }
+    supersede(id, "quote cancelled");
+    db.events.push(ev(id, "seller", "approval", { text: "Quote cancelled" }));
+    save();
+    return detail(id);
+  }
+  if (
+    deposit &&
+    deposit.status === "COMPLETED" &&
+    deposit.paypal_capture_id &&
+    (q.status === "deposit_paid" || q.status === "delivered")
+  ) {
+    const refundId = `REF${rand(12)}`;
+    deposit.status = "REFUNDED";
+    deposit.updated_at = now();
+    q.status = "cancelled";
+    touch(q);
+    supersede(id, "booking cancelled with deposit refund");
+    db.events.push(
+      ev(id, "paypal", "tool_call", {
+        tool: "paypal.agent_toolkit.create_refund",
+        input: { capture_id: deposit.paypal_capture_id },
+        output: { refund_id: refundId, status: "COMPLETED" },
+        text: "Deposit refunded via PayPal Agent Toolkit create_refund (COMPLETED)",
+      }),
     );
-  q.status = "cancelled";
-  touch(q);
-  for (const p of db.payments[id] ?? [])
-    if (p.status === "CREATED") {
-      p.status = "VOIDED";
-      p.updated_at = now();
-    }
-  supersede(id, "quote cancelled");
-  db.events.push(ev(id, "seller", "approval", { text: "Quote cancelled" }));
-  save();
-  return detail(id);
+    db.events.push(
+      ev(id, "seller", "approval", {
+        tool: "booking.cancel_refund",
+        output: { refund_id: refundId },
+        text: "Booking cancelled — deposit refunded on PayPal evidence",
+      }),
+    );
+    save();
+    return detail(id);
+  }
+  throw new Error(
+    "This booking cannot be cancelled with an automatic deposit refund in its current state.",
+  );
 }
 /** Demo-only: simulate the client paying the PayPal balance invoice (INVOICING.INVOICE.PAID webhook). */
 export async function simulateBalancePaid(id: string) {

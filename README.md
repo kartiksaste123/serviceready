@@ -1,6 +1,6 @@
 # ServiceReady
 
-**Agent-ready storefront for freelancers** — AI assistants can discover services, request a quote, and collect a **PayPal deposit before work starts**. After delivery, ServiceReady creates a real **PayPal invoice** for the balance and follows up with human-approved reminders. Client claims are never trusted over PayPal evidence.
+**Deposit-before-work merchant storefront** — AI assistants discover services, request a quote, and collect a **PayPal deposit before work starts**. **PayPal evidence beats client claims.** AI never sets amounts (catalog prices only). After delivery, a real **PayPal invoice** covers the balance; reminders are drafted by AI and **human-approved**. Outside agents use MCP with a **revocable spend-limited payment mandate** before `create_deposit_link`.
 
 Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/).
 
@@ -47,9 +47,11 @@ Or hit **Continue as demo** on `/login`. Real sellers can **Create account** —
 | Flow | API | Code |
 |------|-----|------|
 | Deposit | Orders v2 create + capture + JS SDK Buttons | `src/server/paypal.ts`, `src/components/PayPalDepositButton.tsx` |
-| Balance | Invoicing v2 create + send + get (+ remind on approval) | `src/server/live.ts` → `deliver` / `refreshInvoiceStatus` / `approveProposal` |
-| Reconciliation | **Webhooks** (`CHECKOUT.ORDER.APPROVED`, `PAYMENT.CAPTURE.COMPLETED`, `INVOICING.INVOICE.PAID/UPDATED`) verified with `verify-webhook-signature`, idempotent on transmission id, then re-read from the PayPal API | `POST /api/paypal/webhook` → `handlePaypalWebhook` |
-| Agent payments | MCP tool `create_deposit_link` creates the Orders v2 order and returns the PayPal approve link; buyer returns to `/q/:id` and the server captures | `src/server/mcp.ts` |
+| Balance | Invoicing v2 create + send + get | `src/server/live.ts` → `deliver` / `refreshInvoiceStatus` |
+| Collections | **@paypal/agent-toolkit** `get_invoice` / `get_order` (tool traces in audit trail); remind only after human approval via `send_invoice_reminder` | `src/server/paypal-toolkit.ts`, `runCollections`, `approveProposal` |
+| Cancel + refund | Agent Toolkit `create_refund` (Payments v2 fallback) on deposit capture | `cancelQuote` |
+| Reconciliation | **Webhooks** + `verify-webhook-signature`, then re-read PayPal | `POST /api/paypal/webhook` |
+| Agentic commerce | MCP: `create_payment_mandate` (spend limit + revocable key) → `create_deposit_link(mandate_key)` | `src/server/mcp.ts`, `src/server/mandates.ts` |
 | Config | Public sandbox `client_id` | `GET /api/paypal/config` |
 
 Secrets (`PAYPAL_CLIENT_SECRET`) live **only** in server env — never `VITE_*`.
@@ -72,7 +74,7 @@ Without a key (or if the model call fails) the same endpoints fall back to deter
 
 ## MCP server (agentic commerce)
 
-`/mcp/:slug` speaks MCP over Streamable HTTP (stateless JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`). Tools: `list_services`, `get_service`, `request_quote`, `get_quote_status`, `create_deposit_link`.
+`/mcp/:slug` speaks MCP over Streamable HTTP (stateless JSON-RPC 2.0). Tools: `list_services`, `get_service`, `request_quote`, `get_quote_status`, **`create_payment_mandate`**, **`get_payment_mandate`**, **`revoke_payment_mandate`**, **`create_deposit_link`** (requires `mandate_key`; deposit must fit remaining spend).
 
 ```json
 { "mcpServers": { "maya-rao-studio": { "command": "npx", "args": ["-y", "mcp-remote", "https://serviceready.onrender.com/mcp/maya-rao-studio"] } } }
@@ -116,8 +118,10 @@ See `.env.example` and `ENV.md`. Required for live mode:
 Browser (TanStack Start)
   └─ api.ts  →  /api/*  (TanStack server handlers + Nitro catch-all)
         ├─ src/server/live.ts     Supabase persistence + booking state machine + webhook handler
-        ├─ src/server/paypal.ts   Sandbox Orders, Invoicing, webhook signature verification
-        ├─ src/server/llm.ts      xAI Grok (OpenAI-compatible) client
+        ├─ src/server/paypal.ts           Sandbox Orders, Invoicing, refunds, webhook verify
+        ├─ src/server/paypal-toolkit.ts   Official @paypal/agent-toolkit (collections + refund + remind)
+        ├─ src/server/mandates.ts         MCP spend-limit payment mandates
+        ├─ src/server/llm.ts              xAI Grok (OpenAI-compatible) client
         └─ src/server/mcp.ts      MCP server for outside AI agents (/mcp/:slug)
 Render (Node, Nitro node-server)  ·  Supabase Postgres (supabase/migrations, supabase/seed.sql)
 ```

@@ -114,7 +114,11 @@ function Detail() {
     mutationFn: () => api.cancelQuote(id),
     onSuccess: (d) => {
       applyDetail(d);
-      toast("Quote cancelled");
+      toast(
+        d.payments.some((p) => p.kind === "deposit" && p.status === "REFUNDED")
+          ? "Booking cancelled — deposit refunded on PayPal"
+          : "Quote cancelled",
+      );
     },
   });
   const simulate = useMutation({
@@ -211,7 +215,9 @@ function Detail() {
             )}
             Check payment status
           </button>
-          {q.status === "quoted" && (
+          {(q.status === "quoted" ||
+            q.status === "deposit_paid" ||
+            q.status === "delivered") && (
             <button
               type="button"
               className="btn-glass btn-sm"
@@ -223,7 +229,7 @@ function Detail() {
               ) : (
                 <XCircle className="size-3.5" aria-hidden="true" />
               )}
-              Cancel quote
+              {q.status === "quoted" ? "Cancel quote" : "Cancel & refund deposit"}
             </button>
           )}
           {canDeliver && (
@@ -478,9 +484,13 @@ function Detail() {
         <AlertDialogContent className="border-border bg-background text-foreground">
           {confirm === "cancel" ? (
             <AlertDialogHeader>
-              <AlertDialogTitle>Cancel this quote?</AlertDialogTitle>
+              <AlertDialogTitle>
+                {q.status === "quoted" ? "Cancel this quote?" : "Cancel booking and refund deposit?"}
+              </AlertDialogTitle>
               <AlertDialogDescription className="text-muted-foreground">
-                {q.client_name} will no longer be able to pay the deposit. No money has been taken.
+                {q.status === "quoted"
+                  ? `${q.client_name} will no longer be able to pay the deposit. No money has been taken.`
+                  : `PayPal Agent Toolkit will refund the deposit capture for ${q.client_name}. Status flips to cancelled from PayPal refund evidence.`}
               </AlertDialogDescription>
             </AlertDialogHeader>
           ) : (
@@ -502,7 +512,9 @@ function Detail() {
               onClick={() => (confirm === "cancel" ? cancel.mutate() : deliver.mutate())}
             >
               {confirm === "cancel"
-                ? "Cancel quote"
+                ? q.status === "quoted"
+                  ? "Cancel quote"
+                  : "Refund & cancel"
                 : q.balance_cents > 0
                   ? "Send invoice"
                   : "Close booking"}
