@@ -13,7 +13,6 @@ import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { JudgeModeBanner } from "../components/JudgeModeBanner";
 import { AuthProvider } from "@/lib/auth";
 
 function NotFoundComponent() {
@@ -119,7 +118,6 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <JudgeModeBanner />
         <Outlet />
         <Toaster theme="light" position="bottom-right" />
       </AuthProvider>

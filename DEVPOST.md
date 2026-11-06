@@ -91,7 +91,7 @@ This project was significantly rebuilt for the hackathon:
 - **PayPal Webhooks** with `verify-webhook-signature`, idempotent on transmission id; every event is re-read from the PayPal API before state changes
 - **MCP server** (`/mcp/maya-rao-studio`, Streamable HTTP) so Claude/ChatGPT/Cursor can list services, request a quote and get a real PayPal deposit link (`create_deposit_link`); WebMCP registration on the storefront
 - Hosted on **Render** (Node web service, blueprint `render.yaml`)
-- Judge-mode banner + sandbox buyer credentials for Devpost test access
+- Sandbox buyer credentials in README for Devpost test access
 - Public **GitHub** repo with **MIT** license and a judge-ready README
 
 ### Architecture (short)

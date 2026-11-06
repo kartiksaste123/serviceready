@@ -42,10 +42,6 @@ Or hit **Continue as demo** on `/login`. Real sellers can **Create account** —
 
 > Sellers use the sandbox business account attached to the REST app. Never use production credentials.
 
-### Judge mode banner
-
-When `VITE_USE_MOCKS=false`, the app shows a **Judge mode** banner with the 4-step path and the sandbox buyer email (password stays in this README).
-
 ## What uses PayPal
 
 | Flow | API | Code |
@@ -139,7 +135,7 @@ Production is on **Render** (`https://serviceready.onrender.com`), not Lovable. 
 - Signature-verified PayPal webhooks that reconcile deposits and invoices
 - MCP server + WebMCP so outside AI agents can book and get a PayPal deposit link
 - xAI Grok for rate-card parsing, the storefront agent and collections drafts
-- Judge mode banner + sandbox buyer credentials for Devpost test access
+- Sandbox buyer credentials documented in README for Devpost test access
 - MIT license
 
 ## Scripts
