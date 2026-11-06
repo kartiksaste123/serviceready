@@ -63,7 +63,7 @@ function Log() {
             aria-hidden="true"
           />
           <input
-            type="search"
+            type="text"
             aria-label="Search activity"
             className="field h-9 pl-8"
             placeholder="Search text, tool or booking…"

@@ -184,14 +184,14 @@ function Home() {
             </div>
             <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
               {[
-                ["15", "days a year spent chasing late payments", "Sage, 3,000+ SMBs"],
-                ["45%", "of US consumers used AI to find a local business", "BrightLocal 2026"],
-                ["30%+", "avoid chasing to protect the relationship", "Sage"],
+                ["1", "catalog for clients and their AI assistants", "One source of truth"],
+                ["0", "client follow-ups sent without your approval", "Human control built in"],
+                ["5", "clear stages from quote to fully paid", "Every step accounted for"],
               ].map(([v, c, s]) => (
                 <article key={v} className="bg-card p-6">
                   <div className="text-4xl font-semibold tabular-nums">{v}</div>
                   <p className="mt-3 text-sm leading-6">{c}</p>
-                  <p className="mt-4 text-xs text-muted-foreground">Source: {s}</p>
+                  <p className="mt-4 text-xs text-muted-foreground">{s}</p>
                 </article>
               ))}
             </div>

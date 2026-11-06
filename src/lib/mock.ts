@@ -23,6 +23,7 @@ import type {
   Source,
 } from "./types";
 import {
+  catalogErrors,
   depositOf,
   draftErrors,
   isEmail,
@@ -71,7 +72,17 @@ function load(): DB {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as DB;
-        if (parsed?.version === 2 && parsed.seller && Array.isArray(parsed.quotes)) return parsed;
+        if (
+          parsed?.version === 2 &&
+          parsed.seller &&
+          Array.isArray(parsed.services) &&
+          Array.isArray(parsed.quotes) &&
+          parsed.payments &&
+          Array.isArray(parsed.events) &&
+          Array.isArray(parsed.proposals) &&
+          Array.isArray(parsed.replies)
+        )
+          return parsed;
       }
     } catch {
       /* corrupted storage → fall back to seed */
@@ -570,10 +581,14 @@ export async function parseCatalog(
       .replace(/\bx\s*\d+\b/i, "")
       .replace(/\(\s*\d+\s*rounds?\s*\)/i, "")
       .replace(/\d+\s*(wks?|weeks?|days?|d)\b/gi, "");
-    const nums = [...cleaned.matchAll(/\$?\s*(\d[\d,]*(?:\.\d{1,2})?)\s*(k)?\b/gi)].map(
+    const priceText = cleaned.replace(/\d+\s*%/g, "");
+    const explicitPrice = priceText.match(/\$\s*(\d[\d,]*(?:\.\d{1,2})?)\s*(k)?\b/i);
+    const nums = [...priceText.matchAll(/\$?\s*(\d[\d,]*(?:\.\d{1,2})?)\s*(k)?\b/gi)].map(
       (m) => Number((m[1] ?? "0").replace(/,/g, "")) * (m[2] ? 1000 : 1),
     );
-    const price = nums[0] ?? 0;
+    const price = explicitPrice
+      ? Number(explicitPrice[1]!.replace(/,/g, "")) * (explicitPrice[2] ? 1000 : 1)
+      : (nums[0] ?? 0);
     const weeks = p.match(/(\d+)\s*(wks?|weeks?)\b/i);
     const days = p.match(/(\d+)\s*(days?|d)\b/i);
     const rounds = p.match(/\((\d+)\s*rounds?\)/i);
@@ -633,7 +648,7 @@ export async function parseCatalog(
 export async function publishCatalog(drafts: ServiceDraft[]) {
   await wait(800);
   if (!drafts.length) throw new Error("Nothing to publish");
-  const bad = drafts.flatMap(draftErrors);
+  const bad = catalogErrors(drafts);
   if (bad.length)
     throw new Error(
       `${bad.length} issue${bad.length === 1 ? "" : "s"} must be fixed before publishing`,
@@ -692,6 +707,8 @@ function createQuote(b: {
   brief: string;
   source: Source;
 }) {
+  if (!["web", "mcp", "webmcp", "agent_sim"].includes(b.source))
+    throw new Error("Invalid booking source");
   const errs = Object.values(quoteRequestErrors(b));
   if (errs.length) throw new Error(errs[0]);
   const db = D();
@@ -919,7 +936,7 @@ function reminderDraft(
   const me = signOff();
   const amt = money(bal.amount_cents);
   if (opts.final)
-    return `Hi ${first}, I've sent a few reminders about the ${amt} balance for ${q.service_title}, now ${opts.overdueDays} days since the invoice. Could you let me know when you expect to pay, or if anything is holding it up? Invoice: ${bal.invoice_url}\n\nThanks, ${me}`;
+    return `Hi ${first}, I'm checking in about the ${amt} balance for ${q.service_title}, now ${opts.overdueDays} days since the invoice. Could you let me know when you expect to pay, or if anything is holding it up? Invoice: ${bal.invoice_url}\n\nThanks, ${me}`;
   if (opts.claimsPaid) {
     const open = tone === "firm" ? `Hi ${first},` : `Hi ${first}, thank you!`;
     return `${open} I just checked and PayPal still shows the ${amt} invoice as open on my side — sometimes the payment doesn't complete the last step. Here's the link again: ${bal.invoice_url}${tone === "friendly" ? "\n\nNo rush at all!" : ""}\n\n— ${me}`;
@@ -1092,6 +1109,12 @@ export async function approveProposal(id: string, draft_message: string) {
   const p = db.proposals.find((x) => x.id === id);
   if (!p) throw new Error("Proposal not found");
   if (p.status !== "pending") throw new Error("This suggestion was already handled");
+  const bal = balanceOf(p.quote_id);
+  if (p.action === "thank_and_close" && bal?.status !== "PAID")
+    throw new Error("PayPal has not confirmed payment. Run a new payment check first.");
+  if ((p.action === "send_reminder" || p.action === "escalate") && (!bal || bal.status === "PAID"))
+    throw new Error("This invoice is no longer unpaid. Run a new payment check first.");
+  if (draft_message.length > LIMITS.message) throw new Error("Message is too long");
   const sends = p.action !== "wait";
   if (sends && !draft_message.trim()) throw new Error("The message can't be empty");
   const q = getQ(p.quote_id);

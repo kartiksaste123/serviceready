@@ -129,10 +129,10 @@ function Bookings() {
               aria-hidden="true"
             />
             <input
-              type="search"
+              type="text"
               aria-label="Search bookings"
               className="field h-9 pl-8 pr-8"
-              placeholder="Search client, email or service…"
+              placeholder="Search bookings…"
               value={q}
               onChange={(e) => {
                 setQ(e.target.value);

@@ -252,3 +252,70 @@ describe("validation", () => {
     ).toEqual({});
   });
 });
+
+describe("edge-case financial invariants", () => {
+  it("closes a 100%-deposit booking without a zero-value invoice", async () => {
+    const [s] = await mock.publishCatalog([
+      {
+        tmp_id: "t",
+        title: "Prepaid design audit",
+        description: "A concise design review",
+        deliverables: ["Review report"],
+        price_cents: 10000,
+        deposit_pct: 100,
+        lead_time_days: 2,
+      },
+    ]);
+    const q = await mock.postPublicQuote(SLUG, {
+      service_id: s!.id,
+      client_name: "A Client",
+      client_email: "a@example.com",
+      brief: "Review my project design please",
+      source: "web",
+    });
+    const order = await mock.createDepositOrder(q.id);
+    await mock.captureDeposit(q.id, order.order_id);
+    const d = await mock.deliver(q.id);
+    expect(d.quote.status).toBe("paid");
+    expect(d.payments.filter((p) => p.kind === "balance")).toHaveLength(0);
+  });
+  it("never lets a cancelled order be captured", async () => {
+    const q = await newQuote();
+    const order = await mock.createDepositOrder(q.id);
+    await mock.cancelQuote(q.id);
+    await expect(mock.captureDeposit(q.id, order.order_id)).rejects.toThrow(/cancelled/);
+  });
+  it("keeps original quote prices after changing the service price", async () => {
+    const q = await newQuote();
+    await mock.publishCatalog([
+      {
+        tmp_id: "t",
+        title: "Logo design",
+        description: "Now a bigger package",
+        deliverables: [],
+        price_cents: 90000,
+        deposit_pct: 60,
+        lead_time_days: 10,
+      },
+    ]);
+    expect((await mock.getQuote(q.id)).quote.total_cents).toBe(q.total_cents);
+  });
+  it("doesn't mistake deposit percentages or template quantities for prices", async () => {
+    const r = await mock.parseCatalog(
+      "logo 50% deposit $450 7 days | social templates x10 $300 5 days",
+    );
+    expect(r.services.map((s) => s.price_cents)).toEqual([45000, 30000]);
+  });
+  it("rejects duplicate names within a catalog import", async () => {
+    const d = {
+      tmp_id: "t",
+      title: "Test",
+      description: "",
+      deliverables: [],
+      price_cents: 10000,
+      deposit_pct: 50,
+      lead_time_days: 7,
+    };
+    await expect(mock.publishCatalog([d, { ...d, tmp_id: "t2" }])).rejects.toThrow();
+  });
+});

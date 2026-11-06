@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Bot,
@@ -85,6 +85,11 @@ function Detail() {
   const [confirm, setConfirm] = useState<null | "deliver" | "cancel">(null);
   const [paste, setPaste] = useState("");
   const [run, setRun] = useState<AgentRun | null>(null);
+  useEffect(() => {
+    setConfirm(null);
+    setPaste("");
+    setRun(null);
+  }, [id]);
   const refreshAll = () =>
     ["quote", "proposals", "stats", "quotes", "events"].forEach((k) =>
       qc.invalidateQueries({ queryKey: [k] }),
@@ -247,7 +252,7 @@ function Detail() {
         <StatusTracker status={q.status} />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_1fr]">
         <section className="glass-card p-5" aria-labelledby="pay-h">
           <h2 id="pay-h" className="mb-4 font-semibold">
             Payments
@@ -292,7 +297,7 @@ function Detail() {
                       <PayStatus status={p.status} />
                       <span className="text-xs text-muted-foreground">{fmtDate(p.updated_at)}</span>
                     </span>
-                    {p.invoice_url && (
+                    {p.invoice_url && !USE_MOCKS && (
                       <a
                         href={p.invoice_url}
                         target="_blank"

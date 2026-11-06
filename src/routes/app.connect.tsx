@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Globe, ShieldCheck } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, USE_MOCKS } from "@/lib/api";
 import { CopyButton, ErrorState, PageHeader } from "@/components/kit";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -66,6 +66,14 @@ function Connect() {
         />
       ) : (
         <div className="space-y-5">
+          {USE_MOCKS && (
+            <p className="rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">Integration preview.</span> These
+              configuration examples show how your external MCP server connects to assistants. The
+              server URL is illustrative in this local demo; use the storefront assistant to try the
+              complete booking flow.
+            </p>
+          )}
           <section className="glass-card p-5" aria-labelledby="c1">
             <h2 id="c1" className="text-sm font-semibold">
               1. Copy your service connection
@@ -101,7 +109,11 @@ function Connect() {
                     </h3>
                     <CopyButton text={c} label={`Copy ${t} config`} iconOnly />
                   </div>
-                  <pre className="overflow-auto rounded-xl bg-muted p-4 font-mono text-sm leading-relaxed text-foreground ringline">
+                  <pre
+                    tabIndex={0}
+                    aria-label={`${t} configuration example`}
+                    className="overflow-auto rounded-xl bg-muted p-4 font-mono text-sm leading-relaxed text-foreground ringline"
+                  >
                     {c}
                   </pre>
                 </section>
@@ -133,8 +145,8 @@ function Connect() {
               <div>
                 <h2 className="font-semibold">Browser assistants work automatically</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Your storefront exposes the same tools to supported browser assistants (WebMCP):{" "}
-                  {data.agent.webmcp_tools.join(", ")}.
+                  The external WebMCP integration is designed to expose these storefront tools to
+                  supported browser assistants: {data.agent.webmcp_tools.join(", ")}.
                 </p>
               </div>
             </section>

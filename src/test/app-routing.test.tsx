@@ -21,6 +21,22 @@ function failedMatches(matches: Awaited<ReturnType<typeof loadAt>>) {
 // Resolve routes without rendering: jsdom never loads stylesheets, and React
 // holds the whole render until any stylesheet link in the root head loads.
 describe("App routing", () => {
+  it.each([
+    "/onboard",
+    "/s/maya-rao-studio",
+    "/q/q_jordan",
+    "/app",
+    "/app/approvals",
+    "/app/catalog",
+    "/app/collections",
+    "/app/connect",
+    "/app/log",
+    "/app/settings",
+    "/app/quotes/q_hannah",
+  ])("resolves %s", async (path) => {
+    expect(failedMatches(await loadAt(path))).toEqual([]);
+  });
+
   it("loads the index route without a loader error", async () => {
     const matches = await loadAt("/");
 

@@ -163,9 +163,11 @@ function SdkCheckout({ quoteId, onPaid }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
   const onPaidRef = useRef(onPaid);
   onPaidRef.current = onPaid;
   useEffect(() => {
+    setState("loading");
     let cancelled = false;
     let close: (() => void) | undefined;
     (async () => {
@@ -199,7 +201,7 @@ function SdkCheckout({ quoteId, onPaid }: Props) {
       cancelled = true;
       close?.();
     };
-  }, [quoteId]);
+  }, [quoteId, attempt]);
   return (
     <div>
       {state === "loading" && (
@@ -209,9 +211,19 @@ function SdkCheckout({ quoteId, onPaid }: Props) {
         </div>
       )}
       {state === "error" && (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
+        <div role="alert" className="space-y-2">
+          <p className="text-sm text-danger">{error}</p>
+          <button
+            type="button"
+            className="btn-glass btn-sm"
+            onClick={() => {
+              sdkPromise = null;
+              setAttempt((a) => a + 1);
+            }}
+          >
+            Retry PayPal
+          </button>
+        </div>
       )}
       <div ref={ref} />
     </div>

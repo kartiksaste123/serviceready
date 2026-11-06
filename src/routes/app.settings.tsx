@@ -34,9 +34,9 @@ export const Route = createFileRoute("/app/settings")({
 });
 
 const TONES = [
-  { t: "friendly", d: "Warm, no pressure" },
-  { t: "neutral", d: "Short and factual" },
-  { t: "firm", d: "Clear due dates" },
+  { t: "friendly", l: "Friendly", d: "Warm, no pressure" },
+  { t: "neutral", l: "Neutral", d: "Short and factual" },
+  { t: "firm", l: "Firm", d: "Clear due dates" },
 ] as const;
 
 // Keep raw strings while typing so clearing a field doesn't silently become 0.
@@ -141,7 +141,7 @@ function SettingsPage() {
             <fieldset className="mt-3">
               <legend className="mb-1.5 block text-sm font-medium">Reminder tone</legend>
               <div className="grid gap-2 sm:grid-cols-3" role="radiogroup">
-                {TONES.map(({ t, d: desc }) => (
+                {TONES.map(({ t, l, d: desc }) => (
                   <button
                     type="button"
                     role="radio"
@@ -150,7 +150,7 @@ function SettingsPage() {
                     onClick={() => set({ reminder_tone: t })}
                     className={`rounded-lg border px-3 py-2 text-left text-sm ${d.reminder_tone === t ? "border-foreground bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
                   >
-                    <span className="block font-semibold capitalize">{t}</span>
+                    <span className="block font-semibold">{l}</span>
                     <span className="block text-xs opacity-80">{desc}</span>
                   </button>
                 ))}

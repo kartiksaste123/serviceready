@@ -12,6 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as OnboardRouteImport } from './routes/onboard'
+import { Route as ApiEventsRouteImport } from './routes/api.events'
+import { Route as ApiProposalsRouteImport } from './routes/api.proposals'
+import { Route as ApiQuotesRouteImport } from './routes/api.quotes'
+import { Route as ApiSellerRouteImport } from './routes/api.seller'
+import { Route as ApiServicesRouteImport } from './routes/api.services'
+import { Route as ApiStatsRouteImport } from './routes/api.stats'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppApprovalsRouteImport } from './routes/app.approvals'
 import { Route as AppCatalogRouteImport } from './routes/app.catalog'
@@ -21,7 +27,26 @@ import { Route as AppLogRouteImport } from './routes/app.log'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as QIdRouteImport } from './routes/q.$id'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
+import { Route as ApiAgentSimChatRouteImport } from './routes/api.agent-sim.chat'
+import { Route as ApiCatalogParseRouteImport } from './routes/api.catalog.parse'
+import { Route as ApiCatalogPublishRouteImport } from './routes/api.catalog.publish'
+import { Route as ApiDemoResetRouteImport } from './routes/api.demo.reset'
+import { Route as ApiPaypalConfigRouteImport } from './routes/api.paypal.config'
+import { Route as ApiPublicSlugRouteImport } from './routes/api.public.$slug'
+import { Route as ApiQuotesIdRouteImport } from './routes/api.quotes.$id'
+import { Route as ApiSellerRulesRouteImport } from './routes/api.seller.rules'
 import { Route as AppQuotesIdRouteImport } from './routes/app.quotes.$id'
+import { Route as ApiProposalsIdApproveRouteImport } from './routes/api.proposals.$id.approve'
+import { Route as ApiProposalsIdRejectRouteImport } from './routes/api.proposals.$id.reject'
+import { Route as ApiPublicSlugQuotesRouteImport } from './routes/api.public.$slug.quotes'
+import { Route as ApiQuotesIdCancelRouteImport } from './routes/api.quotes.$id.cancel'
+import { Route as ApiQuotesIdDeliverRouteImport } from './routes/api.quotes.$id.deliver'
+import { Route as ApiQuotesIdInvoiceRouteImport } from './routes/api.quotes.$id.invoice'
+import { Route as ApiQuotesIdRepliesRouteImport } from './routes/api.quotes.$id.replies'
+import { Route as ApiDemoQuotesIdPayBalanceRouteImport } from './routes/api.demo.quotes.$id.pay-balance'
+import { Route as ApiQuotesIdCollectionsRunRouteImport } from './routes/api.quotes.$id.collections.run'
+import { Route as ApiQuotesIdDepositCaptureRouteImport } from './routes/api.quotes.$id.deposit.capture'
+import { Route as ApiQuotesIdDepositOrderRouteImport } from './routes/api.quotes.$id.deposit.order'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -36,6 +61,36 @@ const AppRoute = AppRouteImport.update({
 const OnboardRoute = OnboardRouteImport.update({
   id: '/onboard',
   path: '/onboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEventsRoute = ApiEventsRouteImport.update({
+  id: '/api/events',
+  path: '/api/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiProposalsRoute = ApiProposalsRouteImport.update({
+  id: '/api/proposals',
+  path: '/api/proposals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiQuotesRoute = ApiQuotesRouteImport.update({
+  id: '/api/quotes',
+  path: '/api/quotes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSellerRoute = ApiSellerRouteImport.update({
+  id: '/api/seller',
+  path: '/api/seller',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiServicesRoute = ApiServicesRouteImport.update({
+  id: '/api/services',
+  path: '/api/services',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStatsRoute = ApiStatsRouteImport.update({
+  id: '/api/stats',
+  path: '/api/stats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -83,16 +138,120 @@ const SSlugRoute = SSlugRouteImport.update({
   path: '/s/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAgentSimChatRoute = ApiAgentSimChatRouteImport.update({
+  id: '/api/agent-sim/chat',
+  path: '/api/agent-sim/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCatalogParseRoute = ApiCatalogParseRouteImport.update({
+  id: '/api/catalog/parse',
+  path: '/api/catalog/parse',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCatalogPublishRoute = ApiCatalogPublishRouteImport.update({
+  id: '/api/catalog/publish',
+  path: '/api/catalog/publish',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDemoResetRoute = ApiDemoResetRouteImport.update({
+  id: '/api/demo/reset',
+  path: '/api/demo/reset',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPaypalConfigRoute = ApiPaypalConfigRouteImport.update({
+  id: '/api/paypal/config',
+  path: '/api/paypal/config',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSlugRoute = ApiPublicSlugRouteImport.update({
+  id: '/api/public/$slug',
+  path: '/api/public/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiQuotesIdRoute = ApiQuotesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiQuotesRoute,
+} as any)
+const ApiSellerRulesRoute = ApiSellerRulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
+  getParentRoute: () => ApiSellerRoute,
+} as any)
 const AppQuotesIdRoute = AppQuotesIdRouteImport.update({
   id: '/quotes/$id',
   path: '/quotes/$id',
   getParentRoute: () => AppRoute,
+} as any)
+const ApiProposalsIdApproveRoute = ApiProposalsIdApproveRouteImport.update({
+  id: '/$id/approve',
+  path: '/$id/approve',
+  getParentRoute: () => ApiProposalsRoute,
+} as any)
+const ApiProposalsIdRejectRoute = ApiProposalsIdRejectRouteImport.update({
+  id: '/$id/reject',
+  path: '/$id/reject',
+  getParentRoute: () => ApiProposalsRoute,
+} as any)
+const ApiPublicSlugQuotesRoute = ApiPublicSlugQuotesRouteImport.update({
+  id: '/quotes',
+  path: '/quotes',
+  getParentRoute: () => ApiPublicSlugRoute,
+} as any)
+const ApiQuotesIdCancelRoute = ApiQuotesIdCancelRouteImport.update({
+  id: '/cancel',
+  path: '/cancel',
+  getParentRoute: () => ApiQuotesIdRoute,
+} as any)
+const ApiQuotesIdDeliverRoute = ApiQuotesIdDeliverRouteImport.update({
+  id: '/deliver',
+  path: '/deliver',
+  getParentRoute: () => ApiQuotesIdRoute,
+} as any)
+const ApiQuotesIdInvoiceRoute = ApiQuotesIdInvoiceRouteImport.update({
+  id: '/invoice',
+  path: '/invoice',
+  getParentRoute: () => ApiQuotesIdRoute,
+} as any)
+const ApiQuotesIdRepliesRoute = ApiQuotesIdRepliesRouteImport.update({
+  id: '/replies',
+  path: '/replies',
+  getParentRoute: () => ApiQuotesIdRoute,
+} as any)
+const ApiDemoQuotesIdPayBalanceRoute =
+  ApiDemoQuotesIdPayBalanceRouteImport.update({
+    id: '/api/demo/quotes/$id/pay-balance',
+    path: '/api/demo/quotes/$id/pay-balance',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiQuotesIdCollectionsRunRoute =
+  ApiQuotesIdCollectionsRunRouteImport.update({
+    id: '/collections/run',
+    path: '/collections/run',
+    getParentRoute: () => ApiQuotesIdRoute,
+  } as any)
+const ApiQuotesIdDepositCaptureRoute =
+  ApiQuotesIdDepositCaptureRouteImport.update({
+    id: '/deposit/capture',
+    path: '/deposit/capture',
+    getParentRoute: () => ApiQuotesIdRoute,
+  } as any)
+const ApiQuotesIdDepositOrderRoute = ApiQuotesIdDepositOrderRouteImport.update({
+  id: '/deposit/order',
+  path: '/deposit/order',
+  getParentRoute: () => ApiQuotesIdRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/onboard': typeof OnboardRoute
+  '/api/events': typeof ApiEventsRoute
+  '/api/proposals': typeof ApiProposalsRouteWithChildren
+  '/api/quotes': typeof ApiQuotesRouteWithChildren
+  '/api/seller': typeof ApiSellerRouteWithChildren
+  '/api/services': typeof ApiServicesRoute
+  '/api/stats': typeof ApiStatsRoute
   '/app/approvals': typeof AppApprovalsRoute
   '/app/catalog': typeof AppCatalogRoute
   '/app/collections': typeof AppCollectionsRoute
@@ -102,11 +261,36 @@ export interface FileRoutesByFullPath {
   '/q/$id': typeof QIdRoute
   '/s/$slug': typeof SSlugRoute
   '/app/': typeof AppIndexRoute
+  '/api/agent-sim/chat': typeof ApiAgentSimChatRoute
+  '/api/catalog/parse': typeof ApiCatalogParseRoute
+  '/api/catalog/publish': typeof ApiCatalogPublishRoute
+  '/api/demo/reset': typeof ApiDemoResetRoute
+  '/api/paypal/config': typeof ApiPaypalConfigRoute
+  '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
+  '/api/quotes/$id': typeof ApiQuotesIdRouteWithChildren
+  '/api/seller/rules': typeof ApiSellerRulesRoute
   '/app/quotes/$id': typeof AppQuotesIdRoute
+  '/api/proposals/$id/approve': typeof ApiProposalsIdApproveRoute
+  '/api/proposals/$id/reject': typeof ApiProposalsIdRejectRoute
+  '/api/public/$slug/quotes': typeof ApiPublicSlugQuotesRoute
+  '/api/quotes/$id/cancel': typeof ApiQuotesIdCancelRoute
+  '/api/quotes/$id/deliver': typeof ApiQuotesIdDeliverRoute
+  '/api/quotes/$id/invoice': typeof ApiQuotesIdInvoiceRoute
+  '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
+  '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
+  '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
+  '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
+  '/api/quotes/$id/deposit/order': typeof ApiQuotesIdDepositOrderRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/onboard': typeof OnboardRoute
+  '/api/events': typeof ApiEventsRoute
+  '/api/proposals': typeof ApiProposalsRouteWithChildren
+  '/api/quotes': typeof ApiQuotesRouteWithChildren
+  '/api/seller': typeof ApiSellerRouteWithChildren
+  '/api/services': typeof ApiServicesRoute
+  '/api/stats': typeof ApiStatsRoute
   '/app/approvals': typeof AppApprovalsRoute
   '/app/catalog': typeof AppCatalogRoute
   '/app/collections': typeof AppCollectionsRoute
@@ -116,13 +300,38 @@ export interface FileRoutesByTo {
   '/q/$id': typeof QIdRoute
   '/s/$slug': typeof SSlugRoute
   '/app': typeof AppIndexRoute
+  '/api/agent-sim/chat': typeof ApiAgentSimChatRoute
+  '/api/catalog/parse': typeof ApiCatalogParseRoute
+  '/api/catalog/publish': typeof ApiCatalogPublishRoute
+  '/api/demo/reset': typeof ApiDemoResetRoute
+  '/api/paypal/config': typeof ApiPaypalConfigRoute
+  '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
+  '/api/quotes/$id': typeof ApiQuotesIdRouteWithChildren
+  '/api/seller/rules': typeof ApiSellerRulesRoute
   '/app/quotes/$id': typeof AppQuotesIdRoute
+  '/api/proposals/$id/approve': typeof ApiProposalsIdApproveRoute
+  '/api/proposals/$id/reject': typeof ApiProposalsIdRejectRoute
+  '/api/public/$slug/quotes': typeof ApiPublicSlugQuotesRoute
+  '/api/quotes/$id/cancel': typeof ApiQuotesIdCancelRoute
+  '/api/quotes/$id/deliver': typeof ApiQuotesIdDeliverRoute
+  '/api/quotes/$id/invoice': typeof ApiQuotesIdInvoiceRoute
+  '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
+  '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
+  '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
+  '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
+  '/api/quotes/$id/deposit/order': typeof ApiQuotesIdDepositOrderRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/onboard': typeof OnboardRoute
+  '/api/events': typeof ApiEventsRoute
+  '/api/proposals': typeof ApiProposalsRouteWithChildren
+  '/api/quotes': typeof ApiQuotesRouteWithChildren
+  '/api/seller': typeof ApiSellerRouteWithChildren
+  '/api/services': typeof ApiServicesRoute
+  '/api/stats': typeof ApiStatsRoute
   '/app/approvals': typeof AppApprovalsRoute
   '/app/catalog': typeof AppCatalogRoute
   '/app/collections': typeof AppCollectionsRoute
@@ -132,7 +341,26 @@ export interface FileRoutesById {
   '/q/$id': typeof QIdRoute
   '/s/$slug': typeof SSlugRoute
   '/app/': typeof AppIndexRoute
+  '/api/agent-sim/chat': typeof ApiAgentSimChatRoute
+  '/api/catalog/parse': typeof ApiCatalogParseRoute
+  '/api/catalog/publish': typeof ApiCatalogPublishRoute
+  '/api/demo/reset': typeof ApiDemoResetRoute
+  '/api/paypal/config': typeof ApiPaypalConfigRoute
+  '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
+  '/api/quotes/$id': typeof ApiQuotesIdRouteWithChildren
+  '/api/seller/rules': typeof ApiSellerRulesRoute
   '/app/quotes/$id': typeof AppQuotesIdRoute
+  '/api/proposals/$id/approve': typeof ApiProposalsIdApproveRoute
+  '/api/proposals/$id/reject': typeof ApiProposalsIdRejectRoute
+  '/api/public/$slug/quotes': typeof ApiPublicSlugQuotesRoute
+  '/api/quotes/$id/cancel': typeof ApiQuotesIdCancelRoute
+  '/api/quotes/$id/deliver': typeof ApiQuotesIdDeliverRoute
+  '/api/quotes/$id/invoice': typeof ApiQuotesIdInvoiceRoute
+  '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
+  '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
+  '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
+  '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
+  '/api/quotes/$id/deposit/order': typeof ApiQuotesIdDepositOrderRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -140,6 +368,12 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/onboard'
+    | '/api/events'
+    | '/api/proposals'
+    | '/api/quotes'
+    | '/api/seller'
+    | '/api/services'
+    | '/api/stats'
     | '/app/approvals'
     | '/app/catalog'
     | '/app/collections'
@@ -149,11 +383,36 @@ export interface FileRouteTypes {
     | '/q/$id'
     | '/s/$slug'
     | '/app/'
+    | '/api/agent-sim/chat'
+    | '/api/catalog/parse'
+    | '/api/catalog/publish'
+    | '/api/demo/reset'
+    | '/api/paypal/config'
+    | '/api/public/$slug'
+    | '/api/quotes/$id'
+    | '/api/seller/rules'
     | '/app/quotes/$id'
+    | '/api/proposals/$id/approve'
+    | '/api/proposals/$id/reject'
+    | '/api/public/$slug/quotes'
+    | '/api/quotes/$id/cancel'
+    | '/api/quotes/$id/deliver'
+    | '/api/quotes/$id/invoice'
+    | '/api/quotes/$id/replies'
+    | '/api/demo/quotes/$id/pay-balance'
+    | '/api/quotes/$id/collections/run'
+    | '/api/quotes/$id/deposit/capture'
+    | '/api/quotes/$id/deposit/order'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/onboard'
+    | '/api/events'
+    | '/api/proposals'
+    | '/api/quotes'
+    | '/api/seller'
+    | '/api/services'
+    | '/api/stats'
     | '/app/approvals'
     | '/app/catalog'
     | '/app/collections'
@@ -163,12 +422,37 @@ export interface FileRouteTypes {
     | '/q/$id'
     | '/s/$slug'
     | '/app'
+    | '/api/agent-sim/chat'
+    | '/api/catalog/parse'
+    | '/api/catalog/publish'
+    | '/api/demo/reset'
+    | '/api/paypal/config'
+    | '/api/public/$slug'
+    | '/api/quotes/$id'
+    | '/api/seller/rules'
     | '/app/quotes/$id'
+    | '/api/proposals/$id/approve'
+    | '/api/proposals/$id/reject'
+    | '/api/public/$slug/quotes'
+    | '/api/quotes/$id/cancel'
+    | '/api/quotes/$id/deliver'
+    | '/api/quotes/$id/invoice'
+    | '/api/quotes/$id/replies'
+    | '/api/demo/quotes/$id/pay-balance'
+    | '/api/quotes/$id/collections/run'
+    | '/api/quotes/$id/deposit/capture'
+    | '/api/quotes/$id/deposit/order'
   id:
     | '__root__'
     | '/'
     | '/app'
     | '/onboard'
+    | '/api/events'
+    | '/api/proposals'
+    | '/api/quotes'
+    | '/api/seller'
+    | '/api/services'
+    | '/api/stats'
     | '/app/approvals'
     | '/app/catalog'
     | '/app/collections'
@@ -178,15 +462,47 @@ export interface FileRouteTypes {
     | '/q/$id'
     | '/s/$slug'
     | '/app/'
+    | '/api/agent-sim/chat'
+    | '/api/catalog/parse'
+    | '/api/catalog/publish'
+    | '/api/demo/reset'
+    | '/api/paypal/config'
+    | '/api/public/$slug'
+    | '/api/quotes/$id'
+    | '/api/seller/rules'
     | '/app/quotes/$id'
+    | '/api/proposals/$id/approve'
+    | '/api/proposals/$id/reject'
+    | '/api/public/$slug/quotes'
+    | '/api/quotes/$id/cancel'
+    | '/api/quotes/$id/deliver'
+    | '/api/quotes/$id/invoice'
+    | '/api/quotes/$id/replies'
+    | '/api/demo/quotes/$id/pay-balance'
+    | '/api/quotes/$id/collections/run'
+    | '/api/quotes/$id/deposit/capture'
+    | '/api/quotes/$id/deposit/order'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   OnboardRoute: typeof OnboardRoute
+  ApiEventsRoute: typeof ApiEventsRoute
+  ApiProposalsRoute: typeof ApiProposalsRouteWithChildren
+  ApiQuotesRoute: typeof ApiQuotesRouteWithChildren
+  ApiSellerRoute: typeof ApiSellerRouteWithChildren
+  ApiServicesRoute: typeof ApiServicesRoute
+  ApiStatsRoute: typeof ApiStatsRoute
   QIdRoute: typeof QIdRoute
   SSlugRoute: typeof SSlugRoute
+  ApiAgentSimChatRoute: typeof ApiAgentSimChatRoute
+  ApiCatalogParseRoute: typeof ApiCatalogParseRoute
+  ApiCatalogPublishRoute: typeof ApiCatalogPublishRoute
+  ApiDemoResetRoute: typeof ApiDemoResetRoute
+  ApiPaypalConfigRoute: typeof ApiPaypalConfigRoute
+  ApiPublicSlugRoute: typeof ApiPublicSlugRouteWithChildren
+  ApiDemoQuotesIdPayBalanceRoute: typeof ApiDemoQuotesIdPayBalanceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -210,6 +526,48 @@ declare module '@tanstack/react-router' {
       path: '/onboard'
       fullPath: '/onboard'
       preLoaderRoute: typeof OnboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/events': {
+      id: '/api/events'
+      path: '/api/events'
+      fullPath: '/api/events'
+      preLoaderRoute: typeof ApiEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/proposals': {
+      id: '/api/proposals'
+      path: '/api/proposals'
+      fullPath: '/api/proposals'
+      preLoaderRoute: typeof ApiProposalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/quotes': {
+      id: '/api/quotes'
+      path: '/api/quotes'
+      fullPath: '/api/quotes'
+      preLoaderRoute: typeof ApiQuotesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/seller': {
+      id: '/api/seller'
+      path: '/api/seller'
+      fullPath: '/api/seller'
+      preLoaderRoute: typeof ApiSellerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/services': {
+      id: '/api/services'
+      path: '/api/services'
+      fullPath: '/api/services'
+      preLoaderRoute: typeof ApiServicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/stats': {
+      id: '/api/stats'
+      path: '/api/stats'
+      fullPath: '/api/stats'
+      preLoaderRoute: typeof ApiStatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/': {
@@ -275,12 +633,145 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/agent-sim/chat': {
+      id: '/api/agent-sim/chat'
+      path: '/api/agent-sim/chat'
+      fullPath: '/api/agent-sim/chat'
+      preLoaderRoute: typeof ApiAgentSimChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catalog/parse': {
+      id: '/api/catalog/parse'
+      path: '/api/catalog/parse'
+      fullPath: '/api/catalog/parse'
+      preLoaderRoute: typeof ApiCatalogParseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catalog/publish': {
+      id: '/api/catalog/publish'
+      path: '/api/catalog/publish'
+      fullPath: '/api/catalog/publish'
+      preLoaderRoute: typeof ApiCatalogPublishRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/demo/reset': {
+      id: '/api/demo/reset'
+      path: '/api/demo/reset'
+      fullPath: '/api/demo/reset'
+      preLoaderRoute: typeof ApiDemoResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/paypal/config': {
+      id: '/api/paypal/config'
+      path: '/api/paypal/config'
+      fullPath: '/api/paypal/config'
+      preLoaderRoute: typeof ApiPaypalConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/$slug': {
+      id: '/api/public/$slug'
+      path: '/api/public/$slug'
+      fullPath: '/api/public/$slug'
+      preLoaderRoute: typeof ApiPublicSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/quotes/$id': {
+      id: '/api/quotes/$id'
+      path: '/$id'
+      fullPath: '/api/quotes/$id'
+      preLoaderRoute: typeof ApiQuotesIdRouteImport
+      parentRoute: typeof ApiQuotesRoute
+    }
+    '/api/seller/rules': {
+      id: '/api/seller/rules'
+      path: '/rules'
+      fullPath: '/api/seller/rules'
+      preLoaderRoute: typeof ApiSellerRulesRouteImport
+      parentRoute: typeof ApiSellerRoute
+    }
     '/app/quotes/$id': {
       id: '/app/quotes/$id'
       path: '/quotes/$id'
       fullPath: '/app/quotes/$id'
       preLoaderRoute: typeof AppQuotesIdRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/proposals/$id/approve': {
+      id: '/api/proposals/$id/approve'
+      path: '/$id/approve'
+      fullPath: '/api/proposals/$id/approve'
+      preLoaderRoute: typeof ApiProposalsIdApproveRouteImport
+      parentRoute: typeof ApiProposalsRoute
+    }
+    '/api/proposals/$id/reject': {
+      id: '/api/proposals/$id/reject'
+      path: '/$id/reject'
+      fullPath: '/api/proposals/$id/reject'
+      preLoaderRoute: typeof ApiProposalsIdRejectRouteImport
+      parentRoute: typeof ApiProposalsRoute
+    }
+    '/api/public/$slug/quotes': {
+      id: '/api/public/$slug/quotes'
+      path: '/quotes'
+      fullPath: '/api/public/$slug/quotes'
+      preLoaderRoute: typeof ApiPublicSlugQuotesRouteImport
+      parentRoute: typeof ApiPublicSlugRoute
+    }
+    '/api/quotes/$id/cancel': {
+      id: '/api/quotes/$id/cancel'
+      path: '/cancel'
+      fullPath: '/api/quotes/$id/cancel'
+      preLoaderRoute: typeof ApiQuotesIdCancelRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
+    '/api/quotes/$id/deliver': {
+      id: '/api/quotes/$id/deliver'
+      path: '/deliver'
+      fullPath: '/api/quotes/$id/deliver'
+      preLoaderRoute: typeof ApiQuotesIdDeliverRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
+    '/api/quotes/$id/invoice': {
+      id: '/api/quotes/$id/invoice'
+      path: '/invoice'
+      fullPath: '/api/quotes/$id/invoice'
+      preLoaderRoute: typeof ApiQuotesIdInvoiceRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
+    '/api/quotes/$id/replies': {
+      id: '/api/quotes/$id/replies'
+      path: '/replies'
+      fullPath: '/api/quotes/$id/replies'
+      preLoaderRoute: typeof ApiQuotesIdRepliesRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
+    '/api/demo/quotes/$id/pay-balance': {
+      id: '/api/demo/quotes/$id/pay-balance'
+      path: '/api/demo/quotes/$id/pay-balance'
+      fullPath: '/api/demo/quotes/$id/pay-balance'
+      preLoaderRoute: typeof ApiDemoQuotesIdPayBalanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/quotes/$id/collections/run': {
+      id: '/api/quotes/$id/collections/run'
+      path: '/collections/run'
+      fullPath: '/api/quotes/$id/collections/run'
+      preLoaderRoute: typeof ApiQuotesIdCollectionsRunRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
+    '/api/quotes/$id/deposit/capture': {
+      id: '/api/quotes/$id/deposit/capture'
+      path: '/deposit/capture'
+      fullPath: '/api/quotes/$id/deposit/capture'
+      preLoaderRoute: typeof ApiQuotesIdDepositCaptureRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
+    '/api/quotes/$id/deposit/order': {
+      id: '/api/quotes/$id/deposit/order'
+      path: '/deposit/order'
+      fullPath: '/api/quotes/$id/deposit/order'
+      preLoaderRoute: typeof ApiQuotesIdDepositOrderRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
     }
   }
 }
@@ -309,12 +800,99 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
+interface ApiProposalsRouteChildren {
+  ApiProposalsIdApproveRoute: typeof ApiProposalsIdApproveRoute
+  ApiProposalsIdRejectRoute: typeof ApiProposalsIdRejectRoute
+}
+
+const ApiProposalsRouteChildren: ApiProposalsRouteChildren = {
+  ApiProposalsIdApproveRoute: ApiProposalsIdApproveRoute,
+  ApiProposalsIdRejectRoute: ApiProposalsIdRejectRoute,
+}
+
+const ApiProposalsRouteWithChildren = ApiProposalsRoute._addFileChildren(
+  ApiProposalsRouteChildren,
+)
+
+interface ApiQuotesIdRouteChildren {
+  ApiQuotesIdCancelRoute: typeof ApiQuotesIdCancelRoute
+  ApiQuotesIdDeliverRoute: typeof ApiQuotesIdDeliverRoute
+  ApiQuotesIdInvoiceRoute: typeof ApiQuotesIdInvoiceRoute
+  ApiQuotesIdRepliesRoute: typeof ApiQuotesIdRepliesRoute
+  ApiQuotesIdCollectionsRunRoute: typeof ApiQuotesIdCollectionsRunRoute
+  ApiQuotesIdDepositCaptureRoute: typeof ApiQuotesIdDepositCaptureRoute
+  ApiQuotesIdDepositOrderRoute: typeof ApiQuotesIdDepositOrderRoute
+}
+
+const ApiQuotesIdRouteChildren: ApiQuotesIdRouteChildren = {
+  ApiQuotesIdCancelRoute: ApiQuotesIdCancelRoute,
+  ApiQuotesIdDeliverRoute: ApiQuotesIdDeliverRoute,
+  ApiQuotesIdInvoiceRoute: ApiQuotesIdInvoiceRoute,
+  ApiQuotesIdRepliesRoute: ApiQuotesIdRepliesRoute,
+  ApiQuotesIdCollectionsRunRoute: ApiQuotesIdCollectionsRunRoute,
+  ApiQuotesIdDepositCaptureRoute: ApiQuotesIdDepositCaptureRoute,
+  ApiQuotesIdDepositOrderRoute: ApiQuotesIdDepositOrderRoute,
+}
+
+const ApiQuotesIdRouteWithChildren = ApiQuotesIdRoute._addFileChildren(
+  ApiQuotesIdRouteChildren,
+)
+
+interface ApiQuotesRouteChildren {
+  ApiQuotesIdRoute: typeof ApiQuotesIdRouteWithChildren
+}
+
+const ApiQuotesRouteChildren: ApiQuotesRouteChildren = {
+  ApiQuotesIdRoute: ApiQuotesIdRouteWithChildren,
+}
+
+const ApiQuotesRouteWithChildren = ApiQuotesRoute._addFileChildren(
+  ApiQuotesRouteChildren,
+)
+
+interface ApiSellerRouteChildren {
+  ApiSellerRulesRoute: typeof ApiSellerRulesRoute
+}
+
+const ApiSellerRouteChildren: ApiSellerRouteChildren = {
+  ApiSellerRulesRoute: ApiSellerRulesRoute,
+}
+
+const ApiSellerRouteWithChildren = ApiSellerRoute._addFileChildren(
+  ApiSellerRouteChildren,
+)
+
+interface ApiPublicSlugRouteChildren {
+  ApiPublicSlugQuotesRoute: typeof ApiPublicSlugQuotesRoute
+}
+
+const ApiPublicSlugRouteChildren: ApiPublicSlugRouteChildren = {
+  ApiPublicSlugQuotesRoute: ApiPublicSlugQuotesRoute,
+}
+
+const ApiPublicSlugRouteWithChildren = ApiPublicSlugRoute._addFileChildren(
+  ApiPublicSlugRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   OnboardRoute: OnboardRoute,
+  ApiEventsRoute: ApiEventsRoute,
+  ApiProposalsRoute: ApiProposalsRouteWithChildren,
+  ApiQuotesRoute: ApiQuotesRouteWithChildren,
+  ApiSellerRoute: ApiSellerRouteWithChildren,
+  ApiServicesRoute: ApiServicesRoute,
+  ApiStatsRoute: ApiStatsRoute,
   QIdRoute: QIdRoute,
   SSlugRoute: SSlugRoute,
+  ApiAgentSimChatRoute: ApiAgentSimChatRoute,
+  ApiCatalogParseRoute: ApiCatalogParseRoute,
+  ApiCatalogPublishRoute: ApiCatalogPublishRoute,
+  ApiDemoResetRoute: ApiDemoResetRoute,
+  ApiPaypalConfigRoute: ApiPaypalConfigRoute,
+  ApiPublicSlugRoute: ApiPublicSlugRouteWithChildren,
+  ApiDemoQuotesIdPayBalanceRoute: ApiDemoQuotesIdPayBalanceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

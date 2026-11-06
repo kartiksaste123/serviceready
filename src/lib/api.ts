@@ -40,6 +40,7 @@ async function http<T>(method: string, path: string, body?: unknown): Promise<T>
       headers: body !== undefined ? { "Content-Type": "application/json" } : {},
       body: body !== undefined ? JSON.stringify(body) : null,
       credentials: "include",
+      signal: AbortSignal.timeout(20_000),
     });
   } catch {
     throw new ApiError("Network error — check your connection and try again", 0);
@@ -53,7 +54,7 @@ async function http<T>(method: string, path: string, body?: unknown): Promise<T>
           : `${res.status} ${res.statusText}`;
     try {
       const j = (await res.json()) as { error?: string; message?: string };
-      msg = j.error ?? j.message ?? msg;
+      msg = typeof j.error === "string" ? j.error : typeof j.message === "string" ? j.message : msg;
     } catch {
       /* non-JSON error body */
     }
@@ -124,6 +125,12 @@ export const api = {
     ),
   deliver: (id: string) =>
     m<QuoteDetail>(() => mock.deliver(id), "POST", `/api/quotes/${enc(id)}/deliver`),
+  refreshInvoice: (id: string) =>
+    m<QuoteDetail>(
+      () => mock.getQuote(id, true),
+      "GET",
+      `/api/quotes/${enc(id)}/invoice`,
+    ),
   postReply: (id: string, text: string, from: "client" | "seller") =>
     m<{ reply: Reply; agent_run: AgentRun | null }>(
       () => mock.postReply(id, { text, from }),

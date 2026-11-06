@@ -30,3 +30,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets / local credentials (never commit)
+.paypal-sandbox-*
+.supabase-anon-key.txt
+.supabase-project-url.txt
+.supabase-*-key*
+.supabase-service*
+.env
+.env.local
+.env.*.local
+.env.production
+.dev.vars

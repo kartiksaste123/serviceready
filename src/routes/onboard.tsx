@@ -13,11 +13,11 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, USE_MOCKS } from "@/lib/api";
 import type { Flag, Service, ServiceDraft } from "@/lib/types";
 import { CopyButton, Wordmark } from "@/components/kit";
 import { money } from "@/lib/format";
-import { depositOf, draftErrors, LIMITS } from "@/lib/validation";
+import { catalogErrors, depositOf, LIMITS } from "@/lib/validation";
 
 export const Route = createFileRoute("/onboard")({
   head: () => ({
@@ -78,7 +78,7 @@ function Onboard() {
     if (!drafts) return [];
     return drafts.flatMap((d) => {
       const o = originals.current[d.tmp_id];
-      const hard = draftErrors(d);
+      const hard = catalogErrors(drafts).filter((f) => f.tmp_id === d.tmp_id);
       const ai = aiFlags.filter(
         (f) =>
           f.tmp_id === d.tmp_id &&
@@ -387,8 +387,10 @@ function Onboard() {
             </span>
             <h1 className="display mt-5 text-3xl">Your services are now agent-ready</h1>
             <p className="mt-3 text-muted-foreground">
-              {published.length} service{published.length === 1 ? "" : "s"} published. AI assistants
-              can discover and quote them at:
+              {published.length} service{published.length === 1 ? "" : "s"} published.
+              {USE_MOCKS
+                ? " Your demo catalog is ready to quote on the storefront. MCP configuration preview:"
+                : " AI assistants can discover and quote them at:"}
             </p>
             <div className="glass-row mx-auto mt-5 flex max-w-md items-center gap-2 p-2 pl-4 font-mono text-[13px]">
               <span className="min-w-0 truncate">{mcpUrl}</span>

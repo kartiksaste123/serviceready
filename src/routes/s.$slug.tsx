@@ -13,7 +13,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, USE_MOCKS } from "@/lib/api";
 import type { ChatMsg, Quote, Service, ToolTrace } from "@/lib/types";
 import { money0 } from "@/lib/format";
 import { depositOf, LIMITS, quoteRequestErrors } from "@/lib/validation";
@@ -66,6 +66,7 @@ function Storefront() {
     meta: { silent: true },
   });
   const [picked, setPicked] = useState<Service | null>(null);
+  useEffect(() => setPicked(null), [slug]);
   const notFound = isError && error instanceof Error && /not found/i.test(error.message);
 
   return (
@@ -134,7 +135,7 @@ function Storefront() {
                 Balance only due on delivery
               </li>
             </ul>
-            <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_420px]">
               {data.services.length === 0 ? (
                 <Empty title="No services published yet">Check back soon.</Empty>
               ) : (
@@ -179,7 +180,7 @@ function Storefront() {
                   ))}
                 </div>
               )}
-              <AgentChat slug={slug} />
+              <AgentChat key={slug} slug={slug} />
             </div>
           </>
         )}
@@ -201,6 +202,12 @@ function AgentBadge({ mcp, tools }: { mcp: string; tools: string[] }) {
       <PopoverContent align="end" className="w-80 border-border bg-background text-foreground">
         <p className="text-xs font-medium text-muted-foreground">MCP endpoint</p>
         <p className="mt-1 break-all font-mono text-xs text-link">{mcp}</p>
+        {USE_MOCKS && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Connection preview — try the simulated assistant below. Live MCP requires the external
+            service.
+          </p>
+        )}
         <p className="mt-4 text-xs font-medium text-muted-foreground">WebMCP tools</p>
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {tools.map((t) => (
@@ -217,7 +224,7 @@ function AgentBadge({ mcp, tools }: { mcp: string; tools: string[] }) {
           {webmcp === null
             ? "Checking…"
             : webmcp
-              ? "WebMCP: available in this browser"
+              ? "Browser supports WebMCP (external integration required)"
               : "WebMCP: not supported in this browser"}
         </p>
       </PopoverContent>

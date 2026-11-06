@@ -26,7 +26,7 @@ export function draftErrors(d: ServiceDraft): Flag[] {
   if (!d.title.trim()) f("title", "Add a service name.");
   else if (d.title.trim().length > LIMITS.title)
     f("title", `Keep the name under ${LIMITS.title} characters.`);
-  if (!Number.isFinite(d.price_cents) || d.price_cents <= 0)
+  if (!Number.isSafeInteger(d.price_cents) || d.price_cents <= 0)
     f("price_cents", "Add a price above $0.");
   else if (d.price_cents > LIMITS.maxPriceCents)
     f("price_cents", "Price looks too high — check for an extra zero.");
@@ -40,6 +40,20 @@ export function draftErrors(d: ServiceDraft): Flag[] {
     d.lead_time_days > LIMITS.maxLeadDays
   )
     f("lead_time_days", `Turnaround must be between 1 and ${LIMITS.maxLeadDays} days.`);
+  if (
+    Number.isFinite(d.price_cents) &&
+    Number.isFinite(d.deposit_pct) &&
+    d.price_cents > 0 &&
+    depositOf(d.price_cents, d.deposit_pct) < 1
+  )
+    f("deposit_pct", "The deposit must be at least $0.01.");
+  if (d.description.length > LIMITS.description)
+    f("description", "Keep the description under 400 characters.");
+  if (
+    d.deliverables.length > LIMITS.maxDeliverables ||
+    d.deliverables.some((v) => !v.trim() || v.length > LIMITS.deliverable)
+  )
+    f("deliverables", "Use up to 12 non-empty deliverables, each under 60 characters.");
   return out;
 }
 
@@ -77,3 +91,25 @@ export function quoteRequestErrors(b: {
 
 export const depositOf = (price_cents: number, pct: number) =>
   Math.round((price_cents * pct) / 100);
+
+/** Validate the full import atomically, including duplicate service names. */
+export function catalogErrors(drafts: ServiceDraft[]): Flag[] {
+  const counts = new Map<string, number>();
+  for (const d of drafts) {
+    const key = d.title.trim().toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return drafts.flatMap((d) => [
+    ...draftErrors(d),
+    ...(d.title.trim() && (counts.get(d.title.trim().toLowerCase()) ?? 0) > 1
+      ? [
+          {
+            tmp_id: d.tmp_id,
+            field: "title",
+            severity: "error" as const,
+            message: "A service with this name appears twice. Use unique names or remove one.",
+          },
+        ]
+      : []),
+  ]);
+}

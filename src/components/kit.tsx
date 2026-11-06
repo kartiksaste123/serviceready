@@ -170,7 +170,11 @@ export function JsonBlock({ label, value }: { label: string; value: unknown }) {
         {open ? `Hide ${text.toLowerCase()}` : text}
       </button>
       {open && (
-        <pre className="code-box mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs leading-relaxed">
+        <pre
+          tabIndex={0}
+          aria-label={`${text} JSON`}
+          className="code-box mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs leading-relaxed"
+        >
           {JSON.stringify(value, null, 2)}
         </pre>
       )}
