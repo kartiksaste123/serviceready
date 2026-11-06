@@ -41,8 +41,8 @@ Solo freelancers lose hours chasing invoices and start work on trust. Clients gh
 
 ### Live demo (judges)
 
-- **App:** https://serviceready-frontend.lovable.app  
-- **Storefront:** https://serviceready-frontend.lovable.app/s/maya-rao-studio  
+- **App:** https://serviceready.onrender.com  
+- **Storefront:** https://serviceready.onrender.com/s/maya-rao-studio  
 - **Repo (MIT):** https://github.com/kartiksaste123/serviceready  
 - **Sandbox buyer** (PayPal Developer → Sandbox accounts):
 
@@ -133,8 +133,8 @@ Sponsor tools (tick only if you actually used them for a prize): none required f
 
 | Field | Value |
 |-------|-------|
-| Demo / website URL | https://serviceready-frontend.lovable.app |
-| Demo storefront deep link | https://serviceready-frontend.lovable.app/s/maya-rao-studio |
+| Demo / website URL | https://serviceready.onrender.com |
+| Demo storefront deep link | https://serviceready.onrender.com/s/maya-rao-studio |
 | GitHub repo | https://github.com/kartiksaste123/serviceready |
 | License | MIT (root `LICENSE`; detectable in GitHub About) |
 | Video | _(upload YouTube URL after recording — see `DEMO_SCRIPT.md`)_ |

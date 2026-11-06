@@ -4,7 +4,7 @@
 
 Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/).
 
-- **Live demo:** https://serviceready-frontend.lovable.app
+- **Live demo:** https://serviceready.onrender.com
 - **Demo seller storefront:** `/s/maya-rao-studio`
 - **License:** MIT
 

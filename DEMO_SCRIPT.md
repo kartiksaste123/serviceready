@@ -6,7 +6,7 @@
 
 **Prep before record**
 
-1. Live site: https://serviceready-frontend.lovable.app with `VITE_USE_MOCKS=false` (Judge mode banner visible).
+1. Live site: https://serviceready.onrender.com (`VITE_USE_MOCKS=false` on Render — Judge mode banner visible).
 2. Storefront ready: `/s/maya-rao-studio`.
 3. Sandbox buyer logged out of PayPal so the login popup is visible on camera.
 4. Seller workspace `/app` open in a second tab (or split after deposit).
