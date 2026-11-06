@@ -60,8 +60,7 @@ export const Route = createFileRoute("/s/$slug")({
   component: Storefront,
 });
 
-const JUDGE_SAMPLE =
-  "I want a logo for my bakery, my name is Sam Lee, email sam@bakery.com";
+const JUDGE_SAMPLE = "I want a logo for my bakery, my name is Sam Lee, email sam@bakery.com";
 
 const initials = (name: string) =>
   name
@@ -129,7 +128,10 @@ function Storefront() {
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
-          <span className="text-xs text-muted-foreground">Powered by ServiceReady</span>
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <LockKeyhole className="size-3.5" aria-hidden="true" />
+            Secure booking with PayPal
+          </span>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 pb-14 sm:px-5 lg:px-8">
@@ -159,36 +161,54 @@ function Storefront() {
           </div>
         ) : (
           <>
-            <section className="flex flex-wrap items-end justify-between gap-6 py-8">
-              <div className="flex items-center gap-4">
-                <SellerAvatar name={data.seller.name} slug={slug} />
-                <div>
-                  <h1 className="display text-2xl sm:text-4xl">{data.seller.name}</h1>
-                  <p className="mt-2 max-w-lg text-muted-foreground">{data.seller.tagline}</p>
+            <section className="mt-6 overflow-hidden rounded-2xl border border-border bg-card sm:mt-8">
+              <div
+                aria-hidden="true"
+                className="h-20 bg-gradient-to-r from-accent via-[#e6f4f1] to-[#f3efe8] sm:h-24"
+              />
+              <div className="px-5 pb-5 sm:px-7 sm:pb-6">
+                <div className="-mt-10 w-fit rounded-2xl bg-card p-1 shadow-sm">
+                  <SellerAvatar name={data.seller.name} slug={slug} />
+                </div>
+                <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                      {data.seller.name}
+                    </h1>
+                    <p className="mt-1 max-w-xl text-sm text-muted-foreground sm:text-base">
+                      {data.seller.tagline}
+                    </p>
+                  </div>
+                  <AgentBadge mcp={data.agent.mcp_url} tools={data.agent.webmcp_tools} />
                 </div>
               </div>
-              <AgentBadge mcp={data.agent.mcp_url} tools={data.agent.webmcp_tools} />
-            </section>
-            <ul className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              <li className="flex items-center gap-1.5">
-                <ShieldCheck className="size-4" aria-hidden="true" />
-                Fixed prices, no surprises
-              </li>
-              <li className="flex items-center gap-1.5">
-                <LockKeyhole className="size-4" aria-hidden="true" />
-                Deposit paid securely via PayPal
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Check className="size-4" aria-hidden="true" />
-                Balance only due on delivery
-              </li>
-              {data.cancel_policy && data.cancel_policy.free_cancel_hours > 0 && (
-                <li className="flex items-center gap-1.5" title={data.cancel_policy.summary}>
-                  <Check className="size-4" aria-hidden="true" />
-                  Free cancellation within {data.cancel_policy.free_cancel_hours}h
+              <ul className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border bg-muted/50 px-5 py-3 text-sm text-muted-foreground sm:px-7">
+                <li className="flex items-center gap-1.5">
+                  <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
+                  Fixed prices, no surprises
                 </li>
-              )}
-            </ul>
+                <li className="flex items-center gap-1.5">
+                  <LockKeyhole className="size-4 text-primary" aria-hidden="true" />
+                  Deposit paid securely via PayPal
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="size-4 text-primary" aria-hidden="true" />
+                  Balance only due on delivery
+                </li>
+                {data.cancel_policy && data.cancel_policy.free_cancel_hours > 0 && (
+                  <li className="flex items-center gap-1.5" title={data.cancel_policy.summary}>
+                    <Check className="size-4 text-primary" aria-hidden="true" />
+                    Free cancellation within {data.cancel_policy.free_cancel_hours}h
+                  </li>
+                )}
+              </ul>
+            </section>
+            <div className="mb-4 mt-10 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+              <h2 className="text-lg font-semibold">Services</h2>
+              <p className="text-sm text-muted-foreground">
+                Pick one to get an exact quote — or ask the assistant.
+              </p>
+            </div>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_420px]">
               {data.services.length === 0 ? (
                 <Empty title="No services published yet">Check back soon.</Empty>
@@ -219,17 +239,17 @@ function Storefront() {
                         ) : (
                           <div
                             aria-hidden="true"
-                            className="flex aspect-[16/9] w-full items-end bg-gradient-to-br from-emerald-100 via-sky-100 to-violet-100 p-4"
+                            className="grid aspect-[16/9] w-full place-items-center bg-[#f3efe8]"
                           >
-                            <span className="rounded-full bg-background/80 px-3 py-1 text-xs font-semibold text-foreground">
-                              {s.title}
+                            <span className="grid size-14 place-items-center rounded-2xl bg-background text-xl font-semibold text-primary shadow-sm">
+                              {initials(s.title)}
                             </span>
                           </div>
                         )}
                         <div className="flex flex-1 flex-col p-5">
                           <div className="flex items-start justify-between gap-3">
-                            <h2 className="font-semibold">{s.title}</h2>
-                            <span className="text-xl font-bold tabular-nums">
+                            <h3 className="font-semibold">{s.title}</h3>
+                            <span className="text-lg font-semibold tabular-nums">
                               {money0(s.price_cents)}
                             </span>
                           </div>
@@ -256,7 +276,7 @@ function Storefront() {
                           )}
                           <button
                             type="button"
-                            className="btn-mint btn-sm mt-4 self-start"
+                            className="btn-mint btn-sm mt-5 w-full"
                             onClick={() => setPicked(s)}
                             aria-label={`Request a quote for ${s.title}`}
                           >
@@ -273,6 +293,11 @@ function Storefront() {
           </>
         )}
       </main>
+      <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
+        <Link to="/" className="inline-flex items-center gap-1.5 hover:text-foreground">
+          Booking page by <span className="font-semibold text-foreground">ServiceReady</span>
+        </Link>
+      </footer>
       <QuoteDialog slug={slug} service={picked} onClose={() => setPicked(null)} />
     </div>
   );
@@ -322,7 +347,7 @@ function AgentBadge({ mcp, tools }: { mcp: string; tools: string[] }) {
     <Popover>
       <PopoverTrigger className="flex items-center gap-2 rounded-full bg-success-bg px-3.5 py-1.5 text-sm font-semibold text-success ringline hover:bg-muted">
         <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
-        Agent-ready
+        Works with AI assistants
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 border-border bg-background text-foreground">
         <p className="text-xs font-medium text-muted-foreground">MCP endpoint</p>
@@ -628,7 +653,9 @@ function AgentChat({ slug, judge = false }: { slug: string; judge?: boolean }) {
           ) : it.kind === "quote" ? (
             <Link key={i} to="/q/$id" params={{ id: it.quote.id }} className="btn-mint w-full">
               <Zap className="size-4" aria-hidden="true" />
-              {it.quote.deposit_intent === "AUTHORIZE" ? "Review & authorize deposit" : "Review & pay deposit"}{" "}
+              {it.quote.deposit_intent === "AUTHORIZE"
+                ? "Review & authorize deposit"
+                : "Review & pay deposit"}{" "}
               · {money0(it.quote.deposit_cents)}
             </Link>
           ) : (

@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Wordmark } from "@/components/kit";
+import { CheckoutPreview, DeskPreview } from "@/components/marketing/ProductPreview";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -161,7 +162,7 @@ function Home() {
             aria-hidden="true"
             className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[520px] bg-gradient-to-b from-accent to-transparent"
           />
-          <div className={`${container} relative pb-12 pt-14 text-center sm:pb-16 sm:pt-20`}>
+          <div className={`${container} relative pb-16 pt-14 text-center sm:pb-24 sm:pt-20`}>
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs">
               <span className="size-1.5 rounded-full bg-brand" aria-hidden="true" />
               Bookings and payments, powered by PayPal + AI
@@ -196,18 +197,9 @@ function Home() {
                 Explore the demo dashboard
               </Link>
             </p>
-            <div className="relative mx-auto mt-12 max-w-5xl">
-              <div className="overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-[0_24px_60px_-24px_rgba(16,24,40,0.25)]">
-                <img
-                  src="/images/hero.webp"
-                  alt="A freelancer's ServiceReady booking with a PayPal deposit paid"
-                  className="aspect-[4/3] w-full rounded-xl object-cover sm:aspect-[16/8]"
-                  width={960}
-                  height={600}
-                  loading="eager"
-                />
-              </div>
-              <div className="mx-auto -mt-16 w-[min(92%,380px)] text-left sm:absolute sm:bottom-6 sm:right-6 sm:mt-0">
+            <div className="relative mx-auto mt-14 max-w-5xl">
+              <DeskPreview />
+              <div className="hidden w-[340px] text-left sm:absolute sm:block sm:-bottom-8 sm:-right-6 sm:mt-0 lg:-right-12">
                 <BookingProof />
               </div>
             </div>
@@ -296,15 +288,8 @@ function Home() {
                 ))}
               </ul>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-[0_24px_60px_-28px_rgba(16,24,40,0.25)]">
-              <img
-                src="/images/paypal-success.webp"
-                alt="PayPal deposit paid confirmation for a ServiceReady booking"
-                className="aspect-[4/3] w-full rounded-xl object-cover"
-                width={1200}
-                height={900}
-                loading="lazy"
-              />
+            <div className="rounded-3xl bg-gradient-to-br from-accent via-muted to-background p-6 sm:p-10">
+              <CheckoutPreview />
             </div>
           </div>
         </section>
