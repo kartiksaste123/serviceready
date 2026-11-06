@@ -14,7 +14,7 @@
 
 **Sandbox buyer (show email on screen; password only if Devpost needs it — prefer README cut):**
 
-`sb-ivgi153178596@personal.example.com`
+`sb-flkqr53721283@personal.example.com`
 
 ---
 

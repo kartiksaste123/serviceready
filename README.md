@@ -26,9 +26,9 @@ Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/)
 
 | Field | Value |
 |-------|-------|
-| Email | `sb-ivgi153178596@personal.example.com` |
-| Password | `e;W?lu4V` |
-| Type | Personal (IN) |
+| Email | `sb-flkqr53721283@personal.example.com` |
+| Password | `PcS5.(%K` |
+| Type | Personal (US) |
 
 > Sellers use the sandbox business account attached to the REST app. Never use production credentials.
 

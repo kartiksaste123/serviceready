@@ -48,9 +48,9 @@ Solo freelancers lose hours chasing invoices and start work on trust. Clients gh
 
 | Field | Value |
 |-------|-------|
-| Email | `sb-ivgi153178596@personal.example.com` |
-| Password | `e;W?lu4V` |
-| Type | Personal (IN) |
+| Email | `sb-flkqr53721283@personal.example.com` |
+| Password | `PcS5.(%K` |
+| Type | Personal (US) |
 
 **3-minute path:** open storefront → ask AI for a logo/brand package → pay deposit with PayPal sandbox → seller **Mark delivered & invoice balance** → pay the PayPal invoice as the same sandbox buyer → run payment check (status flips from PayPal evidence).
 
@@ -157,8 +157,8 @@ Sponsor tools: tick **Render** (the live demo is a Render web service — eligib
 
 **PayPal sandbox buyer** (required to complete deposit + invoice):
 
-- Email: `sb-ivgi153178596@personal.example.com`
-- Password: `e;W?lu4V`
+- Email: `sb-flkqr53721283@personal.example.com`
+- Password: `PcS5.(%K`
 - Environment: PayPal **Sandbox** only
 
 Keep the demo free and working through judging (**15 Dec 2026**).

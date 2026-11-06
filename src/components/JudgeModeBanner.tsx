@@ -4,7 +4,7 @@ import { USE_MOCKS } from "@/lib/api";
 
 const BUYER_EMAIL =
   (import.meta.env["VITE_PAYPAL_SANDBOX_BUYER_EMAIL"] as string | undefined)?.trim() ||
-  "sb-ivgi153178596@personal.example.com";
+  "sb-flkqr53721283@personal.example.com";
 
 /**
  * Visible only in live sandbox mode. Password stays in README / judge docs — not the public UI.
