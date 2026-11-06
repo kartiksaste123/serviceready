@@ -9,6 +9,10 @@ import {
   Clock,
   Loader2,
   LockKeyhole,
+  MessageCircle,
+  Megaphone,
+  PenTool,
+  Sparkles,
   Send,
   ShieldCheck,
   Wrench,
@@ -70,6 +74,39 @@ const initials = (name: string) =>
     .map((w) => w[0]?.toUpperCase())
     .join("");
 
+/** Designed fallback cover: brand gradient + type icon, so a service without a photo never looks empty. */
+function CoverArt({ title }: { title: string }) {
+  const t = title.toLowerCase();
+  const Icon = t.includes("logo")
+    ? PenTool
+    : t.includes("whatsapp")
+      ? MessageCircle
+      : t.includes("social") || t.includes("reel") || t.includes("post")
+        ? Megaphone
+        : Sparkles;
+  return (
+    <div
+      aria-hidden="true"
+      className="relative flex aspect-[16/9] w-full items-end overflow-hidden bg-gradient-to-br from-[#0f766e] via-[#13877d] to-[#5eb8a9] p-4"
+    >
+      <div
+        className="absolute inset-0 opacity-[0.12]"
+        style={{
+          backgroundImage: "radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)",
+          backgroundSize: "18px 18px",
+        }}
+      />
+      <Icon className="absolute -right-4 -top-4 size-36 text-white/15" strokeWidth={1.25} />
+      <span className="relative flex items-center gap-2.5">
+        <span className="grid size-10 place-items-center rounded-xl bg-white/95 text-sm font-semibold text-primary shadow-sm">
+          {initials(title)}
+        </span>
+        <span className="line-clamp-2 text-sm font-semibold leading-snug text-white">{title}</span>
+      </span>
+    </div>
+  );
+}
+
 function serviceCover(title: string, imageUrl?: string | null): string | null {
   if (imageUrl) return imageUrl;
   const t = title.toLowerCase();
@@ -124,7 +161,7 @@ function Storefront() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-border">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-5 lg:px-8">
+        <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-10">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
@@ -134,7 +171,7 @@ function Storefront() {
           </span>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 pb-14 sm:px-5 lg:px-8">
+      <main className="mx-auto max-w-[1440px] px-4 pb-12 sm:px-6 lg:px-10">
         {isLoading ? (
           <div className="space-y-4 py-10">
             <Skeleton className="h-10 w-72" />
@@ -203,23 +240,23 @@ function Storefront() {
                 )}
               </ul>
             </section>
-            <div className="mb-4 mt-10 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+            <div className="mb-4 mt-8 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
               <h2 className="text-lg font-semibold">Services</h2>
               <p className="text-sm text-muted-foreground">
                 Pick one to get an exact quote — or ask the assistant.
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_420px]">
+            <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px]">
               {data.services.length === 0 ? (
                 <Empty title="No services published yet">Check back soon.</Empty>
               ) : (
                 <div
                   className={`grid content-start gap-4 ${
-                    data.services.length === 3
-                      ? "md:grid-cols-2 xl:grid-cols-3"
-                      : data.services.length === 1
-                        ? "grid-cols-1"
-                        : "md:grid-cols-2"
+                    data.services.length === 1
+                      ? "grid-cols-1"
+                      : data.services.length === 2 || data.services.length === 4
+                        ? "sm:grid-cols-2"
+                        : "sm:grid-cols-2 xl:grid-cols-3"
                   }`}
                 >
                   {data.services.map((s) => {
@@ -237,14 +274,7 @@ function Storefront() {
                             loading="lazy"
                           />
                         ) : (
-                          <div
-                            aria-hidden="true"
-                            className="grid aspect-[16/9] w-full place-items-center bg-[#f3efe8]"
-                          >
-                            <span className="grid size-14 place-items-center rounded-2xl bg-background text-xl font-semibold text-primary shadow-sm">
-                              {initials(s.title)}
-                            </span>
-                          </div>
+                          <CoverArt title={s.title} />
                         )}
                         <div className="flex flex-1 flex-col p-5">
                           <div className="flex items-start justify-between gap-3">
@@ -545,7 +575,7 @@ function AgentChat({ slug, judge = false }: { slug: string; judge?: boolean }) {
   };
   return (
     <aside
-      className="glass-card relative flex h-[min(70dvh,480px)] flex-col overflow-hidden lg:sticky lg:top-6 lg:h-[520px]"
+      className="glass-card relative flex h-[min(75dvh,560px)] flex-col overflow-hidden lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)] lg:max-h-[820px] lg:min-h-[520px]"
       aria-label="AI assistant demo"
     >
       <img
@@ -580,6 +610,25 @@ function AgentChat({ slug, judge = false }: { slug: string; judge?: boolean }) {
         className="flex flex-1 flex-col space-y-3 overflow-y-auto p-4"
         aria-live="polite"
       >
+        {!items.length && (
+          <div className="relative rounded-2xl rounded-tl-sm bg-background/90 p-4 text-sm shadow-xs ring-1 ring-border">
+            <p className="font-semibold">Hi! I can quote and book any service here.</p>
+            <ul className="mt-2 space-y-1.5 text-[13px] text-muted-foreground">
+              <li className="flex gap-2">
+                <Check className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                Prices come straight from this catalog — I can&apos;t change them.
+              </li>
+              <li className="flex gap-2">
+                <Check className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                Tell me your name, email and what you need — I&apos;ll make the quote.
+              </li>
+              <li className="flex gap-2">
+                <Check className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                You pay the deposit yourself in a secure PayPal checkout.
+              </li>
+            </ul>
+          </div>
+        )}
         {!items.length && (
           <div className="mt-auto space-y-2">
             {judge && (

@@ -88,7 +88,7 @@ function JudgesPage() {
   return (
     <div className="min-h-screen bg-muted">
       <header className="border-b border-border bg-background">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
@@ -97,80 +97,118 @@ function JudgesPage() {
           </a>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6">
-        <section className="glass-card p-5 sm:p-6">
-          <p className="text-sm font-medium text-muted-foreground">PayPal AI Hackathon 2026</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-            Judge path · about 3 minutes
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Deposit-before-work storefront for freelancers. AI books; PayPal holds or captures the
-            deposit; a deterministic policy decides refunds; nobody — human or agent — can change an
-            amount after it's priced.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <a href={`/s/${SLUG}?judge=1`} className="btn-mint btn-sm">
-              Live storefront <ArrowUpRight className="size-3.5" aria-hidden="true" />
-            </a>
-            <a href="/login?demo=1&next=/app" className="btn-glass btn-sm">
-              Seller desk (demo login)
-            </a>
-            <a
-              href={`${REPO}/blob/master/DEMO_SCRIPT.md`}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-glass btn-sm"
-            >
-              Demo script
-            </a>
-            <a href="/api/health" target="_blank" rel="noreferrer" className="btn-glass btn-sm">
-              /api/health
-            </a>
-          </div>
+      <main className="mx-auto max-w-[1440px] space-y-5 px-4 py-6 sm:px-6 lg:px-10">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+          <section className="glass-card flex flex-col justify-between p-5 sm:p-7">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">PayPal AI Hackathon 2026</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                Judge path · about 3 minutes
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm text-muted-foreground sm:text-base">
+                Deposit-before-work storefront for freelancers. AI books; PayPal holds or captures
+                the deposit; a deterministic policy decides refunds; nobody — human or agent — can
+                change an amount after it's priced.
+              </p>
+            </div>
+            <div>
+              <dl className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border text-sm sm:grid-cols-4">
+                {[
+                  ["5", "guided steps"],
+                  ["Orders v2", "capture + authorize"],
+                  ["Invoicing v2", "final bill + tip"],
+                  ["MCP", "AI booking tools"],
+                ].map(([k, v]) => (
+                  <div key={k} className="bg-card px-4 py-3">
+                    <dt className="font-semibold">{k}</dt>
+                    <dd className="text-xs text-muted-foreground">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <a href={`/s/${SLUG}?judge=1`} className="btn-mint btn-sm">
+                  Live storefront <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                </a>
+                <a href="/login?demo=1&next=/app" className="btn-glass btn-sm">
+                  Seller desk (demo login)
+                </a>
+                <a
+                  href={`${REPO}/blob/master/DEMO_SCRIPT.md`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-glass btn-sm"
+                >
+                  Demo script
+                </a>
+                <a href="/api/health" target="_blank" rel="noreferrer" className="btn-glass btn-sm">
+                  /api/health
+                </a>
+              </div>
+            </div>
+          </section>
+          <section className="glass-card flex flex-col p-5" aria-labelledby="creds-h">
+            <h2 id="creds-h" className="font-semibold">
+              Credentials (sandbox only)
+            </h2>
+            <div className="mt-3 space-y-2 text-sm">
+              <p className="text-xs font-semibold text-muted-foreground">PayPal sandbox buyer</p>
+              <Copy label="Email" value={SANDBOX_BUYER_EMAIL} />
+              <Copy label="Password" value={SANDBOX_BUYER_PASSWORD} />
+              <p className="pt-2 text-xs font-semibold text-muted-foreground">Seller desk</p>
+              <Copy label="Email" value="demo@serviceready.app" />
+              <Copy label="Password" value="DemoJudge2026!" />
+              <p className="text-xs text-muted-foreground">
+                Tip: use the buyer email as the client email so the PayPal invoice reaches that
+                sandbox inbox.
+              </p>
+            </div>
+          </section>
+        </div>
+
+        <section aria-labelledby="steps-h">
+          <h2 id="steps-h" className="mb-3 font-semibold">
+            One-click steps
+          </h2>
+          <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {STEPS.map((s, i) => (
+              <li key={s.title} className="glass-card flex flex-col p-4 text-sm">
+                <span className="flex size-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {i + 1}
+                </span>
+                <p className="mt-3 font-semibold">{s.title}</p>
+                <p className="mt-1 flex-1 text-muted-foreground">{s.body}</p>
+                <a href={s.to} className="mt-3 text-xs font-semibold text-link">
+                  {s.cta} →
+                </a>
+              </li>
+            ))}
+          </ol>
         </section>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-          <section className="glass-card p-5" aria-labelledby="steps-h">
-            <h2 id="steps-h" className="font-semibold">
-              One-click steps
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+          <section className="glass-card p-5" aria-labelledby="mcp-h">
+            <h2 id="mcp-h" className="flex items-center gap-2 font-semibold">
+              <Bot className="size-4" aria-hidden="true" />
+              Book from Claude (MCP)
             </h2>
-            <ol className="mt-3 space-y-3">
-              {STEPS.map((s, i) => (
-                <li key={s.title} className="glass-row flex gap-3 p-3 text-sm">
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    {i + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">{s.title}</p>
-                    <p className="mt-0.5 text-muted-foreground">{s.body}</p>
-                  </div>
-                  <a href={s.to} className="shrink-0 self-start text-xs font-semibold text-link">
-                    {s.cta} →
-                  </a>
-                </li>
-              ))}
-            </ol>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Streamable HTTP MCP at <code className="font-mono">{MCP_URL}</code>. In Claude.ai /
+              Desktop: Settings → Connectors → Add custom connector → paste the URL. Or:
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <Snippet label="Claude Code" code={CLAUDE_CODE} />
+              <Snippet label="claude_desktop_config.json" code={CLAUDE_JSON} />
+              <Snippet label="Prompt to paste" code={PROMPT} />
+              <Snippet label="curl" code={CURL} />
+            </div>
+            {USE_MOCKS && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Local mock mode — MCP runs on the live deploy.
+              </p>
+            )}
           </section>
 
           <div className="space-y-5">
-            <section className="glass-card p-5" aria-labelledby="creds-h">
-              <h2 id="creds-h" className="font-semibold">
-                Credentials (sandbox only)
-              </h2>
-              <div className="mt-3 space-y-2 text-sm">
-                <p className="text-xs font-semibold text-muted-foreground">PayPal sandbox buyer</p>
-                <Copy label="Email" value={SANDBOX_BUYER_EMAIL} />
-                <Copy label="Password" value={SANDBOX_BUYER_PASSWORD} />
-                <p className="pt-2 text-xs font-semibold text-muted-foreground">Seller desk</p>
-                <Copy label="Email" value="demo@serviceready.app" />
-                <Copy label="Password" value="DemoJudge2026!" />
-                <p className="text-xs text-muted-foreground">
-                  Tip: use the buyer email as the client email so the PayPal invoice reaches that
-                  sandbox inbox.
-                </p>
-              </div>
-            </section>
-
             <section className="glass-card p-5" aria-labelledby="tamper-h">
               <h2 id="tamper-h" className="flex items-center gap-2 font-semibold">
                 <ShieldCheck className="size-4" aria-hidden="true" />
@@ -233,46 +271,23 @@ function JudgesPage() {
                 </p>
               )}
             </section>
+            <section className="glass-card p-5 text-sm" aria-labelledby="beats-h">
+              <h2 id="beats-h" className="font-semibold">
+                What to look for
+              </h2>
+              <ul className="mt-2 grid gap-x-6 gap-y-1.5 text-muted-foreground sm:grid-cols-2 lg:grid-cols-1">
+                <li>PayPal Orders v2 CAPTURE + AUTHORIZE, JS SDK v6</li>
+                <li>Invoicing v2 final bill with tip line</li>
+                <li>Cancel policy → void / partial capture / refund</li>
+                <li>Agent Toolkit get_invoice · create_refund · reminders</li>
+                <li>Signed webhooks + “Check PayPal” fallback</li>
+                <li>MCP spend mandates, Vault rebooking</li>
+                <li>HMAC-signed quotes + order fingerprint</li>
+                <li>PayPal-Request-Id on every money write</li>
+              </ul>
+            </section>
           </div>
         </div>
-
-        <section className="glass-card p-5" aria-labelledby="mcp-h">
-          <h2 id="mcp-h" className="flex items-center gap-2 font-semibold">
-            <Bot className="size-4" aria-hidden="true" />
-            Book from Claude (MCP)
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Streamable HTTP MCP at <code className="font-mono">{MCP_URL}</code>. In Claude.ai /
-            Desktop: Settings → Connectors → Add custom connector → paste the URL. Or:
-          </p>
-          <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            <Snippet label="Claude Code" code={CLAUDE_CODE} />
-            <Snippet label="claude_desktop_config.json" code={CLAUDE_JSON} />
-            <Snippet label="Prompt to paste" code={PROMPT} />
-            <Snippet label="curl" code={CURL} />
-          </div>
-          {USE_MOCKS && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Local mock mode — MCP runs on the live deploy.
-            </p>
-          )}
-        </section>
-
-        <section className="glass-card p-5 text-sm" aria-labelledby="beats-h">
-          <h2 id="beats-h" className="font-semibold">
-            What to look for
-          </h2>
-          <ul className="mt-2 grid gap-x-6 gap-y-1.5 text-muted-foreground sm:grid-cols-2">
-            <li>PayPal Orders v2 CAPTURE + AUTHORIZE, JS SDK v6</li>
-            <li>Invoicing v2 final bill with tip line</li>
-            <li>Cancel policy → void / partial capture / refund</li>
-            <li>Agent Toolkit get_invoice · create_refund · reminders</li>
-            <li>Signed webhooks + “Check PayPal” fallback</li>
-            <li>MCP spend mandates, Vault rebooking</li>
-            <li>HMAC-signed quotes + order fingerprint</li>
-            <li>PayPal-Request-Id on every money write</li>
-          </ul>
-        </section>
       </main>
     </div>
   );

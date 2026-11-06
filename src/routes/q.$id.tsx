@@ -136,7 +136,7 @@ function QuotePage() {
   return (
     <div className="min-h-screen bg-muted">
       <header className="border-b border-border bg-background">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-5 lg:px-8">
+        <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
@@ -146,7 +146,7 @@ function QuotePage() {
           </span>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-5 sm:pt-6 lg:px-8">
+      <main className="mx-auto max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 sm:pt-6 lg:px-10">
         {returnCapture === "capturing" && (
           <p
             role="status"

@@ -51,7 +51,7 @@ function Catalog() {
         </Link>
       </PageHeader>
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-44 rounded-2xl" />
           ))}
@@ -66,7 +66,7 @@ function Catalog() {
           to publish your first services.
         </Empty>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {data.map((s) => (
             <article key={s.id} className="glass-card flex flex-col p-5">
               <div className="mb-3">

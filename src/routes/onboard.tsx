@@ -124,7 +124,7 @@ function Onboard() {
   return (
     <div className="min-h-screen bg-muted">
       <header className="border-b border-border bg-background">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-5">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-5">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
@@ -143,7 +143,7 @@ function Onboard() {
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-5 sm:pt-8">
+      <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-5 sm:pt-8">
         <ol className="mb-8 flex flex-wrap gap-2 text-[13px]" aria-label="Progress">
           {["Paste your prices", "Check the details", "Go live"].map((l, i) => (
             <li
@@ -158,7 +158,7 @@ function Onboard() {
         </ol>
 
         {step === 1 && (
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
             <section className="glass-card p-6 sm:p-8">
               <h1 className="display text-2xl sm:text-4xl">Paste your price list</h1>
               <p className="mt-3 text-muted-foreground">
@@ -172,7 +172,7 @@ function Onboard() {
                 id="raw"
                 value={raw}
                 onChange={(e) => setRaw(e.target.value)}
-                rows={8}
+                rows={14}
                 maxLength={10000}
                 placeholder={"e.g.\nlogo 450 (2 rounds), 1 week\nbrand kit 1200 half upfront, 2wks"}
                 className="field mt-6 resize-y font-mono text-[13px] leading-relaxed"

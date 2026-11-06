@@ -108,7 +108,7 @@ const features = [
   },
 ];
 
-const container = "mx-auto w-full max-w-6xl px-5 sm:px-8";
+const container = "mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10";
 
 function SectionHead({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
@@ -197,7 +197,7 @@ function Home() {
                 Explore the demo dashboard
               </Link>
             </p>
-            <div className="relative mx-auto mt-14 max-w-5xl">
+            <div className="relative mx-auto mt-14 max-w-6xl">
               <DeskPreview />
               <div className="hidden w-[340px] text-left sm:absolute sm:block sm:-bottom-8 sm:-right-6 sm:mt-0 lg:-right-12">
                 <BookingProof />
