@@ -177,7 +177,7 @@ function SdkCheckout({ quoteId, onPaid }: Props) {
         if (cancelled || !ref.current) return;
         ref.current.innerHTML = "";
         const btns = paypal.Buttons({
-          style: { layout: "vertical", shape: "rect", label: "pay", color: "gold", height: "48" },
+          style: { layout: "vertical", shape: "rect", label: "pay", color: "gold", height: 48 },
           createOrder: async () => (await api.createDepositOrder(quoteId)).order_id,
           onApprove: async ({ orderID }) => {
             const q = await api.captureDeposit(quoteId, orderID);
