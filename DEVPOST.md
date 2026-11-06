@@ -153,7 +153,7 @@ Sponsor tools: tick **Render** (the live demo is a Render web service — eligib
 
 ## Test credentials / judge access
 
-**App access:** no seller login required for the seeded demo path. Open the live URL and storefront link above.
+**App access:** storefront `/s/maya-rao-studio` is public. Seller desk: `/login` → **Continue as demo**, or `demo@serviceready.app` / `DemoJudge2026!` (also in README).
 
 **PayPal sandbox buyer** (required to complete deposit + invoice):
 

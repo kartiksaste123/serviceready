@@ -16,11 +16,21 @@ Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/)
 2. Ask the assistant for a logo / brand package, or pick a service and request a quote (use any name + email).
 3. On the quote page, click **Pay deposit with PayPal**.
 4. Log in with the **sandbox buyer** below and approve the payment (real PayPal sandbox popup).
-5. Open the seller workspace (`/app`) → open the booking → **Mark delivered & invoice balance**.
+5. Open **Sign in** → **Continue as demo** (or use the demo credentials below) → seller desk → open the booking → **Mark delivered & invoice balance**.
 6. Open the PayPal invoice link and pay it as the same sandbox buyer.
 7. PayPal sends `INVOICING.INVOICE.PAID` to our webhook → status flips to paid (or press "Check payment" — both re-read the invoice from PayPal).
 
 > Tip: use the sandbox buyer email below as the client email so the PayPal invoice lands in that sandbox inbox.
+
+### Demo seller login (Supabase Auth)
+
+| Field | Value |
+|-------|-------|
+| Email | `demo@serviceready.app` |
+| Password | `DemoJudge2026!` |
+| Workspace | Maya Rao Studio (`/s/maya-rao-studio`) |
+
+Or hit **Continue as demo** on `/login`. Real sellers can **Create account** — that opens an empty desk for their own storefront. Public `/s/*`, `/q/*`, and `/mcp/*` stay open without signing in.
 
 ### Sandbox buyer (PayPal Developer → Sandbox accounts)
 
@@ -50,7 +60,7 @@ Secrets (`PAYPAL_CLIENT_SECRET`) live **only** in server env — never `VITE_*`.
 
 ## Persistence
 
-Supabase Postgres (`sellers`, `services`, `quotes`, `payments`, `agent_events`, `proposals`, `replies`, `webhook_events`). Demo RLS is open for the hackathon so judges share one seeded seller (`maya-rao-studio`).
+Supabase Postgres + Auth (`sellers.auth_user_id`, `services.image_url`, Storage bucket `service-covers`). Demo RLS is open for the hackathon so judges share one seeded seller (`maya-rao-studio`) via the demo login. New accounts get their own seller row on first sign-in.
 
 ## AI (server-side LLM)
 

@@ -102,8 +102,8 @@ function Home() {
             </a>
           </nav>
           <div className="flex items-center gap-2">
-            <Link to="/app" className="btn-glass btn-sm hidden sm:inline-flex">
-              Open demo workspace
+            <Link to="/login" className="btn-glass btn-sm hidden sm:inline-flex">
+              Sign in
             </Link>
             <Link to="/onboard" className="btn-mint btn-sm">
               <span className="sm:hidden">Get started</span>
@@ -132,13 +132,17 @@ function Home() {
                 <Link to="/s/$slug" params={{ slug: "maya-rao-studio" }} className="btn-glass">
                   See Maya's storefront
                 </Link>
-                <Link to="/app" className="btn-glass">
-                  Open seller workspace
+                <Link
+                  to="/login"
+                  search={{ demo: "1", next: "/app" }}
+                  className="btn-glass"
+                >
+                  Open demo workspace
                 </Link>
               </div>
               <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
                 <ShieldCheck className="size-4" />
-                No account needed for this interactive demo.
+                Demo signs you into Maya Rao Studio — create your own account anytime.
               </p>
             </div>
             <div className="relative">
@@ -312,7 +316,7 @@ function Home() {
             <a href="#how" className="hover:text-foreground">
               How it works
             </a>
-            <Link to="/app" className="hover:text-foreground">
+            <Link to="/login" search={{ next: "/app" }} className="hover:text-foreground">
               Seller console
             </Link>
           </div>
@@ -352,7 +356,7 @@ function BookingProof() {
           <span className="size-1.5 rounded-full bg-warning" />
           Awaiting approval
         </span>
-        <Link to="/app/approvals" className="text-xs font-semibold hover:underline sm:text-sm">
+        <Link to="/login" search={{ demo: "1", next: "/app/approvals" }} className="text-xs font-semibold hover:underline sm:text-sm">
           Review message →
         </Link>
       </div>

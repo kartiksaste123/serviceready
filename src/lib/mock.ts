@@ -662,6 +662,7 @@ export async function publishCatalog(drafts: ServiceDraft[]) {
       title: d.title.trim(),
       description: d.description.trim(),
       deliverables: d.deliverables.map((x) => x.trim()).filter(Boolean),
+      image_url: d.image_url ?? null,
       price_cents: d.price_cents,
       deposit_pct: d.deposit_pct,
       lead_time_days: d.lead_time_days ?? 7,

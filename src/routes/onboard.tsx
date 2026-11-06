@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import {
@@ -16,6 +16,8 @@ import { toast } from "sonner";
 import { api, USE_MOCKS } from "@/lib/api";
 import type { Flag, Service, ServiceDraft } from "@/lib/types";
 import { CopyButton, Wordmark } from "@/components/kit";
+import { ServiceImageField } from "@/components/ServiceImageField";
+import { useAuth } from "@/lib/auth";
 import { money } from "@/lib/format";
 import { catalogErrors, depositOf, LIMITS } from "@/lib/validation";
 
@@ -45,7 +47,14 @@ const num = (v: string) => (v.trim() === "" ? NaN : Number(v));
 
 function Onboard() {
   const qc = useQueryClient();
-  const seller = useQuery({ queryKey: ["seller"], queryFn: api.getSeller });
+  const navigate = useNavigate();
+  const auth = useAuth();
+  const signedIn = USE_MOCKS || !!auth.session;
+  const seller = useQuery({
+    queryKey: ["seller"],
+    queryFn: api.getSeller,
+    enabled: signedIn,
+  });
   const slug = seller.data?.slug ?? "maya-rao-studio";
   const [raw, setRaw] = useState("");
   const [drafts, setDrafts] = useState<ServiceDraft[] | null>(null);
@@ -119,9 +128,19 @@ function Onboard() {
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
-          <Link to="/app/catalog" className="text-sm text-muted-foreground hover:text-foreground">
-            Back to workspace
-          </Link>
+          {signedIn ? (
+            <Link to="/app/catalog" className="text-sm text-muted-foreground hover:text-foreground">
+              Back to workspace
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              search={{ next: "/onboard" }}
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-5 pb-16 pt-8">
@@ -210,7 +229,14 @@ function Onboard() {
                   type="button"
                   className="btn-mint btn-sm"
                   disabled={!drafts.length || blocking > 0 || publish.isPending}
-                  onClick={() => publish.mutate()}
+                  onClick={() => {
+                    if (!signedIn) {
+                      toast.error("Sign in to publish — so these services land in your desk");
+                      navigate({ to: "/login", search: { next: "/onboard", tab: "signup" } });
+                      return;
+                    }
+                    publish.mutate();
+                  }}
                 >
                   {publish.isPending && (
                     <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -310,6 +336,17 @@ function Onboard() {
                         onChange={(e) => upd(d.tmp_id, { description: e.target.value })}
                       />
                     </L>
+                    <div className="mt-3">
+                      <p className="mb-1.5 text-sm font-medium">Cover image</p>
+                      <ServiceImageField
+                        title={d.title}
+                        description={d.description}
+                        imageUrl={d.image_url ?? null}
+                        requireAuth
+                        signedIn={signedIn}
+                        onChange={(url) => upd(d.tmp_id, { image_url: url })}
+                      />
+                    </div>
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
                       {d.deliverables.map((x) => (
                         <span

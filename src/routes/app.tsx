@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
@@ -6,6 +6,8 @@ import {
   Coins,
   ExternalLink,
   LayoutList,
+  Loader2,
+  LogOut,
   Menu,
   Plug,
   ScrollText,
@@ -14,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, USE_MOCKS } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { money } from "@/lib/format";
 import { Wordmark } from "@/components/kit";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,14 +48,37 @@ const NAV = [
 function AppLayout() {
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const auth = useAuth();
   useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (USE_MOCKS) return;
+    if (!auth.ready) return;
+    if (!auth.session) {
+      navigate({ to: "/login", search: { next: pathname || "/app" } });
+    }
+  }, [auth.ready, auth.session, navigate, pathname]);
   const pending = useQuery({
     queryKey: ["proposals", "pending"],
     queryFn: () => api.listProposals("pending"),
+    enabled: USE_MOCKS || !!auth.session,
   });
-  const seller = useQuery({ queryKey: ["seller"], queryFn: api.getSeller });
+  const seller = useQuery({
+    queryKey: ["seller"],
+    queryFn: api.getSeller,
+    enabled: USE_MOCKS || !!auth.session,
+  });
   const count = pending.data?.length ?? 0;
   const slug = seller.data?.slug ?? "maya-rao-studio";
+
+  if (!USE_MOCKS && (!auth.ready || !auth.session)) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-muted">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Checking sign-in" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-muted lg:grid lg:grid-cols-[260px_1fr]">
       <a
@@ -128,8 +154,25 @@ function AppLayout() {
           )}
           <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
-            {USE_MOCKS ? "Demo workspace · PayPal sandbox" : "Connected · PayPal sandbox"}
+            {USE_MOCKS
+              ? "Demo workspace · PayPal sandbox"
+              : auth.isDemo
+                ? "Demo workspace · PayPal sandbox"
+                : "Your workspace · PayPal sandbox"}
           </p>
+          {!USE_MOCKS && (
+            <button
+              type="button"
+              className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+              onClick={async () => {
+                await auth.signOut();
+                navigate({ to: "/login" });
+              }}
+            >
+              <LogOut className="size-3.5" aria-hidden="true" />
+              Sign out
+            </button>
+          )}
         </div>
       </aside>
       <div className="min-w-0">

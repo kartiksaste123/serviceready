@@ -65,11 +65,13 @@ const initials = (name: string) =>
     .map((w) => w[0]?.toUpperCase())
     .join("");
 
-function serviceCover(title: string): string | null {
+function serviceCover(title: string, imageUrl?: string | null): string | null {
+  if (imageUrl) return imageUrl;
   const t = title.toLowerCase();
   if (t.includes("brand")) return "/images/service-brand.webp";
   if (t.includes("landing")) return "/images/service-landing.webp";
   if (t.includes("pitch")) return "/images/service-pitch.webp";
+  // Soft gradient fallback so new services never show a blank hole
   return null;
 }
 
@@ -186,7 +188,7 @@ function Storefront() {
                   }`}
                 >
                   {data.services.map((s) => {
-                    const cover = serviceCover(s.title);
+                    const cover = serviceCover(s.title, s.image_url);
                     return (
                       <article key={s.id} className="glass-card flex flex-col overflow-hidden p-0">
                         {cover ? (
@@ -199,7 +201,16 @@ function Storefront() {
                             height={360}
                             loading="lazy"
                           />
-                        ) : null}
+                        ) : (
+                          <div
+                            aria-hidden="true"
+                            className="flex aspect-[16/9] w-full items-end bg-gradient-to-br from-emerald-100 via-sky-100 to-violet-100 p-4"
+                          >
+                            <span className="rounded-full bg-background/80 px-3 py-1 text-xs font-semibold text-foreground">
+                              {s.title}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex flex-1 flex-col p-5">
                           <div className="flex items-start justify-between gap-3">
                             <h2 className="font-semibold">{s.title}</h2>

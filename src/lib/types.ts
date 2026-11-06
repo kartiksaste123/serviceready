@@ -25,6 +25,7 @@ export interface Service {
   deposit_pct: number;
   lead_time_days: number;
   status: "published" | "draft";
+  image_url?: string | null;
 }
 export interface ServiceDraft {
   tmp_id: string;
@@ -34,6 +35,7 @@ export interface ServiceDraft {
   price_cents: number;
   deposit_pct: number;
   lead_time_days: number | null;
+  image_url?: string | null;
 }
 export interface Flag {
   tmp_id: string;

@@ -9,7 +9,7 @@
 1. Live site: https://serviceready.onrender.com (`VITE_USE_MOCKS=false` on Render — Judge mode banner visible).
 2. Storefront ready: `/s/maya-rao-studio`.
 3. Sandbox buyer logged out of PayPal so the login popup is visible on camera.
-4. Seller workspace `/app` open in a second tab (or split after deposit).
+4. Seller desk: open `/login` → **Continue as demo** (or demo credentials in README), then `/app`.
 5. Browser zoom ~110%. Hide bookmarks bar. Cut any spinner longer than ~1s in edit.
 
 **Sandbox buyer (show email on screen; password only if Devpost needs it — prefer README cut):**
@@ -70,7 +70,7 @@
 
 ### 1:20–1:50 — Deliver + PayPal Invoicing v2
 
-**On screen:** Seller workspace `/app` → open the booking → **Mark delivered & invoice balance**. Overlay: `PayPal Invoicing v2`.
+**On screen:** `/login` → Continue as demo → seller desk `/app` → open the booking → **Mark delivered & invoice balance**. Overlay: `PayPal Invoicing v2`.
 
 **Say:**  
 “As the seller, I mark the work delivered. ServiceReady creates and sends a real **PayPal invoice** for the remaining balance.”

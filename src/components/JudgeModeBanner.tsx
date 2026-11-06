@@ -40,7 +40,13 @@ export function JudgeModeBanner() {
               </li>
               <li>Request a quote → pay deposit with the PayPal button</li>
               <li>Sandbox buyer: {BUYER_EMAIL} (password in README)</li>
-              <li>Seller marks delivered → pay the real PayPal invoice link</li>
+              <li>
+                Sign in as demo → seller desk{" "}
+                <a className="underline" href="/login?demo=1&next=/app">
+                  /login
+                </a>{" "}
+                → mark delivered → pay invoice
+              </li>
             </ol>
           </div>
         </div>

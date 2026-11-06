@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardRouteImport } from './routes/onboard'
 import { Route as ApiEventsRouteImport } from './routes/api.events'
 import { Route as ApiHealthRouteImport } from './routes/api.health'
@@ -38,7 +39,9 @@ import { Route as ApiPaypalConfigRouteImport } from './routes/api.paypal.config'
 import { Route as ApiPaypalWebhookRouteImport } from './routes/api.paypal.webhook'
 import { Route as ApiPublicSlugRouteImport } from './routes/api.public.$slug'
 import { Route as ApiQuotesIdRouteImport } from './routes/api.quotes.$id'
+import { Route as ApiSellerBootstrapRouteImport } from './routes/api.seller.bootstrap'
 import { Route as ApiSellerRulesRouteImport } from './routes/api.seller.rules'
+import { Route as ApiServicesImageRouteImport } from './routes/api.services.image'
 import { Route as AppQuotesIdRouteImport } from './routes/app.quotes.$id'
 import { Route as ApiProposalsIdApproveRouteImport } from './routes/api.proposals.$id.approve'
 import { Route as ApiProposalsIdRejectRouteImport } from './routes/api.proposals.$id.reject'
@@ -60,6 +63,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppRoute = AppRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardRoute = OnboardRouteImport.update({
@@ -197,10 +205,20 @@ const ApiQuotesIdRoute = ApiQuotesIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiQuotesRoute,
 } as any)
+const ApiSellerBootstrapRoute = ApiSellerBootstrapRouteImport.update({
+  id: '/bootstrap',
+  path: '/bootstrap',
+  getParentRoute: () => ApiSellerRoute,
+} as any)
 const ApiSellerRulesRoute = ApiSellerRulesRouteImport.update({
   id: '/rules',
   path: '/rules',
   getParentRoute: () => ApiSellerRoute,
+} as any)
+const ApiServicesImageRoute = ApiServicesImageRouteImport.update({
+  id: '/image',
+  path: '/image',
+  getParentRoute: () => ApiServicesRoute,
 } as any)
 const AppQuotesIdRoute = AppQuotesIdRouteImport.update({
   id: '/quotes/$id',
@@ -269,13 +287,14 @@ const ApiQuotesIdDepositOrderRoute = ApiQuotesIdDepositOrderRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/api/events': typeof ApiEventsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/proposals': typeof ApiProposalsRouteWithChildren
   '/api/quotes': typeof ApiQuotesRouteWithChildren
   '/api/seller': typeof ApiSellerRouteWithChildren
-  '/api/services': typeof ApiServicesRoute
+  '/api/services': typeof ApiServicesRouteWithChildren
   '/api/stats': typeof ApiStatsRoute
   '/app/approvals': typeof AppApprovalsRoute
   '/app/catalog': typeof AppCatalogRoute
@@ -296,7 +315,9 @@ export interface FileRoutesByFullPath {
   '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
   '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
   '/api/quotes/$id': typeof ApiQuotesIdRouteWithChildren
+  '/api/seller/bootstrap': typeof ApiSellerBootstrapRoute
   '/api/seller/rules': typeof ApiSellerRulesRoute
+  '/api/services/image': typeof ApiServicesImageRoute
   '/app/quotes/$id': typeof AppQuotesIdRoute
   '/api/proposals/$id/approve': typeof ApiProposalsIdApproveRoute
   '/api/proposals/$id/reject': typeof ApiProposalsIdRejectRoute
@@ -312,13 +333,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/api/events': typeof ApiEventsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/proposals': typeof ApiProposalsRouteWithChildren
   '/api/quotes': typeof ApiQuotesRouteWithChildren
   '/api/seller': typeof ApiSellerRouteWithChildren
-  '/api/services': typeof ApiServicesRoute
+  '/api/services': typeof ApiServicesRouteWithChildren
   '/api/stats': typeof ApiStatsRoute
   '/app/approvals': typeof AppApprovalsRoute
   '/app/catalog': typeof AppCatalogRoute
@@ -339,7 +361,9 @@ export interface FileRoutesByTo {
   '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
   '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
   '/api/quotes/$id': typeof ApiQuotesIdRouteWithChildren
+  '/api/seller/bootstrap': typeof ApiSellerBootstrapRoute
   '/api/seller/rules': typeof ApiSellerRulesRoute
+  '/api/services/image': typeof ApiServicesImageRoute
   '/app/quotes/$id': typeof AppQuotesIdRoute
   '/api/proposals/$id/approve': typeof ApiProposalsIdApproveRoute
   '/api/proposals/$id/reject': typeof ApiProposalsIdRejectRoute
@@ -357,13 +381,14 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/api/events': typeof ApiEventsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/proposals': typeof ApiProposalsRouteWithChildren
   '/api/quotes': typeof ApiQuotesRouteWithChildren
   '/api/seller': typeof ApiSellerRouteWithChildren
-  '/api/services': typeof ApiServicesRoute
+  '/api/services': typeof ApiServicesRouteWithChildren
   '/api/stats': typeof ApiStatsRoute
   '/app/approvals': typeof AppApprovalsRoute
   '/app/catalog': typeof AppCatalogRoute
@@ -384,7 +409,9 @@ export interface FileRoutesById {
   '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
   '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
   '/api/quotes/$id': typeof ApiQuotesIdRouteWithChildren
+  '/api/seller/bootstrap': typeof ApiSellerBootstrapRoute
   '/api/seller/rules': typeof ApiSellerRulesRoute
+  '/api/services/image': typeof ApiServicesImageRoute
   '/app/quotes/$id': typeof AppQuotesIdRoute
   '/api/proposals/$id/approve': typeof ApiProposalsIdApproveRoute
   '/api/proposals/$id/reject': typeof ApiProposalsIdRejectRoute
@@ -403,6 +430,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/login'
     | '/onboard'
     | '/api/events'
     | '/api/health'
@@ -430,7 +458,9 @@ export interface FileRouteTypes {
     | '/api/paypal/webhook'
     | '/api/public/$slug'
     | '/api/quotes/$id'
+    | '/api/seller/bootstrap'
     | '/api/seller/rules'
+    | '/api/services/image'
     | '/app/quotes/$id'
     | '/api/proposals/$id/approve'
     | '/api/proposals/$id/reject'
@@ -446,6 +476,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/login'
     | '/onboard'
     | '/api/events'
     | '/api/health'
@@ -473,7 +504,9 @@ export interface FileRouteTypes {
     | '/api/paypal/webhook'
     | '/api/public/$slug'
     | '/api/quotes/$id'
+    | '/api/seller/bootstrap'
     | '/api/seller/rules'
+    | '/api/services/image'
     | '/app/quotes/$id'
     | '/api/proposals/$id/approve'
     | '/api/proposals/$id/reject'
@@ -490,6 +523,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/login'
     | '/onboard'
     | '/api/events'
     | '/api/health'
@@ -517,7 +551,9 @@ export interface FileRouteTypes {
     | '/api/paypal/webhook'
     | '/api/public/$slug'
     | '/api/quotes/$id'
+    | '/api/seller/bootstrap'
     | '/api/seller/rules'
+    | '/api/services/image'
     | '/app/quotes/$id'
     | '/api/proposals/$id/approve'
     | '/api/proposals/$id/reject'
@@ -535,13 +571,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
   OnboardRoute: typeof OnboardRoute
   ApiEventsRoute: typeof ApiEventsRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiProposalsRoute: typeof ApiProposalsRouteWithChildren
   ApiQuotesRoute: typeof ApiQuotesRouteWithChildren
   ApiSellerRoute: typeof ApiSellerRouteWithChildren
-  ApiServicesRoute: typeof ApiServicesRoute
+  ApiServicesRoute: typeof ApiServicesRouteWithChildren
   ApiStatsRoute: typeof ApiStatsRoute
   McpSlugRoute: typeof McpSlugRoute
   QIdRoute: typeof QIdRoute
@@ -571,6 +608,13 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboard': {
@@ -762,12 +806,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiQuotesIdRouteImport
       parentRoute: typeof ApiQuotesRoute
     }
+    '/api/seller/bootstrap': {
+      id: '/api/seller/bootstrap'
+      path: '/bootstrap'
+      fullPath: '/api/seller/bootstrap'
+      preLoaderRoute: typeof ApiSellerBootstrapRouteImport
+      parentRoute: typeof ApiSellerRoute
+    }
     '/api/seller/rules': {
       id: '/api/seller/rules'
       path: '/rules'
       fullPath: '/api/seller/rules'
       preLoaderRoute: typeof ApiSellerRulesRouteImport
       parentRoute: typeof ApiSellerRoute
+    }
+    '/api/services/image': {
+      id: '/api/services/image'
+      path: '/image'
+      fullPath: '/api/services/image'
+      preLoaderRoute: typeof ApiServicesImageRouteImport
+      parentRoute: typeof ApiServicesRoute
     }
     '/app/quotes/$id': {
       id: '/app/quotes/$id'
@@ -931,15 +989,29 @@ const ApiQuotesRouteWithChildren = ApiQuotesRoute._addFileChildren(
 )
 
 interface ApiSellerRouteChildren {
+  ApiSellerBootstrapRoute: typeof ApiSellerBootstrapRoute
   ApiSellerRulesRoute: typeof ApiSellerRulesRoute
 }
 
 const ApiSellerRouteChildren: ApiSellerRouteChildren = {
+  ApiSellerBootstrapRoute: ApiSellerBootstrapRoute,
   ApiSellerRulesRoute: ApiSellerRulesRoute,
 }
 
 const ApiSellerRouteWithChildren = ApiSellerRoute._addFileChildren(
   ApiSellerRouteChildren,
+)
+
+interface ApiServicesRouteChildren {
+  ApiServicesImageRoute: typeof ApiServicesImageRoute
+}
+
+const ApiServicesRouteChildren: ApiServicesRouteChildren = {
+  ApiServicesImageRoute: ApiServicesImageRoute,
+}
+
+const ApiServicesRouteWithChildren = ApiServicesRoute._addFileChildren(
+  ApiServicesRouteChildren,
 )
 
 interface ApiPublicSlugRouteChildren {
@@ -957,13 +1029,14 @@ const ApiPublicSlugRouteWithChildren = ApiPublicSlugRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
   OnboardRoute: OnboardRoute,
   ApiEventsRoute: ApiEventsRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiProposalsRoute: ApiProposalsRouteWithChildren,
   ApiQuotesRoute: ApiQuotesRouteWithChildren,
   ApiSellerRoute: ApiSellerRouteWithChildren,
-  ApiServicesRoute: ApiServicesRoute,
+  ApiServicesRoute: ApiServicesRouteWithChildren,
   ApiStatsRoute: ApiStatsRoute,
   McpSlugRoute: McpSlugRoute,
   QIdRoute: QIdRoute,

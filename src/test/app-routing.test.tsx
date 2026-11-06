@@ -23,6 +23,7 @@ function failedMatches(matches: Awaited<ReturnType<typeof loadAt>>) {
 describe("App routing", () => {
   it.each([
     "/onboard",
+    "/login",
     "/s/maya-rao-studio",
     "/q/q_jordan",
     "/app",

@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock, ExternalLink, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import { money0 } from "@/lib/format";
 import { depositOf } from "@/lib/validation";
 import { Empty, ErrorState, PageHeader } from "@/components/kit";
+import { ServiceImageField } from "@/components/ServiceImageField";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/app/catalog")({
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/app/catalog")({
 });
 
 function Catalog() {
+  const qc = useQueryClient();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["services"],
     queryFn: api.listServices,
@@ -67,6 +69,19 @@ function Catalog() {
         <div className="grid gap-4 sm:grid-cols-2">
           {data.map((s) => (
             <article key={s.id} className="glass-card flex flex-col p-5">
+              <div className="mb-3">
+                <ServiceImageField
+                  title={s.title}
+                  description={s.description}
+                  imageUrl={s.image_url ?? null}
+                  serviceId={s.id}
+                  signedIn
+                  onChange={() => {
+                    void qc.invalidateQueries({ queryKey: ["services"] });
+                    void qc.invalidateQueries({ queryKey: ["public"] });
+                  }}
+                />
+              </div>
               <div className="flex justify-between gap-3">
                 <h2 className="font-semibold">{s.title}</h2>
                 <span className="font-bold tabular-nums">{money0(s.price_cents)}</span>

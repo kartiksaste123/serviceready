@@ -1,4 +1,5 @@
 import * as mock from "./mock";
+import { getAccessToken } from "./supabase";
 import type {
   AgentEvent,
   AgentRun,
@@ -35,12 +36,16 @@ export class ApiError extends Error {
 async function http<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
+    const headers: Record<string, string> = {};
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const token = await getAccessToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
     res = await fetch(`${API_BASE}${path}`, {
       method,
-      headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+      headers,
       body: body !== undefined ? JSON.stringify(body) : null,
       credentials: "include",
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(path.includes("/image") ? 120_000 : 45_000),
     });
   } catch {
     throw new ApiError("Network error — check your connection and try again", 0);
@@ -171,6 +176,32 @@ export const api = {
       () => mock.paypalConfig(),
       "GET",
       "/api/paypal/config",
+    ),
+  bootstrapSeller: (b?: { name?: string; tagline?: string }) =>
+    m<Seller>(() => mock.getSeller(), "POST", "/api/seller/bootstrap", b ?? {}),
+  setServiceImage: (b: {
+    mode: "upload" | "generate" | "clear";
+    title?: string;
+    description?: string;
+    data_url?: string;
+    service_id?: string;
+  }) =>
+    m<{ image_url: string; service?: Service }>(
+      async () => {
+        if (b.mode === "upload" && b.data_url) return { image_url: b.data_url };
+        const t = (b.title ?? "Service").toLowerCase();
+        const fallback = t.includes("brand")
+          ? "/images/service-brand.webp"
+          : t.includes("landing")
+            ? "/images/service-landing.webp"
+            : t.includes("pitch")
+              ? "/images/service-pitch.webp"
+              : "/images/service-brand.webp";
+        return { image_url: fallback };
+      },
+      "POST",
+      "/api/services/image",
+      b,
     ),
   resetDemo: () => m<{ ok: true }>(() => mock.reset(), "POST", "/api/demo/reset"),
 };

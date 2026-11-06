@@ -41,26 +41,40 @@ export async function dispatchApi(request: Request): Promise<Response> {
     }
 
     if (method === "GET" && path === "/api/seller") {
-      return json(await live.getSeller());
+      return json(await live.getSeller(request));
+    }
+    if (method === "POST" && path === "/api/seller/bootstrap") {
+      const body = await readJson<{ name?: string; tagline?: string }>(request);
+      return json(await live.bootstrapSeller(request, body ?? {}));
     }
     if (method === "PUT" && path === "/api/seller/rules") {
       const body = await readJson(request);
-      return json(await live.putRules(body as Parameters<typeof live.putRules>[0]));
+      return json(await live.putRules(body as Parameters<typeof live.putRules>[0], request));
     }
 
     if (method === "POST" && path === "/api/catalog/parse") {
       const body = await readJson<{ raw_text?: string }>(request);
-      return json(await live.parseCatalog(body.raw_text ?? ""));
+      return json(await live.parseCatalog(body.raw_text ?? "", request));
     }
     if (method === "POST" && path === "/api/catalog/publish") {
       const body = await readJson<{ services?: Parameters<typeof live.publishCatalog>[0] }>(
         request,
       );
-      return json(await live.publishCatalog(body.services ?? []));
+      return json(await live.publishCatalog(body.services ?? [], request));
     }
 
     if (method === "GET" && path === "/api/services") {
-      return json(await live.listServices());
+      return json(await live.listServices(request));
+    }
+    if (method === "POST" && path === "/api/services/image") {
+      const body = await readJson<{
+        title?: string;
+        description?: string;
+        data_url?: string;
+        mode?: "upload" | "generate";
+        service_id?: string;
+      }>(request);
+      return json(await live.setServiceImage(request, body ?? {}));
     }
 
     {
@@ -84,7 +98,7 @@ export async function dispatchApi(request: Request): Promise<Response> {
     }
 
     if (method === "GET" && path === "/api/quotes") {
-      return json(await live.listQuotes());
+      return json(await live.listQuotes(request));
     }
 
     {
@@ -111,7 +125,7 @@ export async function dispatchApi(request: Request): Promise<Response> {
     {
       const m = path.match(/^\/api\/quotes\/([^/]+)\/deliver$/);
       if (m && method === "POST") {
-        return json(await live.deliver(decodeURIComponent(m[1]!)));
+        return json(await live.deliver(decodeURIComponent(m[1]!), request));
       }
     }
     {
@@ -123,7 +137,7 @@ export async function dispatchApi(request: Request): Promise<Response> {
     {
       const m = path.match(/^\/api\/quotes\/([^/]+)\/cancel$/);
       if (m && method === "POST") {
-        return json(await live.cancelQuote(decodeURIComponent(m[1]!)));
+        return json(await live.cancelQuote(decodeURIComponent(m[1]!), request));
       }
     }
     {
@@ -141,36 +155,40 @@ export async function dispatchApi(request: Request): Promise<Response> {
     {
       const m = path.match(/^\/api\/quotes\/([^/]+)\/collections\/run$/);
       if (m && method === "POST") {
-        return json(await live.runCollections(decodeURIComponent(m[1]!)));
+        return json(await live.runCollections(decodeURIComponent(m[1]!), undefined, request));
       }
     }
 
     if (method === "GET" && path === "/api/proposals") {
       const status = url.searchParams.get("status") ?? undefined;
-      return json(await live.listProposals(status));
+      return json(await live.listProposals(status, request));
     }
     {
       const m = path.match(/^\/api\/proposals\/([^/]+)\/approve$/);
       if (m && method === "POST") {
         const body = await readJson<{ draft_message?: string }>(request);
         return json(
-          await live.approveProposal(decodeURIComponent(m[1]!), body.draft_message ?? ""),
+          await live.approveProposal(
+            decodeURIComponent(m[1]!),
+            body.draft_message ?? "",
+            request,
+          ),
         );
       }
     }
     {
       const m = path.match(/^\/api\/proposals\/([^/]+)\/reject$/);
       if (m && method === "POST") {
-        return json(await live.rejectProposal(decodeURIComponent(m[1]!)));
+        return json(await live.rejectProposal(decodeURIComponent(m[1]!), request));
       }
     }
 
     if (method === "GET" && path === "/api/events") {
       const actor = url.searchParams.get("actor") ?? undefined;
-      return json(await live.listEvents(actor));
+      return json(await live.listEvents(actor, request));
     }
     if (method === "GET" && path === "/api/stats") {
-      return json(await live.getStats());
+      return json(await live.getStats(request));
     }
 
     if (method === "POST" && (path === "/api/agent/chat" || path === "/api/agent-sim/chat")) {
@@ -184,7 +202,7 @@ export async function dispatchApi(request: Request): Promise<Response> {
     }
 
     if (method === "POST" && path === "/api/demo/reset") {
-      return json(await live.resetDemo());
+      return json(await live.resetDemo(request));
     }
 
     // Demo simulate-balance is intentionally unavailable in live mode

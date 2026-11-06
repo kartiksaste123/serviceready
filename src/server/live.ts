@@ -55,6 +55,7 @@ type SellerRow = {
   reminder_tone: SellerRules["reminder_tone"];
   max_reminders: number;
   wait_days_before_nudge: number;
+  auth_user_id?: string | null;
 };
 type ServiceRow = {
   id: string;
@@ -66,6 +67,7 @@ type ServiceRow = {
   deposit_pct: number;
   lead_time_days: number;
   status: "published" | "draft";
+  image_url?: string | null;
 };
 type QuoteRow = {
   id: string;
@@ -160,6 +162,7 @@ function mapService(r: ServiceRow): Service {
     deposit_pct: r.deposit_pct,
     lead_time_days: r.lead_time_days,
     status: r.status,
+    image_url: r.image_url ?? null,
   };
 }
 function mapQuote(r: QuoteRow): Quote {
@@ -243,6 +246,113 @@ async function demoSeller(): Promise<SellerRow> {
   return requireSeller(DEMO_SLUG);
 }
 
+function bearerToken(request?: Request): string | null {
+  const h = request?.headers.get("authorization") ?? request?.headers.get("Authorization") ?? "";
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m?.[1]?.trim() || null;
+}
+
+async function userIdFromRequest(request?: Request): Promise<string> {
+  const token = bearerToken(request);
+  if (!token) throw new HttpError("Sign in to open your seller desk", 401);
+  const { data, error } = await db().auth.getUser(token);
+  if (error || !data.user) throw new HttpError("Your session expired — sign in again", 401);
+  return data.user.id;
+}
+
+/** Resolve the authenticated seller (desk APIs). Public /s /q /mcp stay slug-based. */
+export async function sellerFromRequest(request?: Request): Promise<SellerRow> {
+  const uid = await userIdFromRequest(request);
+  const { data, error } = await db()
+    .from("sellers")
+    .select("*")
+    .eq("auth_user_id", uid)
+    .maybeSingle();
+  if (error) throw new HttpError(error.message, 500);
+  if (!data) {
+    throw new HttpError("No seller workspace for this account — finish setup first", 404);
+  }
+  return data as SellerRow;
+}
+
+async function assertOwnsQuote(request: Request | undefined, quoteId: string): Promise<{
+  seller: SellerRow;
+  quote: QuoteRow;
+}> {
+  const seller = await sellerFromRequest(request);
+  const quote = await getQuoteRow(quoteId);
+  if (quote.seller_id !== seller.id) throw new HttpError("Booking not found", 404);
+  return { seller, quote };
+}
+
+function slugify(input: string): string {
+  const base = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return base || "studio";
+}
+
+/** After sign-up: create a seller row for this auth user, or return the existing one. */
+export async function bootstrapSeller(
+  request: Request,
+  body: { name?: string; tagline?: string } = {},
+): Promise<Seller> {
+  const token = bearerToken(request);
+  if (!token) throw new HttpError("Sign in to open your seller desk", 401);
+  const { data: authData, error: authErr } = await db().auth.getUser(token);
+  if (authErr || !authData.user) throw new HttpError("Your session expired — sign in again", 401);
+  const user = authData.user;
+
+  const existing = await db()
+    .from("sellers")
+    .select("*")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (existing.error) throw new HttpError(existing.error.message, 500);
+  if (existing.data) return mapSeller(existing.data as SellerRow);
+
+  const metaName =
+    typeof user.user_metadata?.["full_name"] === "string"
+      ? String(user.user_metadata["full_name"]).trim()
+      : "";
+  const name = (body.name?.trim() || metaName || user.email?.split("@")[0] || "My studio").slice(
+    0,
+    80,
+  );
+  const tagline = (body.tagline?.trim() || "Agent-ready services with PayPal deposits.").slice(
+    0,
+    160,
+  );
+  const email = (user.email || `${user.id}@sellers.local`).toLowerCase();
+
+  let slug = slugify(name);
+  for (let i = 0; i < 8; i++) {
+    const candidate = i === 0 ? slug : `${slug}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data, error } = await db()
+      .from("sellers")
+      .insert({
+        slug: candidate,
+        name,
+        tagline,
+        email,
+        auth_user_id: user.id,
+        default_deposit_pct: 30,
+        reminder_tone: "friendly",
+        max_reminders: 3,
+        wait_days_before_nudge: 3,
+      })
+      .select("*")
+      .maybeSingle();
+    if (!error && data) return mapSeller(data as SellerRow);
+    if (error && !/duplicate|unique/i.test(error.message)) {
+      throw new HttpError(error.message, 500);
+    }
+  }
+  throw new HttpError("Could not create a unique storefront slug — try another name", 400);
+}
+
 async function pushEvent(partial: {
   quote_id: string | null;
   seller_id?: string | null;
@@ -312,15 +422,15 @@ async function detail(id: string): Promise<QuoteDetail> {
   };
 }
 
-export async function getSeller(): Promise<Seller> {
-  return mapSeller(await demoSeller());
+export async function getSeller(request?: Request): Promise<Seller> {
+  return mapSeller(await sellerFromRequest(request));
 }
 
-export async function putRules(rules: SellerRules): Promise<Seller> {
+export async function putRules(rules: SellerRules, request?: Request): Promise<Seller> {
   const errs = rulesErrors(rules);
   const first = Object.values(errs).find(Boolean);
   if (first) throw new HttpError(String(first), 400);
-  const seller = await demoSeller();
+  const seller = await sellerFromRequest(request);
   const { data, error } = await db()
     .from("sellers")
     .update({
@@ -337,8 +447,8 @@ export async function putRules(rules: SellerRules): Promise<Seller> {
   return mapSeller(data as SellerRow);
 }
 
-export async function listServices(): Promise<Service[]> {
-  const seller = await demoSeller();
+export async function listServices(request?: Request): Promise<Service[]> {
+  const seller = await sellerFromRequest(request);
   const { data, error } = await db()
     .from("services")
     .select("*")
@@ -442,8 +552,8 @@ export async function postPublicQuote(
   return mapQuote(updated as QuoteRow);
 }
 
-export async function listQuotes(): Promise<Quote[]> {
-  const seller = await demoSeller();
+export async function listQuotes(request?: Request): Promise<Quote[]> {
+  const seller = await sellerFromRequest(request);
   const { data, error } = await db()
     .from("quotes")
     .select("*")
@@ -761,8 +871,8 @@ export async function handlePaypalWebhook(request: Request): Promise<{
   return { ok: true, event_type, verification, handled };
 }
 
-export async function deliver(id: string): Promise<QuoteDetail> {
-  const q = await getQuoteRow(id);
+export async function deliver(id: string, request?: Request): Promise<QuoteDetail> {
+  const { quote: q } = await assertOwnsQuote(request, id);
   if (q.status !== "deposit_paid" && q.status !== "delivered") {
     throw new HttpError(
       q.status === "quoted"
@@ -907,8 +1017,8 @@ export async function refreshInvoiceStatus(id: string): Promise<QuoteDetail> {
   return detail(id);
 }
 
-export async function cancelQuote(id: string): Promise<QuoteDetail> {
-  const q = await getQuoteRow(id);
+export async function cancelQuote(id: string, request?: Request): Promise<QuoteDetail> {
+  const { quote: q } = await assertOwnsQuote(request, id);
   if (q.status !== "quoted") {
     throw new HttpError(
       "Only quotes without a paid deposit can be cancelled. Refund the deposit in PayPal first.",
@@ -956,8 +1066,10 @@ export async function postReply(
   return { reply, agent_run };
 }
 
-export async function runCollections(id: string, trigger?: string): Promise<AgentRun> {
-  const q = await getQuoteRow(id);
+export async function runCollections(id: string, trigger?: string, request?: Request): Promise<AgentRun> {
+  const q = bearerToken(request)
+    ? (await assertOwnsQuote(request, id)).quote
+    : await getQuoteRow(id);
   const pays = await paymentsFor(id);
   const bal = pays.find((p) => p.kind === "balance");
   const steps: AgentEvent[] = [];
@@ -1042,7 +1154,9 @@ export async function runCollections(id: string, trigger?: string): Promise<Agen
 
     const claimsPaid = !!trigger && /paid|payment|sent|transferred/i.test(trigger);
     const first = q.client_name.split(" ")[0] ?? q.client_name;
-    const sellerRow = await demoSeller();
+    const sellerRes = await db().from("sellers").select("*").eq("id", q.seller_id).maybeSingle();
+    if (sellerRes.error) throw new HttpError(sellerRes.error.message, 500);
+    const sellerRow = (sellerRes.data as SellerRow | null) ?? (await demoSeller());
     const tone = sellerRow.reminder_tone;
     let draft = claimsPaid
       ? `Hi ${first}, thank you! I just checked and PayPal still shows the ${money(bal.amount_cents)} invoice as open on my side — sometimes the payment doesn't complete the last step. Here's the link again: ${bal.invoice_url}\n\nNo rush at all!\n\n— Maya`
@@ -1139,8 +1253,8 @@ Include the invoice URL verbatim. Keep under 1200 characters. No subject line.`,
   };
 }
 
-export async function listProposals(status?: string): Promise<Proposal[]> {
-  const seller = await demoSeller();
+export async function listProposals(status?: string, request?: Request): Promise<Proposal[]> {
+  const seller = await sellerFromRequest(request);
   // Join via quotes belonging to seller
   const { data: quotes, error: qErr } = await db()
     .from("quotes")
@@ -1158,14 +1272,18 @@ export async function listProposals(status?: string): Promise<Proposal[]> {
   return (data as ProposalRow[]).map(mapProposal);
 }
 
-export async function approveProposal(id: string, draft_message: string): Promise<Proposal> {
+export async function approveProposal(
+  id: string,
+  draft_message: string,
+  request?: Request,
+): Promise<Proposal> {
   const { data: prop, error } = await db().from("proposals").select("*").eq("id", id).maybeSingle();
   if (error) throw new HttpError(error.message, 500);
   if (!prop) throw new HttpError("Proposal not found", 404);
   const p = prop as ProposalRow;
   if (p.status !== "pending") throw new HttpError("Proposal is no longer pending", 400);
 
-  const q = await getQuoteRow(p.quote_id);
+  const { quote: q } = await assertOwnsQuote(request, p.quote_id);
   const pays = await paymentsFor(p.quote_id);
   const bal = pays.find((x) => x.kind === "balance");
 
@@ -1217,7 +1335,16 @@ export async function approveProposal(id: string, draft_message: string): Promis
   return mapProposal(updated as ProposalRow);
 }
 
-export async function rejectProposal(id: string): Promise<Proposal> {
+export async function rejectProposal(id: string, request?: Request): Promise<Proposal> {
+  const { data: prop, error: pErr } = await db()
+    .from("proposals")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (pErr) throw new HttpError(pErr.message, 500);
+  if (!prop) throw new HttpError("Proposal not found", 404);
+  await assertOwnsQuote(request, (prop as ProposalRow).quote_id);
+
   const { data, error } = await db()
     .from("proposals")
     .update({ status: "rejected", updated_at: new Date().toISOString() })
@@ -1229,8 +1356,8 @@ export async function rejectProposal(id: string): Promise<Proposal> {
   return mapProposal(data as ProposalRow);
 }
 
-export async function listEvents(actor?: string): Promise<AgentEvent[]> {
-  const seller = await demoSeller();
+export async function listEvents(actor?: string, request?: Request): Promise<AgentEvent[]> {
+  const seller = await sellerFromRequest(request);
   let query = db()
     .from("agent_events")
     .select("*")
@@ -1298,8 +1425,8 @@ export async function health() {
   return out;
 }
 
-export async function getStats(): Promise<Stats> {
-  const quotes = await listQuotes();
+export async function getStats(request?: Request): Promise<Stats> {
+  const quotes = await listQuotes(request);
   const by_status = {
     quoted: 0,
     deposit_paid: 0,
@@ -1432,13 +1559,23 @@ const CatalogLlmSchema = z.object({
   notes: z.array(z.string()).optional().default([]),
 });
 
-export async function parseCatalog(raw_text: string): Promise<{
+export async function parseCatalog(
+  raw_text: string,
+  request?: Request,
+): Promise<{
   services: ServiceDraft[];
   flags: Flag[];
 }> {
   const text = (raw_text ?? "").trim();
   if (!text) throw new HttpError("Paste a rate card first", 400);
-  const seller = await demoSeller();
+  let defaultDeposit = 30;
+  try {
+    if (bearerToken(request)) {
+      defaultDeposit = (await sellerFromRequest(request)).default_deposit_pct;
+    }
+  } catch {
+    /* public parse path keeps 30% default */
+  }
 
   if (hasLlm()) {
     try {
@@ -1451,7 +1588,7 @@ Return JSON: {"services":[{"title","description","deliverables":[],"price_usd" O
 Rules:
 - One service per distinct offering. Titles ≤80 chars. Descriptions ≤280 chars.
 - Prefer price_usd as a number (e.g. 1200 for $1,200). price_cents is also fine.
-- deposit_pct is 1-100 integer; default ${seller.default_deposit_pct} if unspecified.
+- deposit_pct is 1-100 integer; default ${defaultDeposit} if unspecified.
 - lead_time_days integer days; default 7 if unspecified.
 - deliverables: short bullet strings (≤12).
 - notes: human-readable warnings (missing price, ambiguous lines).
@@ -1477,7 +1614,7 @@ Return JSON only.`,
         const deposit_pct =
           typeof s.deposit_pct === "number" && s.deposit_pct >= 1 && s.deposit_pct <= 100
             ? s.deposit_pct
-            : seller.default_deposit_pct;
+            : defaultDeposit;
         const lead =
           typeof s.lead_time_days === "number" && s.lead_time_days > 0 ? s.lead_time_days : 7;
         services.push({
@@ -1527,15 +1664,18 @@ Return JSON only.`,
     }
   }
 
-  return parseCatalogHeuristic(text, seller.default_deposit_pct);
+  return parseCatalogHeuristic(text, defaultDeposit);
 }
 
-export async function publishCatalog(services: ServiceDraft[]): Promise<Service[]> {
+export async function publishCatalog(
+  services: ServiceDraft[],
+  request?: Request,
+): Promise<Service[]> {
   for (const d of services) {
     const errs = draftErrors(d);
     if (errs.length) throw new HttpError(errs[0]!.message, 400);
   }
-  const seller = await demoSeller();
+  const seller = await sellerFromRequest(request);
   // Soft-archive existing published by setting draft, then insert new published
   await db()
     .from("services")
@@ -1552,6 +1692,7 @@ export async function publishCatalog(services: ServiceDraft[]): Promise<Service[
     deposit_pct: d.deposit_pct,
     lead_time_days: d.lead_time_days ?? 7,
     status: "published" as const,
+    image_url: d.image_url?.trim() || null,
   }));
   const { data, error } = await db().from("services").insert(rows).select("*");
   if (error) throw new HttpError(error.message, 500);
@@ -1848,8 +1989,142 @@ Use ONLY facts from TOOL_RESULTS and copy amounts exactly as written there. If a
   }
 }
 
-export async function resetDemo(): Promise<{ ok: true }> {
-  const seller = await demoSeller();
+
+async function uploadCoverBytes(
+  bytes: Uint8Array,
+  contentType: string,
+  pathHint: string,
+): Promise<string> {
+  const ext =
+    contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+  const path = `${pathHint.replace(/[^a-zA-Z0-9/_-]+/g, "-").slice(0, 80)}.${ext}`;
+  const { error } = await db().storage.from("service-covers").upload(path, bytes, {
+    contentType,
+    upsert: true,
+  });
+  if (error) throw new HttpError(`Could not save image: ${error.message}`, 500);
+  const { data } = db().storage.from("service-covers").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+function parseDataUrl(dataUrl: string): { bytes: Uint8Array; contentType: string } {
+  const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/i);
+  if (!m) throw new HttpError("Invalid image data", 400);
+  const contentType = m[1]!.toLowerCase();
+  if (!contentType.startsWith("image/")) throw new HttpError("File must be an image", 400);
+  const raw = Buffer.from(m[2]!, "base64");
+  if (raw.byteLength > 5_000_000) throw new HttpError("Image must be under 5 MB", 400);
+  return { bytes: new Uint8Array(raw), contentType };
+}
+
+async function generateCoverWithGrok(title: string, description: string): Promise<Uint8Array> {
+  const key = (typeof process !== "undefined" ? process.env?.["XAI_API_KEY"] : undefined)?.trim();
+  if (!key) throw new HttpError("Image generation needs XAI_API_KEY on the server", 503);
+  const prompt =
+    `Professional freelance service cover image for "${title}". ` +
+    `${description ? `Service: ${description.slice(0, 220)}. ` : ""}` +
+    `Clean modern product photography / brand mockup style, soft studio light, ` +
+    `no text, no logos, no watermarks, square-friendly 16:9 composition, premium freelance marketplace look.`;
+  const res = await fetch("https://api.x.ai/v1/images/generations", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "grok-imagine-image-2.0",
+      prompt,
+      n: 1,
+      aspect_ratio: "16:9",
+      resolution: "1k",
+      quality: "medium",
+      response_format: "b64_json",
+    }),
+    signal: AbortSignal.timeout(90_000),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new HttpError(`Image generation failed (${res.status}): ${t.slice(0, 200)}`, 502);
+  }
+  const j = (await res.json()) as { data?: { b64_json?: string; url?: string }[] };
+  const item = j.data?.[0];
+  if (item?.b64_json) return new Uint8Array(Buffer.from(item.b64_json, "base64"));
+  if (item?.url) {
+    const img = await fetch(item.url, { signal: AbortSignal.timeout(60_000) });
+    if (!img.ok) throw new HttpError("Could not download generated image", 502);
+    return new Uint8Array(await img.arrayBuffer());
+  }
+  throw new HttpError("Image generation returned no image", 502);
+}
+
+/** Upload or AI-generate a service cover; optionally persist onto an existing service row. */
+export async function setServiceImage(
+  request: Request,
+  body: {
+    title?: string;
+    description?: string;
+    data_url?: string;
+    mode?: "upload" | "generate" | "clear";
+    service_id?: string;
+  },
+): Promise<{ image_url: string; service?: Service }> {
+  const seller = await sellerFromRequest(request);
+  if (body.mode === "clear") {
+    if (!body.service_id) return { image_url: "" };
+    const { data, error } = await db()
+      .from("services")
+      .update({ image_url: null, updated_at: new Date().toISOString() })
+      .eq("id", body.service_id)
+      .eq("seller_id", seller.id)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new HttpError(error.message, 500);
+    if (!data) throw new HttpError("Service not found", 404);
+    return { image_url: "", service: mapService(data as ServiceRow) };
+  }
+  const mode = body.mode === "generate" ? "generate" : "upload";
+  let bytes: Uint8Array;
+  let contentType = "image/jpeg";
+  if (mode === "generate") {
+    const title = (body.title ?? "").trim() || "Service";
+    bytes = await generateCoverWithGrok(title, (body.description ?? "").trim());
+  } else {
+    if (!body.data_url) throw new HttpError("Choose an image to upload", 400);
+    const parsed = parseDataUrl(body.data_url);
+    bytes = parsed.bytes;
+    contentType = parsed.contentType;
+  }
+  const hint = `${seller.id}/${body.service_id || crypto.randomUUID()}-${Date.now()}`;
+  const image_url = await uploadCoverBytes(bytes, contentType, hint);
+
+  if (body.service_id) {
+    const { data: existing, error: e1 } = await db()
+      .from("services")
+      .select("*")
+      .eq("id", body.service_id)
+      .eq("seller_id", seller.id)
+      .maybeSingle();
+    if (e1) throw new HttpError(e1.message, 500);
+    if (!existing) throw new HttpError("Service not found", 404);
+    const { data, error } = await db()
+      .from("services")
+      .update({ image_url, updated_at: new Date().toISOString() })
+      .eq("id", body.service_id)
+      .eq("seller_id", seller.id)
+      .select("*")
+      .single();
+    if (error) throw new HttpError(error.message, 500);
+    return { image_url, service: mapService(data as ServiceRow) };
+  }
+  return { image_url };
+}
+
+
+export async function resetDemo(request?: Request): Promise<{ ok: true }> {
+  const seller = await sellerFromRequest(request);
+  if (seller.slug !== DEMO_SLUG) {
+    throw new HttpError("Reset demo is only available on the shared judge workspace", 403);
+  }
   const { data: quotes } = await db().from("quotes").select("id").eq("seller_id", seller.id);
   const ids = (quotes ?? []).map((q: { id: string }) => q.id);
   if (ids.length) {
