@@ -166,7 +166,7 @@ export const api = {
     m<{ messages: ChatMsg[]; tool_calls: ToolTrace[]; quote: Quote | null }>(
       () => mock.agentChat(slug, messages),
       "POST",
-      "/api/agent-sim/chat",
+      "/api/agent/chat",
       { slug, messages },
     ),
   paypalConfig: () =>

@@ -204,7 +204,7 @@ function AgentBadge({ mcp, tools }: { mcp: string; tools: string[] }) {
         <p className="mt-1 break-all font-mono text-xs text-link">{mcp}</p>
         {USE_MOCKS && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Connection preview — try the simulated assistant below. Live MCP requires the external
+            Try the AI assistant below (server-side LLM when configured). Live MCP requires the external
             service.
           </p>
         )}

@@ -28,6 +28,7 @@ import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as QIdRouteImport } from './routes/q.$id'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as ApiAgentSimChatRouteImport } from './routes/api.agent-sim.chat'
+import { Route as ApiAgentChatRouteImport } from './routes/api.agent.chat'
 import { Route as ApiCatalogParseRouteImport } from './routes/api.catalog.parse'
 import { Route as ApiCatalogPublishRouteImport } from './routes/api.catalog.publish'
 import { Route as ApiDemoResetRouteImport } from './routes/api.demo.reset'
@@ -141,6 +142,11 @@ const SSlugRoute = SSlugRouteImport.update({
 const ApiAgentSimChatRoute = ApiAgentSimChatRouteImport.update({
   id: '/api/agent-sim/chat',
   path: '/api/agent-sim/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAgentChatRoute = ApiAgentChatRouteImport.update({
+  id: '/api/agent/chat',
+  path: '/api/agent/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCatalogParseRoute = ApiCatalogParseRouteImport.update({
@@ -262,6 +268,7 @@ export interface FileRoutesByFullPath {
   '/s/$slug': typeof SSlugRoute
   '/app/': typeof AppIndexRoute
   '/api/agent-sim/chat': typeof ApiAgentSimChatRoute
+  '/api/agent/chat': typeof ApiAgentChatRoute
   '/api/catalog/parse': typeof ApiCatalogParseRoute
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
@@ -301,6 +308,7 @@ export interface FileRoutesByTo {
   '/s/$slug': typeof SSlugRoute
   '/app': typeof AppIndexRoute
   '/api/agent-sim/chat': typeof ApiAgentSimChatRoute
+  '/api/agent/chat': typeof ApiAgentChatRoute
   '/api/catalog/parse': typeof ApiCatalogParseRoute
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
@@ -342,6 +350,7 @@ export interface FileRoutesById {
   '/s/$slug': typeof SSlugRoute
   '/app/': typeof AppIndexRoute
   '/api/agent-sim/chat': typeof ApiAgentSimChatRoute
+  '/api/agent/chat': typeof ApiAgentChatRoute
   '/api/catalog/parse': typeof ApiCatalogParseRoute
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
@@ -384,6 +393,7 @@ export interface FileRouteTypes {
     | '/s/$slug'
     | '/app/'
     | '/api/agent-sim/chat'
+    | '/api/agent/chat'
     | '/api/catalog/parse'
     | '/api/catalog/publish'
     | '/api/demo/reset'
@@ -423,6 +433,7 @@ export interface FileRouteTypes {
     | '/s/$slug'
     | '/app'
     | '/api/agent-sim/chat'
+    | '/api/agent/chat'
     | '/api/catalog/parse'
     | '/api/catalog/publish'
     | '/api/demo/reset'
@@ -463,6 +474,7 @@ export interface FileRouteTypes {
     | '/s/$slug'
     | '/app/'
     | '/api/agent-sim/chat'
+    | '/api/agent/chat'
     | '/api/catalog/parse'
     | '/api/catalog/publish'
     | '/api/demo/reset'
@@ -497,6 +509,7 @@ export interface RootRouteChildren {
   QIdRoute: typeof QIdRoute
   SSlugRoute: typeof SSlugRoute
   ApiAgentSimChatRoute: typeof ApiAgentSimChatRoute
+  ApiAgentChatRoute: typeof ApiAgentChatRoute
   ApiCatalogParseRoute: typeof ApiCatalogParseRoute
   ApiCatalogPublishRoute: typeof ApiCatalogPublishRoute
   ApiDemoResetRoute: typeof ApiDemoResetRoute
@@ -638,6 +651,13 @@ declare module '@tanstack/react-router' {
       path: '/api/agent-sim/chat'
       fullPath: '/api/agent-sim/chat'
       preLoaderRoute: typeof ApiAgentSimChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/agent/chat': {
+      id: '/api/agent/chat'
+      path: '/api/agent/chat'
+      fullPath: '/api/agent/chat'
+      preLoaderRoute: typeof ApiAgentChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/catalog/parse': {
@@ -887,6 +907,7 @@ const rootRouteChildren: RootRouteChildren = {
   QIdRoute: QIdRoute,
   SSlugRoute: SSlugRoute,
   ApiAgentSimChatRoute: ApiAgentSimChatRoute,
+  ApiAgentChatRoute: ApiAgentChatRoute,
   ApiCatalogParseRoute: ApiCatalogParseRoute,
   ApiCatalogPublishRoute: ApiCatalogPublishRoute,
   ApiDemoResetRoute: ApiDemoResetRoute,

@@ -22,6 +22,7 @@ Optional:
 |------|--------|
 | `VITE_API_BASE_URL` | Leave empty for same-origin `/api/*`. Set if API is hosted elsewhere (e.g. Render). |
 | `VITE_PUBLIC_ORIGIN` / `PUBLIC_ORIGIN` | Absolute origin for quote + MCP links |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | Server-only LLM (see AI section) |
 
 ## Local
 
@@ -30,6 +31,23 @@ Optional:
 3. `bun run dev`
 4. Open `/s/maya-rao-studio`, request a quote, pay deposit with PayPal sandbox buyer.
 5. Smoke PayPal only: `bun run smoke:paypal` (prints `{ order_id, status }` only).
+
+
+## AI / LLM (Stage One — meaningful AI)
+
+| Name | Where | Notes |
+|------|--------|-------|
+| `OPENAI_API_KEY` | **Server only** | OpenAI-compatible key. Never `VITE_*`. |
+| `OPENAI_BASE_URL` | Server | Optional. Default `https://api.openai.com/v1`. For xAI use `https://api.x.ai/v1`. |
+| `OPENAI_MODEL` | Server | Optional. Default `gpt-4o-mini` (or `grok-2-latest` when using `XAI_API_KEY`). |
+| `XAI_API_KEY` | Server | Optional alternate to `OPENAI_API_KEY` for xAI/Grok. |
+
+Used by:
+- `POST /api/catalog/parse` — structured rate-card → services JSON (validated by `src/lib/validation.ts`)
+- `POST /api/agent/chat` (alias: `/api/agent-sim/chat`) — storefront assistant with tool traces
+- `POST /api/quotes/:id/collections/run` — reminder / thank-you draft text
+
+If no key is set, those endpoints keep the deterministic heuristics so local tests pass.
 
 ## Do not commit
 

@@ -46,9 +46,17 @@ Secrets (`PAYPAL_CLIENT_SECRET`) live **only** in server env — never `VITE_*`.
 
 Supabase Postgres (`sellers`, `services`, `quotes`, `payments`, `agent_events`, `proposals`, `replies`, `webhook_events`). Demo RLS is open for the hackathon so judges share one seeded seller (`maya-rao-studio`).
 
-## AI status (honest)
+## AI (server-side LLM)
 
-Rate-card parse, storefront assistant, and collections drafts currently use **deterministic heuristics** on the server (same shapes as the mock). Wiring a real LLM + PayPal Agent Toolkit is the next MUST-FIX for Stage Two scoring — see `DEVPOST_GAP_MAP.md`.
+When `OPENAI_API_KEY` (or `XAI_API_KEY`) is set on the **server**, these use a real OpenAI-compatible model with JSON outputs + `src/lib/validation.ts` guardrails:
+
+| Endpoint | What the model does |
+|----------|---------------------|
+| `POST /api/catalog/parse` | Extracts services from a messy rate card |
+| `POST /api/agent/chat` (alias `/api/agent-sim/chat`) | Storefront assistant with tool traces (`list_services`, `get_service`, `request_quote`, `get_quote_status`) |
+| `POST /api/quotes/:id/collections/run` | Drafts reminder / follow-up copy for human approval |
+
+Without a key, the same endpoints fall back to deterministic heuristics so tests stay green. Optional: `OPENAI_BASE_URL`, `OPENAI_MODEL`. Never put model keys in `VITE_*`. PayPal Agent Toolkit / MCP are still on the SHOULD-FIX list — see `DEVPOST_GAP_MAP.md`.
 
 ## Local run
 

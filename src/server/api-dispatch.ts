@@ -150,7 +150,10 @@ export async function dispatchApi(request: Request): Promise<Response> {
       return json(await live.getStats());
     }
 
-    if (method === "POST" && path === "/api/agent-sim/chat") {
+    if (
+      method === "POST" &&
+      (path === "/api/agent/chat" || path === "/api/agent-sim/chat")
+    ) {
       const body = await readJson<{ slug?: string; messages?: Parameters<typeof live.agentChat>[1] }>(
         request,
       );

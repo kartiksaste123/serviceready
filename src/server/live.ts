@@ -1,7 +1,9 @@
 /**
  * Supabase-backed live API used by /api/* routes when VITE_USE_MOCKS=false.
- * PayPal Orders + Invoicing are real sandbox calls; AI endpoints reuse
- * deterministic heuristics until an LLM key is wired (see LOVABLE_ENV.md).
+ * PayPal Orders + Invoicing are real sandbox calls.
+ * AI endpoints (catalog parse, storefront agent, collections drafts) call an
+ * OpenAI-compatible LLM when OPENAI_API_KEY is set; otherwise they fall back
+ * to deterministic heuristics so tests stay green without a key.
  */
 import type {
   AgentEvent,
@@ -36,6 +38,8 @@ import { db } from "./db";
 import { publicOrigin } from "./env";
 import { HttpError } from "./http";
 import * as paypal from "./paypal";
+import { chatJson, hasLlm, LlmError } from "./llm";
+import { z } from "zod";
 
 const DEMO_SLUG = "maya-rao-studio";
 const WEBMCP_TOOLS = ["list_services", "get_service", "request_quote", "get_quote_status"];
@@ -836,13 +840,59 @@ export async function runCollections(id: string, trigger?: string): Promise<Agen
 
     const claimsPaid = !!trigger && /paid|payment|sent|transferred/i.test(trigger);
     const first = q.client_name.split(" ")[0] ?? q.client_name;
-    const draft = claimsPaid
+    const sellerRow = await demoSeller();
+    const tone = sellerRow.reminder_tone;
+    let draft = claimsPaid
       ? `Hi ${first}, thank you! I just checked and PayPal still shows the ${money(bal.amount_cents)} invoice as open on my side — sometimes the payment doesn't complete the last step. Here's the link again: ${bal.invoice_url}\n\nNo rush at all!\n\n— Maya`
       : `Hi ${first}, hope you're enjoying the new ${q.service_title.toLowerCase()}! Just a gentle reminder that the ${money(bal.amount_cents)} balance is open whenever you're ready: ${bal.invoice_url}\n\nThanks so much, Maya`;
-
     summary = claimsPaid
       ? "Client claims paid but PayPal still shows open — propose a gentle nudge with the invoice link."
       : "Balance still unpaid — propose a friendly reminder.";
+
+    if (hasLlm()) {
+      try {
+        const ReminderSchema = z.object({
+          draft_message: z.string().min(20).max(2000),
+          summary: z.string().min(8).max(280),
+        });
+        const llmDraft = await chatJson(
+          [
+            {
+              role: "system",
+              content: `You draft a short client email for a freelance collections agent.
+Tone: ${tone}. Seller signs as Maya. PayPal is the source of truth — never trust client payment claims over an unpaid invoice.
+Return JSON: {"draft_message":"...","summary":"one-line agent decision for the human approver"}.
+Include the invoice URL verbatim. Keep under 1200 characters. No subject line.`,
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                client_first: first,
+                service_title: q.service_title,
+                amount: money(bal.amount_cents),
+                invoice_url: bal.invoice_url,
+                paypal_invoice_id: bal.paypal_invoice_id,
+                invoice_status: bal.status,
+                client_said: trigger ?? null,
+                claims_paid_but_paypal_open: claimsPaid,
+              }),
+            },
+          ],
+          ReminderSchema,
+          { temperature: 0.4 },
+        );
+        draft = llmDraft.draft_message.trim();
+        if (!bal.invoice_url || draft.includes(bal.invoice_url ?? "")) {
+          // ok
+        } else if (bal.invoice_url) {
+          draft = `${draft.trim()}\n\nInvoice: ${bal.invoice_url}`;
+        }
+        summary = llmDraft.summary.trim();
+      } catch {
+        // keep heuristic draft
+      }
+    }
+
     await log({
       quote_id: id,
       seller_id: q.seller_id,
@@ -1054,14 +1104,12 @@ export async function getStats(): Promise<Stats> {
   };
 }
 
-/** Heuristic catalog parse (same spirit as mock) — LLM swap later. */
-export async function parseCatalog(raw_text: string): Promise<{
-  services: ServiceDraft[];
-  flags: Flag[];
-}> {
+/** Heuristic catalog parse — used when no LLM key is set, or as LLM fallback. */
+function parseCatalogHeuristic(
+  raw_text: string,
+  default_deposit_pct: number,
+): { services: ServiceDraft[]; flags: Flag[] } {
   const text = (raw_text ?? "").trim();
-  if (!text) throw new HttpError("Paste a rate card first", 400);
-  const seller = await demoSeller();
   const chunks = text
     .split(/\n+|[|;]+/)
     .map((s) => s.trim())
@@ -1074,20 +1122,23 @@ export async function parseCatalog(raw_text: string): Promise<{
     const pct = chunk.match(/(\d{1,3})\s*%/);
     const days = chunk.match(/(\d+)\s*(?:day|days|d)\b/i);
     if (!moneyMatch && !/[a-zA-Z]{3,}/.test(chunk)) continue;
-    const title = chunk
-      .replace(/\$[\d,.]+k?/gi, "")
-      .replace(/\d{1,3}\s*%/g, "")
-      .replace(/\d+\s*(?:day|days|d)\b/gi, "")
-      .replace(/[-–—:]+/g, " ")
-      .trim()
-      .replace(/\s+/g, " ")
-      .slice(0, 80) || `Service ${++i}`;
+    const title =
+      chunk
+        .replace(/\$[\d,.]+k?/gi, "")
+        .replace(/\d{1,3}\s*%/g, "")
+        .replace(/\d+\s*(?:day|days|d)\b/gi, "")
+        .replace(/[-–—:]+/g, " ")
+        .trim()
+        .replace(/\s+/g, " ")
+        .slice(0, 80) || `Service ${++i}`;
     let price = 0;
     if (moneyMatch) {
-      price = Math.round(parseFloat(moneyMatch[1]!.replace(/,/g, "")) * (moneyMatch[2] ? 1000 : 1) * 100);
+      price = Math.round(
+        parseFloat(moneyMatch[1]!.replace(/,/g, "")) * (moneyMatch[2] ? 1000 : 1) * 100,
+      );
     }
     const tmp_id = `tmp_${Date.now().toString(36)}_${i++}`;
-    const deposit_pct = pct ? Math.min(100, parseInt(pct[1]!, 10)) : seller.default_deposit_pct;
+    const deposit_pct = pct ? Math.min(100, parseInt(pct[1]!, 10)) : default_deposit_pct;
     services.push({
       tmp_id,
       title,
@@ -1118,6 +1169,118 @@ export async function parseCatalog(raw_text: string): Promise<{
   return { services, flags };
 }
 
+const CatalogLlmSchema = z.object({
+  services: z.array(
+    z.object({
+      title: z.string(),
+      description: z.string().optional().default(""),
+      deliverables: z.array(z.string()).optional().default([]),
+      price_usd: z.number().optional(),
+      price_cents: z.number().int().optional(),
+      deposit_pct: z.number().int().optional(),
+      lead_time_days: z.number().int().nullable().optional(),
+    }),
+  ),
+  notes: z.array(z.string()).optional().default([]),
+});
+
+export async function parseCatalog(raw_text: string): Promise<{
+  services: ServiceDraft[];
+  flags: Flag[];
+}> {
+  const text = (raw_text ?? "").trim();
+  if (!text) throw new HttpError("Paste a rate card first", 400);
+  const seller = await demoSeller();
+
+  if (hasLlm()) {
+    try {
+      const parsed = await chatJson(
+        [
+          {
+            role: "system",
+            content: `You extract freelance service offerings from messy rate cards.
+Return JSON: {"services":[{"title","description","deliverables":[],"price_usd" OR "price_cents","deposit_pct","lead_time_days"}],"notes":[]}
+Rules:
+- One service per distinct offering. Titles ≤80 chars. Descriptions ≤280 chars.
+- Prefer price_usd as a number (e.g. 1200 for $1,200). price_cents is also fine.
+- deposit_pct is 1-100 integer; default ${seller.default_deposit_pct} if unspecified.
+- lead_time_days integer days; default 7 if unspecified.
+- deliverables: short bullet strings (≤12).
+- notes: human-readable warnings (missing price, ambiguous lines).
+Return JSON only.`,
+          },
+          { role: "user", content: text.slice(0, 8000) },
+        ],
+        CatalogLlmSchema,
+        { temperature: 0.1 },
+      );
+
+      const services: ServiceDraft[] = [];
+      const flags: Flag[] = [];
+      let i = 0;
+      for (const s of parsed.services) {
+        const tmp_id = `tmp_${Date.now().toString(36)}_${i++}`;
+        let price_cents = 0;
+        if (typeof s.price_cents === "number" && Number.isFinite(s.price_cents)) {
+          price_cents = Math.round(s.price_cents);
+        } else if (typeof s.price_usd === "number" && Number.isFinite(s.price_usd)) {
+          price_cents = Math.round(s.price_usd * 100);
+        }
+        const deposit_pct =
+          typeof s.deposit_pct === "number" && s.deposit_pct >= 1 && s.deposit_pct <= 100
+            ? s.deposit_pct
+            : seller.default_deposit_pct;
+        const lead =
+          typeof s.lead_time_days === "number" && s.lead_time_days > 0
+            ? s.lead_time_days
+            : 7;
+        services.push({
+          tmp_id,
+          title: (s.title || `Service ${i}`).trim().slice(0, 80),
+          description: (s.description ?? "").trim().slice(0, 280),
+          deliverables: (s.deliverables ?? []).map((d) => d.trim()).filter(Boolean).slice(0, 12),
+          price_cents,
+          deposit_pct,
+          lead_time_days: lead,
+        });
+        if (price_cents <= 0) {
+          flags.push({
+            tmp_id,
+            field: "price_cents",
+            severity: "error",
+            message: "Could not find a price — set one before publishing",
+          });
+        }
+      }
+      for (const note of parsed.notes ?? []) {
+        flags.push({
+          tmp_id: services[0]?.tmp_id ?? "tmp",
+          field: "raw_text",
+          severity: "warning",
+          message: note.slice(0, 200),
+        });
+      }
+      for (const e of catalogErrors(services)) flags.push(e);
+      if (!services.length) {
+        flags.push({
+          tmp_id: "tmp",
+          field: "raw_text",
+          severity: "error",
+          message: "Couldn't extract any services — try one service per line with a price",
+        });
+      }
+      return { services, flags };
+    } catch (e) {
+      // Fall through to heuristics on any LLM failure
+      if (!(e instanceof LlmError)) {
+        // still fall back
+      }
+    }
+  }
+
+  return parseCatalogHeuristic(text, seller.default_deposit_pct);
+}
+
 export async function publishCatalog(services: ServiceDraft[]): Promise<Service[]> {
   for (const d of services) {
     const errs = draftErrors(d);
@@ -1146,7 +1309,24 @@ export async function publishCatalog(services: ServiceDraft[]): Promise<Service[
   return (data as ServiceRow[]).map(mapService);
 }
 
-export async function agentChat(
+const AgentPlanSchema = z.object({
+  reply: z.string(),
+  actions: z
+    .array(
+      z.object({
+        tool: z.enum(["list_services", "get_service", "request_quote", "get_quote_status"]),
+        service_id: z.string().optional(),
+        quote_id: z.string().optional(),
+        client_name: z.string().optional(),
+        client_email: z.string().optional(),
+        brief: z.string().optional(),
+      }),
+    )
+    .default([]),
+});
+
+/** Deterministic storefront agent — used when no LLM key is set. */
+async function agentChatHeuristic(
   slug: string,
   messages: ChatMsg[],
 ): Promise<{ messages: ChatMsg[]; tool_calls: ToolTrace[]; quote: Quote | null }> {
@@ -1225,6 +1405,147 @@ export async function agentChat(
     tool_calls,
     quote,
   };
+}
+
+export async function agentChat(
+  slug: string,
+  messages: ChatMsg[],
+): Promise<{ messages: ChatMsg[]; tool_calls: ToolTrace[]; quote: Quote | null }> {
+  if (!hasLlm()) return agentChatHeuristic(slug, messages);
+
+  try {
+    const store = await getPublic(slug);
+    const catalog = store.services.map((s) => ({
+      id: s.id,
+      title: s.title,
+      description: s.description,
+      price_cents: s.price_cents,
+      deposit_pct: s.deposit_pct,
+      lead_time_days: s.lead_time_days,
+      deliverables: s.deliverables,
+    }));
+    const history = messages
+      .slice(-8)
+      .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+      .join("\n");
+
+    const plan = await chatJson(
+      [
+        {
+          role: "system",
+          content: `You are the storefront assistant for ${store.seller.name} (${store.seller.tagline}).
+Help clients discover services and request a quote. Deposits are paid with PayPal.
+Available tools (put intended calls in "actions"; the server executes them):
+- list_services
+- get_service (needs service_id)
+- request_quote (needs service_id, client_name, client_email, brief) — only when you have a valid email
+- get_quote_status (needs quote_id)
+Always include list_services as the first action.
+Return JSON: {"reply":"markdown for the client","actions":[{"tool":"...","service_id?","quote_id?","client_name?","client_email?","brief?"}]}
+Be concise. Never invent prices — use the catalog. Never claim payment succeeded.`,
+        },
+        {
+          role: "user",
+          content: `CATALOG:\n${JSON.stringify(catalog)}\n\nCONVERSATION:\n${history || "(empty)"}`,
+        },
+      ],
+      AgentPlanSchema,
+      { temperature: 0.3 },
+    );
+
+    const tool_calls: ToolTrace[] = [];
+    let quote: Quote | null = null;
+
+    // Always surface list_services first for the UI timeline.
+    tool_calls.push({
+      tool: "list_services",
+      input: { slug },
+      output: catalog.map((s) => ({ id: s.id, title: s.title, price_cents: s.price_cents })),
+    });
+
+    const actions = plan.actions.length
+      ? plan.actions
+      : [{ tool: "list_services" as const }];
+
+    for (const action of actions) {
+      if (action.tool === "list_services") continue; // already logged
+      if (action.tool === "get_service") {
+        const svc = store.services.find((s) => s.id === action.service_id) ??
+          store.services.find(
+            (s) =>
+              action.service_id &&
+              s.title.toLowerCase().includes(action.service_id.toLowerCase()),
+          );
+        tool_calls.push({
+          tool: "get_service",
+          input: { id: action.service_id },
+          output: svc ?? { error: "not_found" },
+        });
+      } else if (action.tool === "request_quote") {
+        const service_id = action.service_id ?? "";
+        const svc = store.services.find((s) => s.id === service_id);
+        const email = (action.client_email ?? "").trim();
+        const name = (action.client_name ?? "").trim() || email.split("@")[0] || "Client";
+        if (svc && isEmail(email)) {
+          const created = await postPublicQuote(slug, {
+            service_id: svc.id,
+            client_name: name.slice(0, 100),
+            client_email: email,
+            brief: (action.brief ?? messages.at(-1)?.content ?? "").slice(0, 500),
+            source: "agent_sim",
+          });
+          tool_calls.push({
+            tool: "request_quote",
+            input: { service_id: svc.id, client_email: email, client_name: name },
+            output: { quote_id: created.id, deposit_cents: created.deposit_cents },
+          });
+          quote = created;
+        } else {
+          tool_calls.push({
+            tool: "request_quote",
+            input: action,
+            output: { error: "need published service_id and valid client_email" },
+          });
+        }
+      } else if (action.tool === "get_quote_status" && action.quote_id) {
+        try {
+          const detail = await getQuote(action.quote_id);
+          tool_calls.push({
+            tool: "get_quote_status",
+            input: { quote_id: action.quote_id },
+            output: {
+              id: detail.quote.id,
+              status: detail.quote.status,
+              deposit_cents: detail.quote.deposit_cents,
+              balance_cents: detail.quote.balance_cents,
+            },
+          });
+        } catch (err) {
+          tool_calls.push({
+            tool: "get_quote_status",
+            input: { quote_id: action.quote_id },
+            output: { error: err instanceof Error ? err.message : "error" },
+          });
+        }
+      }
+    }
+
+    let reply = plan.reply?.trim() || "How can I help you pick a service?";
+    if (quote) {
+      // Ensure the reply points at the real quote id / deposit if the model omitted them.
+      if (!reply.includes(quote.id)) {
+        reply += `\n\nQuote reference: **${quote.id}**. Deposit due now: ${money(quote.deposit_cents)}. Pay with PayPal on the quote page to confirm.`;
+      }
+    }
+
+    return {
+      messages: [...messages, { role: "assistant", content: reply }],
+      tool_calls,
+      quote,
+    };
+  } catch {
+    return agentChatHeuristic(slug, messages);
+  }
 }
 
 export async function resetDemo(): Promise<{ ok: true }> {
