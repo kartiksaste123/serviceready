@@ -99,103 +99,105 @@ function SettingsPage() {
     <>
       <PageHeader title="Settings" sub="Rules your assistants follow. They can't override them." />
       {isLoading ? (
-        <Skeleton className="h-80 max-w-2xl rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       ) : isError || !d ? (
         <ErrorState title="Couldn't load settings" onRetry={() => refetch()} />
       ) : (
         <form
-          className="glass-card max-w-2xl space-y-6 p-6"
+          className="glass-card p-6"
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
             save.mutate();
           }}
         >
-          <div>
-            <h2 className="font-semibold">Deposits</h2>
-            <div className="mt-3">
-              <Field
-                htmlFor="dep"
-                label="Default deposit (%)"
-                hint="Applied to newly imported services. You can change it per service before publishing."
-                error={errors.default_deposit_pct}
-              >
-                <input
-                  id="dep"
-                  inputMode="numeric"
-                  type="number"
-                  min={1}
-                  max={100}
-                  step={1}
-                  aria-invalid={!!errors.default_deposit_pct}
-                  aria-describedby={errors.default_deposit_pct ? "dep-error" : "dep-hint"}
-                  className={`field tabular-nums sm:max-w-40 ${errors.default_deposit_pct ? "border-danger" : ""}`}
-                  value={d.default_deposit_pct}
-                  onChange={(e) => set({ default_deposit_pct: e.target.value })}
-                />
-              </Field>
-            </div>
-          </div>
-          <div className="border-t border-border pt-6">
-            <h2 className="font-semibold">Payment follow-ups</h2>
-            <fieldset className="mt-3">
-              <legend className="mb-1.5 block text-sm font-medium">Reminder tone</legend>
-              <div className="grid gap-2 sm:grid-cols-3" role="radiogroup">
-                {TONES.map(({ t, l, d: desc }) => (
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={d.reminder_tone === t}
-                    key={t}
-                    onClick={() => set({ reminder_tone: t })}
-                    className={`rounded-lg border px-3 py-2 text-left text-sm ${d.reminder_tone === t ? "border-foreground bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
-                  >
-                    <span className="block font-semibold">{l}</span>
-                    <span className="block text-xs opacity-80">{desc}</span>
-                  </button>
-                ))}
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-8">
+            <div>
+              <h2 className="font-semibold">Deposits</h2>
+              <div className="mt-3">
+                <Field
+                  htmlFor="dep"
+                  label="Default deposit (%)"
+                  hint="Applied to newly imported services. You can change it per service before publishing."
+                  error={errors.default_deposit_pct}
+                >
+                  <input
+                    id="dep"
+                    inputMode="numeric"
+                    type="number"
+                    min={1}
+                    max={100}
+                    step={1}
+                    aria-invalid={!!errors.default_deposit_pct}
+                    aria-describedby={errors.default_deposit_pct ? "dep-error" : "dep-hint"}
+                    className={`field tabular-nums sm:max-w-40 ${errors.default_deposit_pct ? "border-danger" : ""}`}
+                    value={d.default_deposit_pct}
+                    onChange={(e) => set({ default_deposit_pct: e.target.value })}
+                  />
+                </Field>
               </div>
-            </fieldset>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
-              <Field
-                htmlFor="wait"
-                label="Wait before first nudge (days)"
-                hint="Grace period after the invoice is sent."
-                error={errors.wait_days_before_nudge}
-              >
-                <input
-                  id="wait"
-                  type="number"
-                  min={0}
-                  max={60}
-                  step={1}
-                  aria-invalid={!!errors.wait_days_before_nudge}
-                  className={`field tabular-nums ${errors.wait_days_before_nudge ? "border-danger" : ""}`}
-                  value={d.wait_days_before_nudge}
-                  onChange={(e) => set({ wait_days_before_nudge: e.target.value })}
-                />
-              </Field>
-              <Field
-                htmlFor="max"
-                label="Max reminders"
-                hint="After this, the assistant flags it for you instead."
-                error={errors.max_reminders}
-              >
-                <input
-                  id="max"
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={1}
-                  aria-invalid={!!errors.max_reminders}
-                  className={`field tabular-nums ${errors.max_reminders ? "border-danger" : ""}`}
-                  value={d.max_reminders}
-                  onChange={(e) => set({ max_reminders: e.target.value })}
-                />
-              </Field>
+            </div>
+            <div className="border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+              <h2 className="font-semibold">Payment follow-ups</h2>
+              <fieldset className="mt-3">
+                <legend className="mb-1.5 block text-sm font-medium">Reminder tone</legend>
+                <div className="grid gap-2 sm:grid-cols-3" role="radiogroup">
+                  {TONES.map(({ t, l, d: desc }) => (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={d.reminder_tone === t}
+                      key={t}
+                      onClick={() => set({ reminder_tone: t })}
+                      className={`rounded-lg border px-3 py-2 text-left text-sm ${d.reminder_tone === t ? "border-foreground bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
+                    >
+                      <span className="block font-semibold">{l}</span>
+                      <span className="block text-xs opacity-80">{desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <div className="mt-4 grid gap-5 sm:grid-cols-2">
+                <Field
+                  htmlFor="wait"
+                  label="Wait before first nudge (days)"
+                  hint="Grace period after the invoice is sent."
+                  error={errors.wait_days_before_nudge}
+                >
+                  <input
+                    id="wait"
+                    type="number"
+                    min={0}
+                    max={60}
+                    step={1}
+                    aria-invalid={!!errors.wait_days_before_nudge}
+                    className={`field tabular-nums ${errors.wait_days_before_nudge ? "border-danger" : ""}`}
+                    value={d.wait_days_before_nudge}
+                    onChange={(e) => set({ wait_days_before_nudge: e.target.value })}
+                  />
+                </Field>
+                <Field
+                  htmlFor="max"
+                  label="Max reminders"
+                  hint="After this, the assistant flags it for you instead."
+                  error={errors.max_reminders}
+                >
+                  <input
+                    id="max"
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={1}
+                    aria-invalid={!!errors.max_reminders}
+                    className={`field tabular-nums ${errors.max_reminders ? "border-danger" : ""}`}
+                    value={d.max_reminders}
+                    onChange={(e) => set({ max_reminders: e.target.value })}
+                  />
+                </Field>
+              </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-5">
+          <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-border pt-5">
             <button
               type="submit"
               className="btn-mint"
@@ -224,7 +226,7 @@ function SettingsPage() {
         </form>
       )}
       {USE_MOCKS && (
-        <section className="glass-card mt-6 flex max-w-2xl flex-wrap items-center justify-between gap-4 p-6">
+        <section className="glass-card mt-5 flex flex-wrap items-center justify-between gap-4 p-6">
           <div>
             <h2 className="font-semibold">Reset demo data</h2>
             <p className="text-sm text-muted-foreground">

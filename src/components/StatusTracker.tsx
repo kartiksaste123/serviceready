@@ -36,12 +36,12 @@ export function StatusTracker({ status }: { status: QuoteStatus }) {
             aria-current={active ? "step" : undefined}
             className="relative flex items-center gap-3 sm:flex-col sm:items-start sm:gap-2"
           >
-            {index > 0 && (
+            {index < steps.length - 1 && (
               <span
                 aria-hidden="true"
                 className={cn(
-                  "absolute -left-3 top-3.5 hidden h-0.5 w-3 sm:block",
-                  complete || active ? "bg-primary" : "bg-border",
+                  "absolute -right-1 left-9 top-3.5 hidden h-0.5 rounded-full sm:block",
+                  index < current || status === "paid" ? "bg-primary" : "bg-border",
                 )}
               />
             )}

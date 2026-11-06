@@ -64,7 +64,7 @@ function Approvals() {
         ))}
       </div>
       {active.isLoading ? (
-        <div className="space-y-3">
+        <div className="grid gap-4 xl:grid-cols-2">
           <Skeleton className="h-64" />
           <Skeleton className="h-64" />
         </div>
@@ -82,7 +82,7 @@ function Approvals() {
           </Empty>
         )
       ) : (
-        <div className="space-y-4">
+        <div className={`grid items-start gap-4 ${rows.length > 1 ? "xl:grid-cols-2" : ""}`}>
           {rows.map((p) => (
             <ProposalCard key={`${p.id}-${p.status}`} p={p} />
           ))}

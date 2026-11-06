@@ -160,48 +160,89 @@ function Onboard() {
         </ol>
 
         {step === 1 && (
-          <section className="glass-card max-w-3xl p-6 sm:p-8">
-            <h1 className="display text-3xl sm:text-4xl">
-              Paste your rate card, price list or WhatsApp message
-            </h1>
-            <p className="mt-3 text-muted-foreground">
-              Any format — one service per line or separated by “|”. AI structures it, never changes
-              your prices, and flags anything that looks off.
-            </p>
-            <label htmlFor="raw" className="sr-only">
-              Rate card text
-            </label>
-            <textarea
-              id="raw"
-              value={raw}
-              onChange={(e) => setRaw(e.target.value)}
-              rows={8}
-              maxLength={10000}
-              placeholder={"e.g.\nlogo 450 (2 rounds), 1 week\nbrand kit 1200 half upfront, 2wks"}
-              className="field mt-6 resize-y font-mono text-[13px] leading-relaxed"
-            />
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                className="btn-mint"
-                disabled={!raw.trim() || parse.isPending}
-                onClick={() => parse.mutate()}
-              >
-                {parse.isPending ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Wand2 className="size-4" aria-hidden="true" />
-                )}
-                {parse.isPending ? "Structuring…" : "Structure with AI"}
-              </button>
-              <button type="button" className="btn-glass" onClick={() => setRaw(EXAMPLE)}>
-                Load example
-              </button>
-              <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-                {raw.length.toLocaleString()}/10,000
-              </span>
-            </div>
-          </section>
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+            <section className="glass-card p-6 sm:p-8">
+              <h1 className="display text-3xl sm:text-4xl">
+                Paste your rate card, price list or WhatsApp message
+              </h1>
+              <p className="mt-3 text-muted-foreground">
+                Any format — one service per line or separated by “|”. AI structures it, never
+                changes your prices, and flags anything that looks off.
+              </p>
+              <label htmlFor="raw" className="sr-only">
+                Rate card text
+              </label>
+              <textarea
+                id="raw"
+                value={raw}
+                onChange={(e) => setRaw(e.target.value)}
+                rows={8}
+                maxLength={10000}
+                placeholder={"e.g.\nlogo 450 (2 rounds), 1 week\nbrand kit 1200 half upfront, 2wks"}
+                className="field mt-6 resize-y font-mono text-[13px] leading-relaxed"
+              />
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="btn-mint"
+                  disabled={!raw.trim() || parse.isPending}
+                  onClick={() => parse.mutate()}
+                >
+                  {parse.isPending ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Wand2 className="size-4" aria-hidden="true" />
+                  )}
+                  {parse.isPending ? "Structuring…" : "Structure with AI"}
+                </button>
+                <button type="button" className="btn-glass" onClick={() => setRaw(EXAMPLE)}>
+                  Load example
+                </button>
+                <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                  {raw.length.toLocaleString()}/10,000
+                </span>
+              </div>
+            </section>
+            <aside className="glass-card p-6 lg:sticky lg:top-6" aria-labelledby="how-h">
+              <h2 id="how-h" className="font-semibold">
+                What happens next
+              </h2>
+              <ol className="mt-4 space-y-4 text-sm">
+                {[
+                  [
+                    "AI structures it",
+                    "Each line becomes a service with price, deposit and turnaround.",
+                  ],
+                  [
+                    "You check every field",
+                    "Nothing goes live until you approve. Prices are never changed.",
+                  ],
+                  [
+                    "Assistants can book you",
+                    "Your storefront and MCP endpoint go live with PayPal deposits.",
+                  ],
+                ].map(([t, d], i) => (
+                  <li key={t} className="flex gap-3">
+                    <span className="grid size-7 shrink-0 place-items-center rounded-full border border-border font-mono text-xs">
+                      {i + 1}
+                    </span>
+                    <span>
+                      <span className="block font-medium">{t}</span>
+                      <span className="block text-muted-foreground">{d}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-5 rounded-lg bg-muted p-4 text-sm">
+                <p className="font-medium">Works with messy text</p>
+                <p className="mt-1 font-mono text-[12px] leading-relaxed text-muted-foreground">
+                  logo — 450, 2 revisions, a week
+                  <br />
+                  landing page 1800, 50% deposit, 3 weeks-ish
+                </p>
+              </div>
+            </aside>
+          </div>
         )}
 
         {step === 2 && drafts && (
@@ -418,36 +459,41 @@ function Onboard() {
         )}
 
         {step === 3 && published && (
-          <section className="glass-card mx-auto max-w-2xl p-8 text-center">
-            <span className="icon-tile mx-auto size-12">
-              <CircleCheck className="size-6" aria-hidden="true" />
-            </span>
-            <h1 className="display mt-5 text-3xl">Your services are now agent-ready</h1>
-            <p className="mt-3 text-muted-foreground">
-              {published.length} service{published.length === 1 ? "" : "s"} published.
-              {USE_MOCKS
-                ? " Your demo catalog is ready to quote on the storefront. MCP configuration preview:"
-                : " AI assistants can discover and quote them at:"}
-            </p>
-            <div className="glass-row mx-auto mt-5 flex max-w-md items-center gap-2 p-2 pl-4 font-mono text-[13px]">
-              <span className="min-w-0 truncate">{mcpUrl}</span>
-              <CopyButton
-                text={mcpUrl}
-                label="Copy MCP URL"
-                iconOnly
-                className="ml-auto shrink-0"
-              />
+          <section className="glass-card grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-center">
+            <div>
+              <span className="icon-tile size-12">
+                <CircleCheck className="size-6" aria-hidden="true" />
+              </span>
+              <h1 className="display mt-5 text-3xl">Your services are now agent-ready</h1>
+              <p className="mt-3 text-muted-foreground">
+                {published.length} service{published.length === 1 ? "" : "s"} published.
+                {USE_MOCKS
+                  ? " Your demo catalog is ready to quote on the storefront. MCP configuration preview:"
+                  : " AI assistants can discover and quote them at:"}
+              </p>
+              <div className="glass-row mt-5 flex items-center gap-2 p-2 pl-4 font-mono text-[13px]">
+                <span className="min-w-0 truncate">{mcpUrl}</span>
+                <CopyButton
+                  text={mcpUrl}
+                  label="Copy MCP URL"
+                  iconOnly
+                  className="ml-auto shrink-0"
+                />
+              </div>
             </div>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Link to="/s/$slug" params={{ slug }} className="btn-mint">
-                View storefront <ArrowRight className="size-4" aria-hidden="true" />
-              </Link>
-              <Link to="/app/catalog" className="btn-glass">
-                Go to catalog
-              </Link>
-              <Link to="/app/connect" className="btn-glass">
-                Connect assistants
-              </Link>
+            <div className="rounded-xl border border-border bg-muted p-5">
+              <h2 className="font-semibold">Next steps</h2>
+              <div className="mt-4 grid gap-2">
+                <Link to="/s/$slug" params={{ slug }} className="btn-mint justify-between">
+                  View storefront <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+                <Link to="/app/catalog" className="btn-glass justify-between">
+                  Go to catalog <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+                <Link to="/app/connect" className="btn-glass justify-between">
+                  Connect assistants <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+              </div>
             </div>
           </section>
         )}
