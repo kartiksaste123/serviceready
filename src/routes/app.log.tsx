@@ -57,8 +57,8 @@ function Log() {
         sub="Every quote, PayPal payment, approval and assistant action — newest first."
         tour="log"
       />
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="relative lg:w-72">
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="relative max-w-md">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
@@ -67,7 +67,7 @@ function Log() {
             type="text"
             aria-label="Search activity"
             className="field h-9 pl-8"
-            placeholder="Search text, tool or booking…"
+            placeholder="Search activity…"
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
@@ -76,24 +76,36 @@ function Log() {
           />
         </div>
         <div
-          className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:pb-0"
+          className="flex flex-wrap gap-1.5"
           role="group"
           aria-label="Filter by who acted"
         >
-          {(["", ...ACTORS] as const).map((a) => (
+          {(["", ...ACTORS] as const).map((a) => {
+            const short: Record<string, string> = {
+              seller: "You",
+              client: "Client",
+              paypal: "PayPal",
+              collections_agent: "Payments",
+              seller_agent: "Seller AI",
+              client_agent: "Client AI",
+              system: "System",
+            };
+            return (
             <button
               type="button"
               key={a || "all"}
               aria-pressed={actor === a}
+              title={a ? actorLabel[a] : "Everyone"}
               onClick={() => {
                 setActor(a);
                 setLimit(STEP);
               }}
-              className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-sm ${actor === a ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background text-muted-foreground hover:text-foreground"}`}
+              className={`rounded-lg border px-2.5 py-1.5 text-sm ${actor === a ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background text-muted-foreground hover:text-foreground"}`}
             >
-              {a ? actorLabel[a] : "Everyone"}
+              {a ? short[a] ?? actorLabel[a] : "Everyone"}
             </button>
-          ))}
+            );
+          })}
         </div>
       </div>
       <div

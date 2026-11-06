@@ -131,7 +131,7 @@ function SettingsPage() {
             save.mutate();
           }}
         >
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-8">
+          <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
             <div>
               <h2 className="font-semibold">Deposits</h2>
               <div className="mt-3">
@@ -289,7 +289,7 @@ function SettingsPage() {
               Applies to new quotes; existing quotes keep the policy they were booked under.
             </p>
           </div>
-          <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-border pt-5">
+          <div className="sticky bottom-0 z-10 -mx-5 mt-6 flex flex-wrap items-center gap-3 border-t border-border bg-card/95 px-5 py-4 backdrop-blur sm:-mx-6 sm:px-6">
             <button
               type="submit"
               className="btn-mint"

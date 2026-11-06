@@ -87,7 +87,7 @@ function CoverArt({ title }: { title: string }) {
   return (
     <div
       aria-hidden="true"
-      className="relative flex aspect-[16/9] w-full items-end overflow-hidden bg-gradient-to-br from-[#0f766e] via-[#13877d] to-[#5eb8a9] p-4"
+      className="relative flex aspect-[16/10] max-h-40 w-full items-end overflow-hidden bg-gradient-to-br from-[#0f766e] via-[#13877d] to-[#5eb8a9] p-4"
     >
       <div
         className="absolute inset-0 opacity-[0.12]"
@@ -198,28 +198,28 @@ function Storefront() {
           </div>
         ) : (
           <>
-            <section className="mt-6 overflow-hidden rounded-2xl border border-border bg-card sm:mt-8">
+            <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-card sm:mt-5">
               <div
                 aria-hidden="true"
-                className="h-20 bg-gradient-to-r from-accent via-[#e6f4f1] to-[#f3efe8] sm:h-24"
+                className="h-10 bg-gradient-to-r from-accent via-[#e6f4f1] to-[#f3efe8] sm:h-12"
               />
-              <div className="px-5 pb-5 sm:px-7 sm:pb-6">
-                <div className="-mt-10 w-fit rounded-2xl bg-card p-1 shadow-sm">
+              <div className="px-5 pb-4 sm:px-6 sm:pb-4">
+                <div className="-mt-7 w-fit rounded-2xl bg-card p-1 shadow-sm">
                   <SellerAvatar name={data.seller.name} slug={slug} />
                 </div>
-                <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+                <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
                   <div>
-                    <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                    <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
                       {data.seller.name}
                     </h1>
-                    <p className="mt-1 max-w-xl text-sm text-muted-foreground sm:text-base">
+                    <p className="mt-0.5 max-w-xl text-sm text-muted-foreground">
                       {data.seller.tagline}
                     </p>
                   </div>
                   <AgentBadge mcp={data.agent.mcp_url} tools={data.agent.webmcp_tools} />
                 </div>
               </div>
-              <ul className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border bg-muted/50 px-5 py-3 text-sm text-muted-foreground sm:px-7">
+              <ul className="flex flex-wrap gap-x-5 gap-y-1.5 border-t border-border bg-muted/50 px-5 py-2.5 text-sm text-muted-foreground sm:px-6">
                 <li className="flex items-center gap-1.5">
                   <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
                   Fixed prices, no surprises
@@ -240,7 +240,7 @@ function Storefront() {
                 )}
               </ul>
             </section>
-            <div className="mb-4 mt-8 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+            <div className="mb-3 mt-5 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
               <h2 className="text-lg font-semibold">Services</h2>
               <p className="text-sm text-muted-foreground">
                 Pick one to get an exact quote — or ask the assistant.
@@ -268,7 +268,7 @@ function Storefront() {
                             src={cover}
                             alt=""
                             aria-hidden="true"
-                            className="aspect-[16/9] w-full object-cover"
+                            className="aspect-[16/10] max-h-40 w-full object-cover"
                             width={640}
                             height={360}
                             loading="lazy"
@@ -575,7 +575,7 @@ function AgentChat({ slug, judge = false }: { slug: string; judge?: boolean }) {
   };
   return (
     <aside
-      className="glass-card relative flex h-[min(75dvh,560px)] flex-col overflow-hidden lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)] lg:max-h-[820px] lg:min-h-[520px]"
+      className="glass-card relative flex h-[min(70dvh,560px)] flex-col overflow-hidden lg:sticky lg:top-3 lg:h-[calc(100dvh-1.5rem)] lg:max-h-[760px] lg:min-h-[480px]"
       aria-label="AI assistant demo"
     >
       <img
@@ -630,7 +630,7 @@ function AgentChat({ slug, judge = false }: { slug: string; judge?: boolean }) {
           </div>
         )}
         {!items.length && (
-          <div className="mt-auto space-y-2">
+          <div className="space-y-2 pt-1">
             {judge && (
               <div className="rounded-xl border border-success bg-success-bg p-3 text-sm">
                 <p className="font-semibold text-success">Judge demo · step 1 of 4</p>

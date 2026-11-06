@@ -72,8 +72,13 @@ function Catalog() {
           to publish your first services.
         </Empty>
       ) : (
-        <div className="scroll-panel -m-1 grid gap-4 p-1 sm:grid-cols-2 lg:max-h-[calc(100vh-12rem)] xl:grid-cols-3 2xl:grid-cols-4">
-          {data.map((s, idx) => (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {[...data]
+            .sort((a, b) => {
+              if (a.status === b.status) return a.title.localeCompare(b.title);
+              return a.status === "published" ? -1 : 1;
+            })
+            .map((s, idx) => (
             <article
               key={s.id}
               className="glass-card flex flex-col p-5"

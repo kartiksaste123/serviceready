@@ -169,7 +169,7 @@ function JudgesPage() {
           <h2 id="steps-h" className="mb-3 font-semibold">
             One-click steps
           </h2>
-          <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {STEPS.map((s, i) => (
               <li key={s.title} className="glass-card flex flex-col p-4 text-sm">
                 <span className="flex size-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
@@ -185,7 +185,7 @@ function JudgesPage() {
           </ol>
         </section>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
           <section className="glass-card p-5" aria-labelledby="mcp-h">
             <h2 id="mcp-h" className="flex items-center gap-2 font-semibold">
               <Bot className="size-4" aria-hidden="true" />
@@ -195,7 +195,7 @@ function JudgesPage() {
               Streamable HTTP MCP at <code className="font-mono">{MCP_URL}</code>. In Claude.ai /
               Desktop: Settings → Connectors → Add custom connector → paste the URL. Or:
             </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 grid gap-3">
               <Snippet label="Claude Code" code={CLAUDE_CODE} />
               <Snippet label="claude_desktop_config.json" code={CLAUDE_JSON} />
               <Snippet label="Prompt to paste" code={PROMPT} />
@@ -295,10 +295,10 @@ function JudgesPage() {
 
 function Copy({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="min-w-0 truncate">
+    <div className="flex items-start justify-between gap-2">
+      <span className="min-w-0">
         <span className="text-muted-foreground">{label}: </span>
-        <code className="font-mono text-xs">{value}</code>
+        <code className="break-all font-mono text-xs">{value}</code>
       </span>
       <button
         type="button"
@@ -327,7 +327,7 @@ function Snippet({ label, code }: { label: string; code: string }) {
           Copy
         </button>
       </div>
-      <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-[11px] leading-relaxed">
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-muted p-3 font-mono text-[11px] leading-relaxed">
         {code}
       </pre>
     </div>

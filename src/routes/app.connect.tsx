@@ -85,7 +85,7 @@ function Connect() {
               This MCP server address lets an assistant read your services and request quotes.
             </p>
             <div className="glass-row mt-3 flex items-center gap-2 p-2 pl-4 font-mono text-sm">
-              <span className="min-w-0 truncate text-link" title={url}>
+              <span className="min-w-0 break-all text-link" title={url}>
                 {url}
               </span>
               <CopyButton text={url} label="Copy" className="ml-auto shrink-0" />
@@ -95,7 +95,7 @@ function Connect() {
             <h2 id="c2" className="mb-3 text-sm font-semibold">
               2. Add it to your assistant
             </h2>
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid items-start gap-5 lg:grid-cols-2">
               {(
                 [
                   ["Claude Desktop", "claude_desktop_config.json", claude],
@@ -115,7 +115,7 @@ function Connect() {
                   <pre
                     tabIndex={0}
                     aria-label={`${t} configuration example`}
-                    className="overflow-auto rounded-xl bg-muted p-4 font-mono text-sm leading-relaxed text-foreground ringline"
+                    className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-muted p-4 font-mono text-[12px] leading-relaxed text-foreground ringline"
                   >
                     {c}
                   </pre>

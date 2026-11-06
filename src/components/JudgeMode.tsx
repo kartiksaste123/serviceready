@@ -49,7 +49,7 @@ export function JudgeMode() {
 
   if (state === "chip") {
     return (
-      <div className="fixed bottom-3 left-3 z-40 flex items-center gap-1 rounded-full border border-border bg-background/95 py-1 pl-3 pr-1 text-xs shadow-md backdrop-blur print:hidden">
+      <div className="fixed bottom-3 right-3 z-40 flex items-center gap-1 rounded-full border border-border bg-background/95 py-1 pl-3 pr-1 text-xs shadow-md backdrop-blur print:hidden">
         <button
           type="button"
           onClick={() => setState("open")}
@@ -74,7 +74,7 @@ export function JudgeMode() {
   return (
     <aside
       aria-label="Judge demo path"
-      className="fixed bottom-3 left-3 z-40 w-[min(92vw,340px)] rounded-xl border border-border bg-background/97 p-3 text-xs shadow-lg backdrop-blur print:hidden"
+      className="fixed bottom-3 right-3 z-40 w-[min(92vw,340px)] rounded-xl border border-border bg-background/97 p-3 text-xs shadow-lg backdrop-blur print:hidden"
     >
       <div className="mb-2 flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-sm font-semibold">

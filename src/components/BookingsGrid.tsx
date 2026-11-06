@@ -109,7 +109,7 @@ export function BookingsGrid({
         headerName: "Client",
         field: "client_name",
         flex: 1.3,
-        minWidth: 180,
+        minWidth: 140,
         cellRenderer: (p: ICellRendererParams<Row>) =>
           p.data ? (
             <div className="flex h-full flex-col justify-center leading-tight">
@@ -121,8 +121,8 @@ export function BookingsGrid({
       {
         headerName: "Service",
         field: "service_title",
-        flex: 1.2,
-        minWidth: 160,
+        flex: 1.1,
+        minWidth: 130,
         cellRenderer: (p: ICellRendererParams<Row>) =>
           p.data ? (
             <div className="flex h-full flex-col justify-center leading-tight">
@@ -137,7 +137,7 @@ export function BookingsGrid({
         headerName: "Amount",
         headerTooltip: "Full price of the booking",
         field: "total_cents",
-        width: 120,
+        width: 100,
         type: "rightAligned",
         valueFormatter: (p) => money(Number(p.value ?? 0)),
         cellClass: "font-semibold tabular-nums",
@@ -145,7 +145,7 @@ export function BookingsGrid({
       {
         headerName: "Paid so far",
         colId: "paid",
-        width: 160,
+        width: 140,
         headerTooltip: "Deposit and balance, as PayPal reports them",
         valueGetter: (p) => (p.data ? paidCents(p.data) : 0),
         cellRenderer: (p: ICellRendererParams<Row>) => (p.data ? <PaidCell q={p.data} /> : null),
@@ -154,7 +154,7 @@ export function BookingsGrid({
         headerName: "Status",
         field: "status",
         flex: 1,
-        minWidth: 230,
+        minWidth: 150,
         headerTooltip: "Risk badge = how likely the balance needs a nudge",
         cellRenderer: (p: ICellRendererParams<Row>) =>
           p.data ? (
@@ -167,7 +167,9 @@ export function BookingsGrid({
       {
         headerName: "Updated",
         field: "updated_at",
-        width: 110,
+        flex: 0.6,
+        minWidth: 88,
+        maxWidth: 120,
         sort: "desc",
         cellRenderer: (p: ICellRendererParams<Row>) =>
           p.data ? (
@@ -218,7 +220,7 @@ export function BookingsGrid({
         className="hidden md:block"
         style={{
           // Fixed-height grid: rows scroll inside, header row stays pinned.
-          height: `min(${40 + Math.max(data.length, 3) * 64 + 2}px, max(360px, calc(100vh - 22rem)))`,
+          height: `min(${40 + Math.max(data.length, 4) * 64 + 2}px, max(520px, calc(100vh - 14rem)))`,
         }}
         data-testid="bookings-ag-grid"
         aria-label="Bookings"
@@ -232,6 +234,7 @@ export function BookingsGrid({
             getRowId={(p) => p.data.id}
             domLayout="normal"
             defaultColDef={{ sortable: true, resizable: true, suppressMovable: true }}
+            suppressHorizontalScroll={false}
             rowClass="cursor-pointer"
             onRowClicked={(e) => e.data && onOpen(e.data.id)}
             onCellKeyDown={(e) => {

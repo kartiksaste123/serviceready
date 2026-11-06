@@ -221,7 +221,7 @@ function Home() {
           </div>
         </section>
 
-        <section id="how" className={`${container} scroll-mt-20 py-20 sm:py-24`}>
+        <section id="how" className={`${container} scroll-mt-20 py-14 sm:py-16`}>
           <SectionHead
             eyebrow="How it works"
             title="From price list to paid booking in three steps"
@@ -244,7 +244,7 @@ function Home() {
         </section>
 
         <section id="features" className="scroll-mt-20 border-y border-border bg-muted">
-          <div className={`${container} py-20 sm:py-24`}>
+          <div className={`${container} py-14 sm:py-16`}>
             <SectionHead
               eyebrow="Why ServiceReady"
               title="Less chasing. More trust."
@@ -264,7 +264,7 @@ function Home() {
           </div>
         </section>
 
-        <section className={`${container} py-20 sm:py-24`}>
+        <section className={`${container} py-14 sm:py-16`}>
           <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div>
               <p className="eyebrow">Real PayPal checkout</p>
@@ -294,7 +294,7 @@ function Home() {
           </div>
         </section>
 
-        <section className={`${container} pb-20 sm:pb-24`}>
+        <section className={`${container} pb-14 sm:pb-16`}>
           <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-border bg-card p-6 sm:flex-row sm:items-center sm:p-8">
             <div className="flex items-start gap-4">
               <span className="icon-tile">
@@ -314,7 +314,7 @@ function Home() {
         </section>
 
         <section className="bg-foreground text-background">
-          <div className={`${container} py-16 text-center sm:py-20`}>
+          <div className={`${container} py-12 text-center sm:py-14`}>
             <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
               Ready for your next client?
             </h2>
