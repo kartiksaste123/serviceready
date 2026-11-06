@@ -75,8 +75,8 @@ function LoginPage() {
   const subtitle = useMemo(
     () =>
       tab === "signin"
-        ? "Open your seller desk — bookings, deposits and approvals."
-        : "Create an account to publish services AI assistants can book.",
+        ? "Bookings, deposits and approvals"
+        : "Publish services AI assistants can book",
     [tab],
   );
 
@@ -142,143 +142,226 @@ function LoginPage() {
     );
   }
 
+  const inputCls = "field mt-1 h-9 py-1.5";
+
   return (
-    <div className="min-h-screen bg-muted">
-      <header className="border-b border-border bg-background">
-        <div className="mx-auto flex h-16 max-w-lg items-center justify-between px-5">
+    <div className="grid h-[100dvh] min-h-[100dvh] grid-cols-1 overflow-hidden bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      {/* LEFT — brand + auth card */}
+      <section className="flex h-full min-h-0 flex-col px-5 py-4 sm:px-8 lg:px-12 lg:py-5">
+        <header className="flex shrink-0 items-center justify-between">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
           <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
             Back to site
           </Link>
-        </div>
-      </header>
-      <main className="mx-auto max-w-lg px-5 py-10">
-        <div className="glass-card p-6 sm:p-8">
-          <p className="eyebrow flex items-center gap-2">
-            <LockKeyhole className="size-3.5" aria-hidden="true" />
-            Seller desk
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            {tab === "signin" ? "Sign in" : "Create account"}
-          </h1>
-          <p className="mt-2 text-muted-foreground">{subtitle}</p>
+        </header>
 
-          <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === "signin"}
-              className={`rounded-lg px-3 py-2 text-sm font-medium ${tab === "signin" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
-              onClick={() => setTab("signin")}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === "signup"}
-              className={`rounded-lg px-3 py-2 text-sm font-medium ${tab === "signup" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
-              onClick={() => setTab("signup")}
-            >
-              Create account
-            </button>
-          </div>
-
-          <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-            {tab === "signup" && (
-              <div>
-                <label htmlFor="name" className="text-sm font-medium">
-                  Studio / business name
-                </label>
-                <input
-                  id="name"
-                  className="field mt-1.5"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Maya Rao Studio"
-                  autoComplete="organization"
-                  required
-                />
-              </div>
-            )}
-            <div>
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                className="field mt-1.5"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@studio.com"
-                autoComplete="email"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="text-sm font-medium">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                className="field mt-1.5"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
-                autoComplete={tab === "signup" ? "new-password" : "current-password"}
-                minLength={6}
-                required
-              />
-            </div>
-            {error && (
-              <p className="rounded-lg border border-danger/30 bg-danger-bg px-3 py-2 text-sm text-danger" role="alert">
-                {error}
+        <main className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto py-3">
+          <div className="my-auto w-full max-w-[400px]">
+            <div className="mb-4 text-center max-sm:mb-3">
+              <h1 className="text-[1.5rem] font-semibold leading-[1.1] tracking-tight sm:text-[2rem] xl:text-[2.25rem]">
+                Let AI assistants book
+                <br className="hidden sm:block" /> your services
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground max-sm:hidden [@media(max-height:760px)]:hidden">
+                Quotes, deposits and invoices — paid through PayPal while you sleep.
               </p>
-            )}
-            <button type="submit" className="btn-mint w-full" disabled={busy !== null}>
-              {busy === "form" ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <ArrowRight className="size-4" aria-hidden="true" />
-              )}
-              {tab === "signin" ? "Sign in to desk" : "Create account & open desk"}
-            </button>
-          </form>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center" aria-hidden="true">
-              <div className="w-full border-t border-border" />
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">or for judges</span>
+
+            <div className="glass-card rounded-2xl p-4 sm:p-5 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)]">
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <LockKeyhole className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="shrink-0 font-semibold uppercase tracking-wide">Seller desk</span>
+                <span aria-hidden="true">·</span>
+                <span className="truncate">{subtitle}</span>
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === "signin"}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${tab === "signin" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setTab("signin")}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === "signup"}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${tab === "signup" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setTab("signup")}
+                >
+                  Create account
+                </button>
+              </div>
+
+              <form className="mt-3 space-y-2.5" onSubmit={onSubmit}>
+                {tab === "signup" && (
+                  <div>
+                    <label htmlFor="name" className="text-xs font-medium">
+                      Studio / business name
+                    </label>
+                    <input
+                      id="name"
+                      className={inputCls}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Maya Rao Studio"
+                      autoComplete="organization"
+                      required
+                    />
+                  </div>
+                )}
+                <div>
+                  <label htmlFor="email" className="text-xs font-medium">
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    className={inputCls}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@studio.com"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="password" className="text-xs font-medium">
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    className={inputCls}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    autoComplete={tab === "signup" ? "new-password" : "current-password"}
+                    minLength={6}
+                    required
+                  />
+                </div>
+                {error && (
+                  <p
+                    className="rounded-lg border border-danger/30 bg-danger-bg px-3 py-1.5 text-xs text-danger"
+                    role="alert"
+                  >
+                    {error}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  className="btn-mint min-h-9 w-full py-2"
+                  disabled={busy !== null}
+                >
+                  {busy === "form" ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <ArrowRight className="size-4" aria-hidden="true" />
+                  )}
+                  {tab === "signin" ? "Sign in to desk" : "Create account & open desk"}
+                </button>
+              </form>
+
+              <div className="my-3 flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+                <div className="h-px flex-1 bg-border" aria-hidden="true" />
+                or for judges
+                <div className="h-px flex-1 bg-border" aria-hidden="true" />
+              </div>
+
+              <button
+                type="button"
+                className="btn-glass min-h-9 w-full py-2"
+                disabled={busy !== null}
+                onClick={() => void onDemo()}
+              >
+                {busy === "demo" ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <FlaskConical className="size-4" aria-hidden="true" />
+                )}
+                <span className="truncate">Continue as demo (Maya Rao Studio)</span>
+              </button>
+              <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                Demo login: <span className="font-mono">{DEMO_LOGIN.email}</span> — password in
+                README
+              </p>
             </div>
           </div>
+        </main>
 
-          <button
-            type="button"
-            className="btn-glass w-full"
-            disabled={busy !== null}
-            onClick={() => void onDemo()}
-          >
-            {busy === "demo" ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <FlaskConical className="size-4" aria-hidden="true" />
-            )}
-            Continue as demo (Maya Rao Studio)
-          </button>
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            Demo login: <span className="font-mono">{DEMO_LOGIN.email}</span> — password in README
-          </p>
-        </div>
-        <p className="mt-6 text-center text-sm text-muted-foreground">
+        <p className="shrink-0 text-center text-xs text-muted-foreground max-sm:hidden">
           Public storefronts and quote links stay open without signing in.
         </p>
-      </main>
+      </section>
+
+      {/* RIGHT — looping workflow demo */}
+      <aside
+        className="hidden h-full min-h-0 p-4 pl-0 lg:block"
+        aria-label="ServiceReady workflow demo"
+      >
+        <LoginDemoPanel />
+      </aside>
+    </div>
+  );
+}
+
+const DEMO_STILLS = [
+  { src: "/images/hero.webp", caption: "Paste your prices — AI structures your catalog" },
+  { src: "/images/service-landing.webp", caption: "A storefront AI assistants can read and book" },
+  { src: "/images/agent-chat-bg.webp", caption: "Buyers' agents request quotes over MCP" },
+  { src: "/images/paypal-success.webp", caption: "Deposits and invoices paid through PayPal" },
+];
+
+/**
+ * Right-hand demo panel. Plays /videos/login-demo.mp4 (swap that file to update the cut).
+ * Falls back to a cross-fading still slideshow if the video can't load.
+ */
+function LoginDemoPanel() {
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [i, setI] = useState(0);
+
+  useEffect(() => {
+    if (!videoFailed) return;
+    const t = window.setInterval(() => setI((n) => (n + 1) % DEMO_STILLS.length), 4000);
+    return () => window.clearInterval(t);
+  }, [videoFailed]);
+
+  return (
+    <div className="relative h-full w-full overflow-hidden rounded-2xl bg-neutral-950 shadow-xl ring-1 ring-black/5">
+      {!videoFailed ? (
+        <video
+          src="/videos/login-demo.mp4"
+          poster="/videos/login-demo-poster.jpg"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          onError={() => setVideoFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        DEMO_STILLS.map((s, n) => (
+          <img
+            key={s.src}
+            src={s.src}
+            alt=""
+            aria-hidden={n !== i}
+            className={`absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-[1800ms] ease-out ${n === i ? "scale-105 opacity-100" : "scale-100 opacity-0"}`}
+          />
+        ))
+      )}
+      {videoFailed && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-6">
+          <p className="text-lg font-semibold text-white">{DEMO_STILLS[i]?.caption}</p>
+        </div>
+      )}
     </div>
   );
 }
