@@ -107,7 +107,6 @@ See `.env.example` and `ENV.md`. Required for live mode:
 - `VITE_USE_MOCKS=false`
 - `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` (server)
 - `SUPABASE_URL` / `SUPABASE_ANON_KEY` (and matching `VITE_*` for the client)
-- `VITE_PAYPAL_SANDBOX_BUYER_EMAIL` (banner)
 - `XAI_API_KEY` (+ `OPENAI_BASE_URL`, `OPENAI_MODEL`) for Grok
 - `PUBLIC_ORIGIN`, `PAYPAL_WEBHOOK_ID`
 

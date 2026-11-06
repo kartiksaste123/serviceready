@@ -15,7 +15,6 @@ The live demo runs on **Render** (`srv-dbmonf61egvs73d783g0`, blueprint in `rend
 | `XAI_API_KEY` | **server only** | xAI Grok key |
 | `OPENAI_BASE_URL` | server | `https://api.x.ai/v1` |
 | `OPENAI_MODEL` | server | `grok-4.20-0309-non-reasoning` (fast, ~2–4 s per agent turn) |
-| `VITE_PAYPAL_SANDBOX_BUYER_EMAIL` | build | Sandbox buyer email for the Judge banner (password only in README) |
 
 `OPENAI_API_KEY` takes precedence over `XAI_API_KEY` if both are set.
 

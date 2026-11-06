@@ -7,13 +7,28 @@ export default defineNitroConfig({
   // Scan ./server for API routes (PayPal + Supabase live backend).
   serverDir: "./server",
   routeRules: {
+    // App HTML shell: never sticky-cache so UI removals (e.g. Judge banner) show
+    // immediately. Hashed /assets/* stay cacheable via their content hashes.
+    "/**": {
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    },
+    "/assets/**": {
+      headers: {
+        "Cache-Control": "public, max-age=31536000, immutable",
+      },
+    },
     // Login demo + any future public videos: always revalidate. Content-hashed
     // filenames already bust sticky caches; these headers stop disk-cache reuse
     // of the same URL between deploys if a hash is ever reused by mistake.
-    // HTML/app shell: revalidate so new hashed video URLs in the JS bundle ship fast
     "/login": {
       headers: {
-        "Cache-Control": "no-cache, must-revalidate",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
       },
     },
     "/videos/**": {

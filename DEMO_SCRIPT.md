@@ -6,7 +6,7 @@
 
 **Prep before record**
 
-1. Live site: https://serviceready.onrender.com (`VITE_USE_MOCKS=false` on Render — Judge mode banner visible).
+1. Live site: https://serviceready.onrender.com (`VITE_USE_MOCKS=false` on Render).
 2. Storefront ready: `/s/maya-rao-studio`.
 3. Sandbox buyer logged out of PayPal so the login popup is visible on camera.
 4. Seller desk: open `/login` → **Continue as demo** (or demo credentials in README), then `/app`.
@@ -27,7 +27,7 @@
 **Say:**  
 “Solo freelancers start work on trust and chase invoices for weeks. ServiceReady is an agent-ready storefront: **AI** helps buyers book, and **PayPal** takes a deposit before work starts — client claims are never trusted over PayPal evidence.”
 
-**Cut to:** Judge mode banner (if visible) → click through to storefront.
+**Cut to:** Landing CTA → click through to storefront `/s/maya-rao-studio`.
 
 ---
 

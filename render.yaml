@@ -43,5 +43,3 @@ services:
         sync: false
       - key: XAI_API_KEY
         sync: false
-      - key: VITE_PAYPAL_SANDBOX_BUYER_EMAIL
-        sync: false

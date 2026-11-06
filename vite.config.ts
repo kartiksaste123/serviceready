@@ -20,9 +20,23 @@ export default defineConfig({
   nitro: {
     ...(nitroPreset ? { preset: nitroPreset } : {}),
     routeRules: {
+      "/**": {
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+      "/assets/**": {
+        headers: {
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      },
       "/login": {
         headers: {
-          "Cache-Control": "no-cache, must-revalidate",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       },
       "/videos/**": {
