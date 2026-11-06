@@ -1129,8 +1129,9 @@ async function markDepositPaid(
     .from("payments")
     .update({
       status: "COMPLETED",
-      paypal_capture_id: captureId ?? null,
       updated_at: now,
+      // Only set when known — a concurrent webhook with undefined must not wipe a prior id.
+      ...(captureId ? { paypal_capture_id: captureId } : {}),
     })
     .eq("id", paymentId);
   if (pErr) throw new HttpError(pErr.message, 500);
@@ -1394,7 +1395,7 @@ export async function captureDeposit(id: string, order_id: string): Promise<Quot
     if (o?.status === "COMPLETED") {
       const fresh = await getQuoteRow(id);
       if (fresh.status !== "quoted") return mapQuote(fresh);
-      return markDepositPaid(q, p.id, order_id, undefined, "capture_api");
+      return markDepositPaid(q, p.id, order_id, o.captureId, "capture_api");
     }
     throw e;
   }
@@ -1540,11 +1541,15 @@ export async function handlePaypalWebhook(request: Request): Promise<{
               await markDepositAuthorized(q, payment.id, orderId, order.authorizationId, "webhook");
               handled = "deposit_marked_authorized";
             } else if (order.status === "COMPLETED") {
+              const captureFromEvent =
+                event_type === "PAYMENT.CAPTURE.COMPLETED" && typeof r.id === "string"
+                  ? r.id
+                  : undefined;
               await markDepositPaid(
                 q,
                 payment.id,
                 orderId,
-                event_type === "PAYMENT.CAPTURE.COMPLETED" ? r.id : undefined,
+                order.captureId ?? captureFromEvent,
                 "webhook",
               );
               handled = "deposit_marked_paid";
@@ -1909,7 +1914,29 @@ export async function cancelQuote(
       kept: dep.amount_cents / 100,
     });
   }
-  if (!dep.paypal_capture_id) {
+  // Recover capture id if a prior capture/webhook race wiped it from the payment row.
+  let captureId = dep.paypal_capture_id ?? null;
+  if (!captureId && dep.paypal_order_id) {
+    const order = await paypal.getOrder(dep.paypal_order_id).catch(() => null);
+    if (order?.captureId) {
+      captureId = order.captureId;
+      await db()
+        .from("payments")
+        .update({ paypal_capture_id: captureId, updated_at: now })
+        .eq("id", dep.id);
+      await pushEvent({
+        quote_id: id,
+        seller_id: q.seller_id,
+        actor: "system",
+        kind: "decision",
+        tool: "paypal.capture_id.recovered",
+        input: { order_id: dep.paypal_order_id },
+        output: { capture_id: captureId },
+        text: "Recovered PayPal capture id from the order before refund",
+      });
+    }
+  }
+  if (!captureId) {
     throw new HttpError("No PayPal capture on this deposit to refund", 400);
   }
   const partial = decision.action === "refund_partial";
@@ -1922,7 +1949,7 @@ export async function cancelQuote(
     : `ServiceReady booking ${id} cancelled — deposit refunded`;
   try {
     const r = await toolkitCreateRefund({
-      captureId: dep.paypal_capture_id,
+      captureId,
       noteToPayer: note,
       ...(partial ? { amountCents: refundCents } : {}),
     });
@@ -1931,8 +1958,8 @@ export async function cancelQuote(
     toolkitTrace = r.trace;
   } catch {
     const r = await paypal.refundCapture({
-      captureId: dep.paypal_capture_id,
-      requestId: `refund-${id}-${dep.paypal_capture_id}-${refundCents}`,
+      captureId,
+      requestId: `refund-${id}-${captureId}-${refundCents}`,
       noteToPayer: note,
       ...(partial ? { amountCents: refundCents } : {}),
     });
@@ -1944,7 +1971,7 @@ export async function cancelQuote(
       actor: "paypal",
       kind: "tool_call",
       tool: "paypal.payments.refund",
-      input: { capture_id: dep.paypal_capture_id, amount: refundCents / 100 },
+      input: { capture_id: captureId, amount: refundCents / 100 },
       output: { refund_id: r.id, status: r.status },
       text: `${partial ? `Refunded ${money(refundCents)}` : "Deposit refunded"} via Payments v2 (${r.status})`,
     });
@@ -1975,7 +2002,7 @@ export async function cancelQuote(
     partial
       ? `Booking cancelled — ${decision.explanation}`
       : "Booking cancelled — deposit refunded on PayPal evidence",
-    { refund_id: refundId, capture_id: dep.paypal_capture_id, status: refundStatus, refunded: refundCents / 100 },
+    { refund_id: refundId, capture_id: captureId, status: refundStatus, refunded: refundCents / 100 },
   );
 }
 
