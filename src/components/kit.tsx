@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
   AlertTriangle,
-  AudioWaveform,
   Check,
   ChevronRight,
   Clock3,
@@ -17,15 +16,14 @@ import { statusLabel } from "@/lib/labels";
 
 export function LogoMark({ className }: { className?: string }) {
   return (
-    <span
+    <img
+      src="/images/logo-mark.png"
+      alt=""
+      width={32}
+      height={32}
       aria-hidden="true"
-      className={cn(
-        "grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground",
-        className,
-      )}
-    >
-      <AudioWaveform className="size-4" strokeWidth={2.5} />
-    </span>
+      className={cn("size-8 rounded-lg", className)}
+    />
   );
 }
 export function Wordmark() {
