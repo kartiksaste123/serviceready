@@ -2899,31 +2899,29 @@ export async function publishCatalog(
   return (data as ServiceRow[]).map(mapService);
 }
 
+const AGENT_TOOLS = [
+  "get_service",
+  "request_quote",
+  "get_quote_status",
+  "get_cancellation_policy",
+] as const;
+type AgentTool = (typeof AGENT_TOOLS)[number];
+
 const AgentPlanSchema = z.object({
   reply: z.string(),
   actions: z
     .array(
       z
         .object({
-          // Lenient: models sometimes write "request_quote(...)" — normalize to the bare tool name.
-          tool: z
-            .string()
-            .transform(
-              (t) =>
-                t
-                  .trim()
-                  .match(/^[a-z_]+/i)?.[0]
-                  ?.toLowerCase() ?? "",
-            )
-            .pipe(
-              z.enum([
-                "list_services",
-                "get_service",
-                "request_quote",
-                "get_quote_status",
-                "get_cancellation_policy",
-              ]),
-            ),
+          // Lenient: models sometimes write "request_quote(...)" or obsolete "list_services".
+          // Unknown tools are dropped below — never fail the whole plan (that caused quote loops).
+          tool: z.string().transform(
+            (t) =>
+              t
+                .trim()
+                .match(/^[a-z_]+/i)?.[0]
+                ?.toLowerCase() ?? "",
+          ),
           service_id: z.string().optional(),
           quote_id: z.string().optional(),
           client_name: z.string().optional(),
@@ -2933,13 +2931,89 @@ const AgentPlanSchema = z.object({
         // keep unknown keys so the money guardrail can see (and reject) price overrides
         .passthrough(),
     )
-    .default([]),
+    .default([])
+    .transform((actions) =>
+      actions.filter((a): a is typeof a & { tool: AgentTool } =>
+        (AGENT_TOOLS as readonly string[]).includes(a.tool),
+      ),
+    ),
 });
 
 /** Deterministic client-facing quote summary — amounts copied from the catalog-built quote, never the model. */
 function quoteReply(created: Quote, svc: Service, sellerName: string): string {
   const held = created.deposit_intent === "AUTHORIZE";
   return `I've requested a quote for **${svc.title}** from ${sellerName}.\n\n- Total: **${money(created.total_cents)}**\n- Deposit due now: **${money(created.deposit_cents)}** (${svc.deposit_pct}%)${held ? " — PayPal holds it and it's only captured when work starts" : ""}\n- Balance on delivery: ${money(created.balance_cents)}\n- Turnaround: ~${svc.lead_time_days} days\n- Quote reference: **${created.id}**\n- Cancellation: ${describeCancelPolicy(created.cancel_policy ?? normalizePolicy(null))}\n\nPay the deposit with PayPal using the button below to confirm.`;
+}
+
+
+/** Resolve a catalog service by id, exact title, or distinctive title words (models often pass the title). */
+function resolveCatalogService(
+  services: Service[],
+  serviceIdOrTitle: string | undefined | null,
+): Service | undefined {
+  const raw = (serviceIdOrTitle ?? "").trim();
+  if (!raw) return undefined;
+  const lower = raw.toLowerCase();
+  return (
+    services.find((s) => s.id === raw) ??
+    services.find((s) => s.title.toLowerCase() === lower) ??
+    services.find((s) => s.title.toLowerCase().includes(lower) || lower.includes(s.title.toLowerCase())) ??
+    services.find((s) =>
+      s.title
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length > 3)
+        .some((w) => lower.includes(w)),
+    )
+  );
+}
+
+/** Pull name / email / matched service / brief from the whole conversation (not just the last turn). */
+function extractBookingIntent(
+  messages: ChatMsg[],
+  services: Service[],
+): {
+  email?: string;
+  name?: string;
+  service?: Service;
+  brief: string;
+  complete: boolean;
+} {
+  const blob = messages.map((m) => m.content).join("\n");
+  const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const emailMatch = blob.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const email = emailMatch?.[0]?.trim();
+  const nameMatch =
+    blob.match(/(?:i'?m|i am|my name is|name\s*[:\-])\s*([A-Z][A-Za-z0-9.'\-]+(?:\s+[A-Z][A-Za-z0-9.'\-]+)?)/i) ??
+    lastUser.match(/^([A-Z][A-Za-z0-9.'\-]+(?:\s+[A-Z][A-Za-z0-9.'\-]+)?)\s*[\/|,]/) ??
+    lastUser.match(/^([A-Z][A-Za-z0-9.'\-]+(?:\s+[A-Z][A-Za-z0-9.'\-]+)?)\s+[A-Z0-9._%+-]+@/i);
+  let name = nameMatch?.[1]?.trim();
+  if (name && email && name.toLowerCase() === email.toLowerCase()) name = undefined;
+  if (!name && email) name = email.split("@")[0];
+
+  const hay = blob.toLowerCase();
+  // Prefer longer / more specific title matches so "WhatsApp Stories" beats "WhatsApp Reels".
+  const ranked = [...services]
+    .map((s) => {
+      const title = s.title.toLowerCase();
+      const words = title.split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+      const hit = title.length > 3 && hay.includes(title)
+        ? title.length + 20
+        : words.filter((w) => hay.includes(w)).reduce((n, w) => n + w.length, 0);
+      return { s, hit };
+    })
+    .filter((x) => x.hit > 0)
+    .sort((a, b) => b.hit - a.hit);
+  const service = ranked[0]?.s;
+  const brief = (lastUser || blob).slice(0, 500);
+  const complete = Boolean(service && email && isEmail(email) && (name || email));
+  return {
+    ...(email ? { email } : {}),
+    ...(name ? { name } : {}),
+    ...(service ? { service } : {}),
+    brief,
+    complete,
+  };
 }
 
 const POLICY_Q = /\b(cancel|cancellation|refund|no[- ]?show|reschedul|policy|money back)/i;
@@ -2968,41 +3042,22 @@ async function agentChatHeuristic(
   const store = await getPublic(slug);
   const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const tool_calls: ToolTrace[] = [];
-  const lower = last.toLowerCase();
+  const intent = extractBookingIntent(messages, store.services);
+  const firstTurn = messages.filter((m) => m.role === "user").length <= 1;
+  const browsing = /\b(what (services|do you offer)|list|catalog|packages|options)\b/i.test(last);
 
-  tool_calls.push({
-    tool: "list_services",
-    input: { slug },
-    output: store.services.map((s) => ({ id: s.id, title: s.title, price_cents: s.price_cents })),
-  });
-
-  const match =
-    store.services.find((s) => lower.includes(s.title.toLowerCase().split(" ")[0]!)) ??
-    store.services.find((s) =>
-      s.title
-        .toLowerCase()
-        .split(/\s+/)
-        .some((w) => w.length > 3 && lower.includes(w)),
-    ) ??
-    (/(logo|brand|identity)/i.test(last)
-      ? store.services.find((s) => /brand|logo|identity/i.test(s.title))
-      : undefined) ??
-    (/(landing|page|web)/i.test(last)
-      ? store.services.find((s) => /landing|page/i.test(s.title))
-      : undefined) ??
-    (/(deck|pitch)/i.test(last)
-      ? store.services.find((s) => /deck|pitch/i.test(s.title))
-      : undefined);
-
-  const emailMatch = last.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  const nameMatch =
-    last.match(/(?:i'?m|i am|my name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i) ??
-    last.match(/\b([A-Z][a-z]+)\b(?=.*,|\s+and\b)/);
+  if (firstTurn || browsing || !intent.service) {
+    tool_calls.push({
+      tool: "list_services",
+      input: { slug },
+      output: store.services.map((s) => ({ id: s.id, title: s.title, price_cents: s.price_cents })),
+    });
+  }
 
   let quote: Quote | null = null;
   let reply: string;
 
-  if (POLICY_Q.test(last) && !emailMatch) {
+  if (POLICY_Q.test(last) && !intent.email) {
     tool_calls.push({
       tool: "get_cancellation_policy",
       input: {},
@@ -3015,23 +3070,27 @@ async function agentChatHeuristic(
       engine: { kind: "heuristic", reason },
     };
   }
-  if (match && emailMatch && isEmail(emailMatch[0]!)) {
-    const client_name = nameMatch?.[1] ?? emailMatch[0]!.split("@")[0]!;
+  if (intent.complete && intent.service && intent.email) {
     const created = await postPublicQuote(slug, {
-      service_id: match.id,
-      client_name,
-      client_email: emailMatch[0]!,
-      brief: last.slice(0, 500),
+      service_id: intent.service.id,
+      client_name: (intent.name ?? intent.email.split("@")[0]!).slice(0, 100),
+      client_email: intent.email,
+      brief: intent.brief,
       source: "agent_sim",
     });
     tool_calls.push({
       tool: "request_quote",
-      input: { service_id: match.id, client_email: emailMatch[0] },
+      input: {
+        service_id: intent.service.id,
+        client_email: intent.email,
+        client_name: intent.name ?? intent.email.split("@")[0],
+      },
       output: { quote_id: created.id, deposit_cents: created.deposit_cents },
     });
     quote = created;
-    reply = `I've requested a quote for **${match.title}** from ${store.seller.name}.\n\n- Total: ${money(created.total_cents)}\n- Deposit due now: ${money(created.deposit_cents)} (${match.deposit_pct}%)\n- Balance on delivery: ${money(created.balance_cents)}\n- Turnaround: ~${match.lead_time_days} days\n- Quote reference: ${created.id}\n\nPay the deposit with PayPal on the quote page to confirm.`;
-  } else if (match) {
+    reply = quoteReply(created, intent.service, store.seller.name);
+  } else if (intent.service) {
+    const match = intent.service;
     tool_calls.push({
       tool: "get_service",
       input: { id: match.id },
@@ -3086,15 +3145,16 @@ export async function agentChat(
         {
           role: "system",
           content: `Storefront assistant for ${store.seller.name} (${store.seller.tagline}). Deposits are paid with PayPal.
+The CATALOG JSON is already injected below — do NOT call list_services (it is not a tool).
 Tools (put intended calls in "actions"; the server runs them):
-- get_service — fields: service_id
-- request_quote — fields: service_id, client_name, client_email, brief
+- get_service — fields: service_id (catalog id OR exact title)
+- request_quote — fields: service_id, client_name, client_email, brief  ← REQUIRED once you have all four
 - get_quote_status — fields: quote_id
-- get_cancellation_policy — no fields (use for any cancel / refund / no-show question; the server writes the policy text)
-Action shape: {"tool":"request_quote","service_id":"<catalog id>","client_name":"...","client_email":"...","brief":"..."}
-Rules: use catalog ids; never invent or set prices/amounts (the server rejects money fields); never claim payment succeeded.
-As soon as the client gave a name, a valid email and a need that matches a service, call request_quote (brief = their need) — don't ask for more.
-When only browsing, name matching services with price and deposit % in the reply. Be concise markdown.
+- get_cancellation_policy — no fields (cancel / refund / no-show questions)
+Action shape: {"tool":"request_quote","service_id":"<catalog id or exact title>","client_name":"...","client_email":"...","brief":"..."}
+HARD RULE: If the conversation already has (1) a matching catalog service, (2) a client name, (3) a valid email, and (4) what they need, you MUST put request_quote in actions this turn. Do not ask clarifying questions. Do not list the catalog again. brief = their need in their words.
+Never invent or set prices/amounts (the server rejects money fields). Never claim payment succeeded.
+When still missing name or email, ask once for the missing field only. Be concise markdown.
 Return JSON only: {"reply":"...","actions":[...]}`,
         },
         {
@@ -3109,19 +3169,27 @@ Return JSON only: {"reply":"...","actions":[...]}`,
     const tool_calls: ToolTrace[] = [];
     let quote: Quote | null = null;
     let quoteSvc: Service | null = null;
+    const intent = extractBookingIntent(messages, store.services);
+    const userTurns = messages.filter((m) => m.role === "user").length;
+    const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const browsing = /\b(what (services|do you offer)|list|catalog|packages|options)\b/i.test(
+      lastUser,
+    );
 
-    // list_services is served from the per-request catalog (no extra DB/model call).
-    tool_calls.push({
-      tool: "list_services",
-      input: { slug, cached: true },
-      output: catalog.map((s) => ({ id: s.id, title: s.title, price_cents: s.price_cents })),
-    });
+    // Only surface list_services when browsing / first turn — never every reply (looks like a loop).
+    if (userTurns <= 1 || browsing) {
+      tool_calls.push({
+        tool: "list_services",
+        input: { slug, cached: true },
+        output: catalog.map((s) => ({ id: s.id, title: s.title, price_cents: s.price_cents })),
+      });
+    }
 
     // Money guardrail + dedupe (at most one request_quote per turn).
     const actions: typeof plan.actions = [];
     let quoteRequested = false;
     for (const action of plan.actions) {
-      if (action.tool === "list_services") continue;
+      if ((action.tool as string) === "list_services") continue;
       if (action.tool === "get_cancellation_policy") {
         if (!actions.some((a) => a.tool === "get_cancellation_policy")) actions.push(action);
         continue;
@@ -3145,6 +3213,19 @@ Return JSON only: {"reply":"...","actions":[...]}`,
       actions.push(action);
     }
 
+    // Deterministic fallback: if the model forgot request_quote but we already have
+    // service + name + email (+ brief), mint the quote anyway so the chat cannot loop.
+    if (!quoteRequested && intent.complete && intent.service && intent.email) {
+      actions.push({
+        tool: "request_quote",
+        service_id: intent.service.id,
+        client_name: intent.name ?? intent.email.split("@")[0],
+        client_email: intent.email,
+        brief: intent.brief,
+      });
+      quoteRequested = true;
+    }
+
     // Independent tools run in parallel.
     const results = await Promise.all(
       actions.map(async (action): Promise<ToolTrace> => {
@@ -3156,13 +3237,7 @@ Return JSON only: {"reply":"...","actions":[...]}`,
           };
         }
         if (action.tool === "get_service") {
-          const svc =
-            store.services.find((s) => s.id === action.service_id) ??
-            store.services.find(
-              (s) =>
-                action.service_id &&
-                s.title.toLowerCase().includes(action.service_id.toLowerCase()),
-            );
+          const svc = resolveCatalogService(store.services, action.service_id);
           return {
             tool: "get_service",
             input: { id: action.service_id },
@@ -3170,14 +3245,21 @@ Return JSON only: {"reply":"...","actions":[...]}`,
           };
         }
         if (action.tool === "request_quote") {
-          const svc = store.services.find((s) => s.id === (action.service_id ?? ""));
-          const email = (action.client_email ?? "").trim();
-          const name = (action.client_name ?? "").trim() || email.split("@")[0] || "Client";
+          const svc =
+            resolveCatalogService(store.services, action.service_id) ??
+            intent.service ??
+            undefined;
+          const email = (action.client_email ?? intent.email ?? "").trim();
+          const name =
+            (action.client_name ?? intent.name ?? "").trim() || email.split("@")[0] || "Client";
           if (!svc || !isEmail(email)) {
             return {
               tool: "request_quote",
               input: { service_id: action.service_id, client_email: email },
-              output: { error: "need published service_id and valid client_email" },
+              output: {
+                error: "need published service_id (or title) and valid client_email",
+                resolved_service: svc?.title ?? null,
+              },
             };
           }
           const created = await postPublicQuote(
@@ -3186,7 +3268,7 @@ Return JSON only: {"reply":"...","actions":[...]}`,
               service_id: svc.id,
               client_name: name.slice(0, 100),
               client_email: email,
-              brief: (action.brief ?? messages.at(-1)?.content ?? "").slice(0, 500),
+              brief: (action.brief ?? intent.brief ?? messages.at(-1)?.content ?? "").slice(0, 500),
               source: "agent_sim",
             },
             request,
