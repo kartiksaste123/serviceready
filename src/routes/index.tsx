@@ -115,17 +115,17 @@ function Home() {
       </header>
       <main id="main">
         <section className="border-b border-border">
-          <div className="mx-auto grid max-w-7xl items-center gap-14 px-5 py-16 sm:px-8 lg:grid-cols-[1.03fr_.97fr] lg:py-24">
+          <div className="mx-auto grid max-w-7xl items-start gap-10 px-5 py-10 sm:px-8 lg:grid-cols-[1.03fr_.97fr] lg:gap-12 lg:py-14">
             <div>
               <p className="eyebrow">The agent-ready service desk for freelancers</p>
-              <h1 className="mt-5 max-w-3xl text-5xl font-semibold leading-[1.02] sm:text-6xl lg:text-7xl">
+              <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-[1.02] sm:text-5xl lg:text-6xl">
                 Get booked by AI agents. Get paid before you start.
               </h1>
-              <p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">
+              <p className="mt-4 max-w-xl text-lg leading-7 text-muted-foreground">
                 Publish services assistants can understand, collect a PayPal deposit before work
                 begins, and keep every client follow-up under your control.
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="mt-6 flex flex-wrap gap-3">
                 <Link to="/onboard" className="btn-mint">
                   Import your rate card <ArrowRight className="size-4" />
                 </Link>
@@ -136,21 +136,23 @@ function Home() {
                   Open seller workspace
                 </Link>
               </div>
-              <p className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
+              <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
                 <ShieldCheck className="size-4" />
                 No account needed for this interactive demo.
               </p>
             </div>
-            <div className="space-y-5">
+            <div className="relative">
               <img
                 src="/images/hero.webp"
                 alt="ServiceReady — AI agents booking freelancers with PayPal deposits"
-                className="aspect-[16/10] w-full rounded-2xl object-cover"
+                className="aspect-[16/11] max-h-[360px] w-full rounded-2xl object-cover"
                 width={960}
                 height={600}
                 loading="eager"
               />
-              <BookingProof />
+              <div className="absolute bottom-4 left-4 right-4">
+                <BookingProof />
+              </div>
             </div>
           </div>
         </section>
@@ -166,7 +168,7 @@ function Home() {
             </div>
           </div>
         </section>
-        <section id="how" className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
+        <section id="how" className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-16">
           <div className="max-w-2xl">
             <p className="eyebrow">How it works</p>
             <h2 className="mt-3 text-3xl font-semibold sm:text-5xl">
@@ -176,7 +178,7 @@ function Home() {
               The assistant handles the repetitive steps. You keep the decisions.
             </p>
           </div>
-          <div className="mt-12 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-2 lg:grid-cols-4">
             {steps.map((s) => (
               <article key={s.n} className="bg-card p-6">
                 <div className="flex items-center justify-between">
@@ -185,14 +187,14 @@ function Home() {
                   </span>
                   <span className="text-xs font-semibold text-muted-foreground">{s.n}</span>
                 </div>
-                <h3 className="mt-8 text-lg font-semibold">{s.title}</h3>
+                <h3 className="mt-5 text-lg font-semibold">{s.title}</h3>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">{s.text}</p>
               </article>
             ))}
           </div>
         </section>
         <section id="proof" className="border-y border-border bg-muted">
-          <div className="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[.8fr_1.2fr]">
+          <div className="mx-auto grid max-w-7xl gap-8 px-5 py-14 sm:px-8 sm:py-16 lg:grid-cols-[.8fr_1.2fr]">
             <div>
               <p className="eyebrow">Why now</p>
               <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">Less chasing. More trust.</h2>
@@ -215,12 +217,12 @@ function Home() {
               ))}
             </div>
           </div>
-          <div className="mx-auto max-w-7xl px-5 pb-20 sm:px-8">
+          <div className="mx-auto max-w-7xl px-5 pb-14 sm:px-8 sm:pb-16">
             <div className="overflow-hidden rounded-2xl border border-border bg-card">
               <img
                 src="/images/paypal-success.webp"
                 alt="PayPal deposit paid confirmation for a ServiceReady booking"
-                className="aspect-[21/9] w-full object-cover"
+                className="aspect-[21/9] max-h-[280px] w-full object-cover"
                 width={1200}
                 height={514}
                 loading="lazy"
@@ -236,7 +238,7 @@ function Home() {
         </section>
         <section
           id="control"
-          className="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 lg:grid-cols-2"
+          className="mx-auto grid max-w-7xl gap-8 px-5 py-14 sm:px-8 sm:py-16 lg:grid-cols-2"
         >
           <div>
             <p className="eyebrow">Human-in-the-loop by design</p>
@@ -273,7 +275,7 @@ function Home() {
             ].map(([Icon, title, text]) => {
               const I = Icon as typeof LockKeyhole;
               return (
-                <li key={String(title)} className="flex gap-4 py-5">
+                <li key={String(title)} className="flex gap-4 py-4">
                   <span className="icon-tile">
                     <I className="size-4" />
                   </span>
@@ -287,7 +289,7 @@ function Home() {
           </ul>
         </section>
         <section className="border-y border-border bg-muted">
-          <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-8">
+          <div className="mx-auto max-w-3xl px-5 py-14 text-center sm:px-8 sm:py-16">
             <MessageSquareText className="mx-auto size-7" />
             <h2 className="mt-5 text-4xl font-semibold">
               Make your services ready for the next client.
@@ -295,7 +297,7 @@ function Home() {
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
               Paste the rate card you already have. Review the result before anything is published.
             </p>
-            <Link to="/onboard" className="btn-mint mt-8">
+            <Link to="/onboard" className="btn-mint mt-6">
               Import your rate card <ArrowRight className="size-4" />
             </Link>
           </div>
@@ -321,48 +323,37 @@ function Home() {
 
 function BookingProof() {
   return (
-    <div className="glass-card dash-shadow p-5 sm:p-6">
-      <div className="flex items-start justify-between border-b border-border pb-5">
-        <div>
-          <p className="text-sm font-semibold">Maya Rao Studio</p>
-          <p className="mt-1 text-xs text-muted-foreground">Brand identity sprint · Nina Park</p>
+    <div className="rounded-xl border border-border bg-card/95 p-3.5 shadow-lg backdrop-blur-md sm:p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">Maya Rao Studio</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            Brand identity sprint · Nina Park
+          </p>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-success-bg px-2.5 py-1 text-xs font-semibold text-success">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success-bg px-2.5 py-1 text-xs font-semibold text-success">
           <Check className="size-3.5" />
           Deposit paid
         </span>
       </div>
-      <div className="-mx-5 grid grid-cols-2 gap-px border-b border-border bg-border sm:-mx-6">
-        <div className="bg-card px-5 py-5 sm:px-6">
-          <p className="text-xs text-muted-foreground">Deposit received</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">$300</p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-lg bg-muted px-3 py-2.5">
+          <p className="text-[11px] text-muted-foreground">Deposit received</p>
+          <p className="mt-0.5 text-lg font-semibold tabular-nums">$300</p>
         </div>
-        <div className="bg-card px-5 py-5 sm:px-6">
-          <p className="text-xs text-muted-foreground">Balance invoiced</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">$300</p>
+        <div className="rounded-lg bg-muted px-3 py-2.5">
+          <p className="text-[11px] text-muted-foreground">Balance invoiced</p>
+          <p className="mt-0.5 text-lg font-semibold tabular-nums">$300</p>
         </div>
       </div>
-      <div className="mt-5 rounded-lg border border-border bg-muted p-4">
-        <div className="flex gap-3">
-          <span className="icon-tile">
-            <Bot className="size-4" />
-          </span>
-          <div>
-            <p className="font-semibold">Payment status checked</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              PayPal says the balance is unpaid. A friendly reminder is ready for Maya to review.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-bg px-2.5 py-1 text-xs font-semibold text-warning">
-            <span className="size-1.5 rounded-full bg-warning" />
-            Awaiting approval
-          </span>
-          <Link to="/app/approvals" className="text-sm font-semibold hover:underline">
-            Review message →
-          </Link>
-        </div>
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-bg px-2.5 py-1 text-xs font-semibold text-warning">
+          <span className="size-1.5 rounded-full bg-warning" />
+          Awaiting approval
+        </span>
+        <Link to="/app/approvals" className="text-xs font-semibold hover:underline sm:text-sm">
+          Review message →
+        </Link>
       </div>
     </div>
   );

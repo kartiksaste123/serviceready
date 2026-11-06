@@ -124,7 +124,7 @@ function Onboard() {
           </Link>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-5 pb-24 pt-8">
+      <main className="mx-auto max-w-6xl px-5 pb-16 pt-8">
         <ol className="mb-8 flex flex-wrap gap-2 text-[13px]" aria-label="Progress">
           {["Paste what you charge", "Check services and prices", "Publish for assistants"].map(
             (l, i) => (

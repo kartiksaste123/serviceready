@@ -116,7 +116,7 @@ function QuotePage() {
           </span>
         </div>
       </header>
-      <main className="mx-auto max-w-2xl px-5 pb-20 pt-8">
+      <main className="mx-auto max-w-2xl px-5 pb-14 pt-8">
         {returnCapture === "capturing" && (
           <p
             role="status"

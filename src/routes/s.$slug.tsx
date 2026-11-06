@@ -121,7 +121,7 @@ function Storefront() {
           <span className="text-xs text-muted-foreground">Powered by ServiceReady</span>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-5 pb-20 lg:px-8">
+      <main className="mx-auto max-w-7xl px-5 pb-14 lg:px-8">
         {isLoading ? (
           <div className="space-y-4 py-10">
             <Skeleton className="h-10 w-72" />
@@ -148,7 +148,7 @@ function Storefront() {
           </div>
         ) : (
           <>
-            <section className="flex flex-wrap items-end justify-between gap-6 py-10">
+            <section className="flex flex-wrap items-end justify-between gap-6 py-8">
               <div className="flex items-center gap-4">
                 <SellerAvatar name={data.seller.name} slug={slug} />
                 <div>
