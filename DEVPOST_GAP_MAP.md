@@ -1,6 +1,7 @@
 # ServiceReady: PayPal AI Hackathon 2026 gap map
 
-_Written Fri 6 Nov 2026, 12:40 IST. Deadline: **Thu 12 Nov 2026, 12:00 PM PT (Fri 13 Nov, 1:30 AM IST)**._
+_Written Fri 6 Nov 2026, 12:40 IST; status refreshed Fri 6 Nov 2026 afternoon IST. Deadline: **Thu 12 Nov 2026, 12:00 PM PT (Fri 13 Nov, 1:30 AM IST)**._
+Paste-ready Devpost fields: `DEVPOST.md`. Video script: `DEMO_SCRIPT.md`.
 Sources: paypalaihackathon.devpost.com (home, /rules, /details/faqs, /updates), the PayPal Community Blog hackathon post, and developer.paypal.com/ai-tools/toolkit.
 
 ---
@@ -52,39 +53,38 @@ Sources: paypalaihackathon.devpost.com (home, /rules, /details/faqs, /updates), 
 
 | Area | Reality | Evidence |
 |---|---|---|
-| Backend | **There is none.** It's a frontend-only TanStack Start app on Nitro/Cloudflare. `src/server.ts` only does SSR error handling. | `src/lib/api.ts` calls `mock.ts` unless `VITE_USE_MOCKS==='false'`, and then points at an external `VITE_API_BASE_URL` that doesn't exist. |
-| PayPal | **100% simulated** by default. `paypalConfig()` returns `client_id: "sb-mock-client-id"`. Orders, captures, invoices, webhooks, and the "Simulate balance payment" button are all localStorage. | `src/lib/mock.ts:782-910, 1309` |
-| PayPal SDK seam | A real-mode `SdkCheckout` exists and looks correct (loads `paypal.com/sdk/js`, createOrder goes to the server, capture runs only in `onApprove`). It has never been run against a real server. | `src/components/PayPalDepositButton.tsx` |
-| AI rate-card parsing | **Regex/split heuristics, not an LLM.** | `mock.ts:544 parseCatalog` splits on `| \n ;` and regex-matches `+N%` |
-| AI storefront agent | **Regex intent matching** with fake tool traces (`list_services`, ...). The UI already calls it a "simulated assistant". | `mock.ts:1233 agentChat` |
-| AI collections/follow-ups | Template text plus rules (tone and grace window). No model. | `mock.ts` (runCollections, proposals) |
-| MCP / WebMCP | The UI shows `.../mcp/{slug}` and config snippets, but **no MCP server exists**. The README says so explicitly. | `app.connect.tsx`, `s.$slug.tsx:193-226`, README |
-| Auth / persistence | No auth. Data is per-browser localStorage. | README |
-| Repo | Local git only (2 commits, both 6 Nov 2026), **no remote, no LICENSE**. README is still the Lovable boilerplate plus ops notes. | `git remote -v` is empty |
-| Quality | 39 tests, lint, typecheck, and browser smoke. Mock lifecycle logic is solid (idempotency, state machine, grace window). | `BUGFIX_REPORT.md` |
-| Env | `.env.example` only has `VITE_USE_MOCKS` / `VITE_API_BASE_URL`. No server secrets are defined. | |
+| Backend | ✅ TanStack Start `/api/*` server routes + Nitro catch-all | `src/routes/api.*`, `src/server/live.ts` |
+| PayPal Orders | ✅ Real sandbox create + capture + JS SDK Buttons | `src/server/paypal.ts`, `PayPalDepositButton.tsx`, `smoke:paypal` |
+| PayPal Invoicing | ✅ Create / send / get / remind on approval | `live.ts` deliver / refreshInvoiceStatus / approveProposal |
+| PayPal webhooks | ❌ Not verified end-to-end yet | SHOULD-FIX |
+| AI rate-card parsing | ✅ LLM when `XAI_API_KEY` / `OPENAI_API_KEY` set; heuristics fallback | `src/server/llm.ts`, `api.catalog.parse` |
+| AI storefront agent | ✅ LLM chat + tool traces; heuristics fallback | `api.agent.chat` |
+| AI collections | ✅ LLM drafts + human approve | `api.quotes.$id.collections.run` |
+| MCP / Agent Toolkit | ❌ UI may advertise; server MCP / `@paypal/agent-toolkit` not shipped | SHOULD-FIX |
+| Auth / persistence | ✅ Supabase Postgres (demo RLS open for seeded seller) | `sellers`, `quotes`, `payments`, … |
+| Repo | ✅ Public GitHub + MIT `LICENSE` + judge README | https://github.com/kartiksaste123/serviceready |
+| Devpost materials | ✅ `DEVPOST.md` + `DEMO_SCRIPT.md` (this refresh) | repo root |
+| Live Lovable publish | ⚠️ Code on GitHub; confirm live URL runs `VITE_USE_MOCKS=false` + secrets | https://serviceready-frontend.lovable.app |
+| Demo video | ❌ Not recorded / uploaded yet | `DEMO_SCRIPT.md` |
+| Quality | ✅ Unit tests + typecheck; PayPal smoke script | `bun run test`, `smoke:paypal` |
 
-**Bottom line:** as it stands, the live site would probably **fail Stage One**. Both PayPal and AI are simulated, and the README admits it. That looks like the "non-functional demo" the rules exclude. The good news is that the product design, state machine, UI seams, and tests are strong, so the work is mostly backend wiring.
+**Bottom line:** Stage One blockers in *code* are largely cleared (real PayPal sandbox path, real LLM path, public MIT repo, persistence). Remaining eligibility risk is **ops**: live site must ship with mocks off + secrets, plus a **public YouTube video &lt; 3 min** and the Devpost form filled from `DEVPOST.md`.
 
----
 
 ## 3. Prioritised gap list
 
 ### MUST-FIX (eligibility / Stage One)
-1. **Real PayPal sandbox backend (Orders v2).** Add server routes, using TanStack Start server routes in the same repo (e.g. `src/routes/api/...`) or Supabase Edge Functions:
-   - `GET /api/paypal/config` returns the public sandbox client_id.
-   - `POST /api/quotes/:id/deposit/order` calls `POST /v2/checkout/orders` (intent CAPTURE, amount = deposit, `custom_id`=quote id, `PayPal-Request-Id` for idempotency).
-   - `POST /api/quotes/:id/deposit/capture` calls `POST /v2/checkout/orders/{id}/capture`, checks `COMPLETED` and that amount/currency match, then stores the capture id.
-   - OAuth `client_credentials` token cached on the server. Secrets `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` live **only** in server env, never in `VITE_*`.
-   - Flip the published site to `VITE_USE_MOCKS=false` (or make a "Live sandbox" mode the default). Keep mocks only for tests.
-2. **Real PayPal Invoicing v2 for the balance.** On deliver: `POST /v2/invoicing/invoices` then `/send`. "Check payment" reads `GET /v2/invoicing/invoices/{id}`. Reminders go through `/remind` after human approval. Remove or relabel the "Simulate balance payment" button (`app.quotes.$id.tsx`) and let the judge pay the real sandbox invoice link with a sandbox buyer account.
-3. **Real AI calls (LLM), not regex.** ✅ Code path done (`src/server/llm.ts` + live `parseCatalog` / `agentChat` / collections drafts). Needs a real `OPENAI_API_KEY` (or `XAI_API_KEY`) in server env for the published demo; heuristics remain the no-key fallback. Validation guardrails kept.
-4. **Persistence that judges can share:** Supabase Postgres (sellers, services, quotes, orders, invoices, proposals, events). Without it, a judge's deposit disappears in another browser and webhooks have nowhere to write. Add RLS. The demo seller can be a seeded public demo account, or thin auth via Supabase magic link plus a "Use demo seller" button.
-5. **Public GitHub repo:** push all source, add an **MIT `LICENSE`** at the root (so GitHub shows it in About), and keep `.env*`, `.wrangler`, `.output`, and `node_modules` out. Set the About description, topics (`paypal`, `ai`, `agentic-commerce`, `mcp`), and website URL. Commits must clearly fall within Oct 1 to Nov 12. Avoid force-pushing (see the Lovable warning in AGENTS.md).
-6. **Real README** (replace the Lovable boilerplate): problem and audience, a 30-second judge path, the live URL, the **sandbox buyer test login** (create one in the PayPal Developer Dashboard under Sandbox accounts), an architecture diagram, the PayPal APIs used (with links to code), the AI model and how it's used, local run steps, an env var table, and a "what's new during the hackathon" section.
-7. **YouTube video, under 3 minutes, public.** Show the real sandbox PayPal popup, the real capture, and the invoice paid by the sandbox buyer. Upload by around 10 Nov because processing is slow.
-8. **Devpost submission form:** description, Built With (PayPal Orders v2, PayPal Invoicing, PayPal JS SDK, PayPal Agent Toolkit/MCP, the LLM, Supabase, plus any sponsor tool), demo URL, repo URL, video, test credentials, and sponsor tools ticked. Submit a draft early and edit until the deadline.
-9. **Remove the "simulated" disclaimers** in the README, the `s.$slug.tsx` AgentBadge, `app.connect.tsx`, and the checkout dialog copy once these flows are real. Do not claim anything that isn't real.
+
+- [x] **1. Real PayPal sandbox backend (Orders v2)** — `GET /api/paypal/config`, deposit order + capture routes, OAuth token cache, secrets server-only. Keep mocks for tests.
+- [ ] **1b. Published site on live sandbox** — confirm Lovable/prod has `VITE_USE_MOCKS=false` + PayPal + Supabase + LLM secrets (ops; not just GitHub).
+- [x] **2. Real PayPal Invoicing v2 for the balance** — create/send/get; remind after human approval. Prefer real invoice link over simulate for the judge path.
+- [x] **3. Real AI calls (LLM)** — `src/server/llm.ts` for catalog parse, agent chat, collections drafts; heuristics fallback without key. **Still need key present on the published host.**
+- [x] **4. Shared persistence** — Supabase Postgres + seeded demo seller (`maya-rao-studio`).
+- [x] **5. Public GitHub repo + MIT LICENSE** — https://github.com/kartiksaste123/serviceready (no force-push; no secrets committed).
+- [x] **6. Real README** — judge path, sandbox buyer, PayPal/AI sections, env, architecture, hackathon “what's new”.
+- [ ] **7. YouTube video &lt; 3 min, public** — record from `DEMO_SCRIPT.md`; upload by ~10 Nov.
+- [ ] **8. Devpost form submitted** — paste from `DEVPOST.md` (description, Built With, demo URL, repo, video, sandbox credentials). Draft early; edit until deadline.
+- [ ] **9. Remove leftover “simulated” disclaimers** in UI copy (`AgentBadge`, connect page, checkout) once live mode is confirmed on the published URL. Do not claim MCP/Agent Toolkit until shipped.
 
 ### SHOULD-FIX (to win)
 **Technological Implementation**
@@ -105,7 +105,7 @@ Sources: paypalaihackathon.devpost.com (home, /rules, /details/faqs, /updates), 
 - Pitch it as "agent-ready storefront for freelancers". Any AI agent (MCP/WebMCP) can discover services, quote, and pay a PayPal deposit, and the seller's agent collects the balance with human-in-the-loop approvals and PayPal as the source of truth ("client claims are never trusted over PayPal evidence"). Make that last line a headline feature.
 
 **Presentation**
-- Video script (about 2:45): problem (0:00-0:20), import a rate card with the LLM (0:20-0:45), an AI agent books via MCP or the storefront assistant (0:45-1:15), real PayPal sandbox deposit popup (1:15-1:40), deliver and send a real PayPal invoice (1:40-2:00), the agent proposes a reminder, a human approves, and the invoice is paid by the sandbox buyer, triggering the webhook and thank-you (2:00-2:35), architecture card naming PayPal + AI (2:35-2:45). Use an AI voiceover, no copyrighted music, and cut the loading screens.
+- [x] Video script written (`DEMO_SCRIPT.md`, ~2:45). Still need to **record + upload**. Beats: problem → AI agent books → PayPal sandbox deposit → deliver + PayPal invoice → AI reminder / pay invoice → architecture card naming PayPal + AI.
 
 **Sponsor prize (cheap win)**
 - Host the backend on **Render** (Web Service) to be eligible for Best Use of Render. Optionally, **Postman**: publish a collection for the ServiceReady API and PayPal calls. An AG Grid upgrade of `BookingsGrid.tsx` is a larger lift with a bigger prize ($5k), so do it only if time allows.
