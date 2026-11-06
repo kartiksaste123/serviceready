@@ -437,9 +437,15 @@ function AgentChat({ slug }: { slug: string }) {
   };
   return (
     <aside
-      className="glass-card flex h-[560px] flex-col overflow-hidden lg:sticky lg:top-6 lg:h-[640px]"
+      className="glass-card relative flex h-[560px] flex-col overflow-hidden lg:sticky lg:top-6 lg:h-[640px]"
       aria-label="AI assistant demo"
     >
+      <img
+        src="/images/agent-chat-bg.webp"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.14]"
+      />
       <div className="flex items-center gap-3 border-b border-border px-5 py-4">
         <span className="icon-tile">
           <Bot className="size-4" aria-hidden="true" />
