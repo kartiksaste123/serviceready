@@ -65,14 +65,29 @@ async function paypalFetch<T>(
     }
   }
   if (!res.ok) {
-    const msg =
+    const base =
       typeof data === "object" && data && "message" in data
         ? String((data as { message: unknown }).message)
         : typeof data === "object" && data && "name" in data
           ? String((data as { name: unknown }).name)
           : `PayPal ${res.status}`;
-    console.error("[paypal]", method, path, res.status, msg);
-    throw new HttpError(msg || `PayPal request failed (${res.status})`, 502);
+    // PayPal puts the useful part (which field, why) in details[] — surface it.
+    const details =
+      typeof data === "object" && data && Array.isArray((data as { details?: unknown }).details)
+        ? ((data as { details: Array<{ field?: string; issue?: string; description?: string }> })
+            .details)
+        : [];
+    const why = details
+      .map((d) => [d.field, d.description ?? d.issue].filter(Boolean).join(": "))
+      .filter(Boolean)
+      .join("; ");
+    const msg = why ? `${base} (${why})` : base;
+    console.error("[paypal]", method, path, res.status, msg, JSON.stringify(details));
+    const err = new HttpError(msg || `PayPal request failed (${res.status})`, 502) as HttpError & {
+      paypalDetails?: typeof details;
+    };
+    err.paypalDetails = details;
+    throw err;
   }
   return data as T;
 }
@@ -487,13 +502,12 @@ export async function createAndSendInvoice(opts: {
   /** Let the payer add a tip in PayPal's invoice UI (Invoicing v2 configuration.allow_tip). */
   allowTip?: boolean;
   requestId?: string;
-}): Promise<{ invoiceId: string; status: string; href?: string }> {
+}): Promise<{ invoiceId: string; status: string; href?: string; allowTip: boolean }> {
   const value = centsToUsd(opts.amountCents);
   const currency = opts.currency ?? "USD";
-  const created = await paypalFetch<{ id: string; status?: string; href?: string }>(
-    "POST",
-    "/v2/invoicing/invoices",
-    {
+  const reqId =
+    opts.requestId ?? `invoice-${opts.invoiceNumber ?? `${opts.recipientEmail}-${value}`}`;
+  const buildBody = (allowTip: boolean) => ({
       detail: {
         currency_code: currency,
         invoice_number: opts.invoiceNumber,
@@ -526,13 +540,32 @@ export async function createAndSendInvoice(opts: {
             unit_amount: { currency_code: currency, value: centsToUsd(i.amountCents) },
           })),
       ],
-      ...(opts.allowTip ? { configuration: { allow_tip: true } } : {}),
-    },
-    {
-      "PayPal-Request-Id":
-        opts.requestId ?? `invoice-${opts.invoiceNumber ?? `${opts.recipientEmail}-${value}`}`,
-    },
-  );
+      ...(allowTip ? { configuration: { allow_tip: true } } : {}),
+  });
+  type Created = {
+    id: string;
+    status?: string;
+    href?: string;
+    detail?: { metadata?: { recipient_view_url?: string } };
+  };
+  let created: Created;
+  let tipEnabled = !!opts.allowTip;
+  try {
+    created = await paypalFetch<Created>("POST", "/v2/invoicing/invoices", buildBody(tipEnabled), {
+      "PayPal-Request-Id": reqId,
+    });
+  } catch (e) {
+    // Some merchant countries (incl. many sandbox accounts) reject allow_tip:
+    // "Tip option are not available in your country." Retry once without it so the
+    // final bill still goes out — the client-chosen tip line is unaffected.
+    const det = (e as { paypalDetails?: Array<{ field?: string }> }).paypalDetails ?? [];
+    if (!tipEnabled || !det.some((d) => d.field?.includes("allow_tip"))) throw e;
+    console.warn("[paypal] allow_tip rejected for this merchant — resending invoice without it");
+    tipEnabled = false;
+    created = await paypalFetch<Created>("POST", "/v2/invoicing/invoices", buildBody(false), {
+      "PayPal-Request-Id": `${reqId}-notip`,
+    });
+  }
 
   const invoiceId = created.id;
   // Send to recipient (sandbox emails the sandbox buyer if linked)
@@ -544,13 +577,14 @@ export async function createAndSendInvoice(opts: {
   );
 
   const href =
+    created.detail?.metadata?.recipient_view_url ??
     (typeof sent === "object" && sent && "href" in sent && typeof sent.href === "string"
       ? sent.href
       : undefined) ??
     created.href ??
     `https://www.sandbox.paypal.com/invoice/p/#${invoiceId}`;
 
-  return { invoiceId, status: "SENT", href };
+  return { invoiceId, status: "SENT", href, allowTip: tipEnabled };
 }
 
 export async function getInvoice(invoiceId: string): Promise<{

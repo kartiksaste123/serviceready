@@ -1609,18 +1609,22 @@ export async function deliver(id: string, request?: Request): Promise<QuoteDetai
   // AUTHORIZE deposits: never invoice the balance while the deposit is still only held.
   await captureHeldDepositRow(q, "deliver");
 
-  await pushEvent({
-    quote_id: id,
-    seller_id: q.seller_id,
-    actor: "seller",
-    kind: "approval",
-    text: "Marked delivered",
-  });
+  // Log "Marked delivered" only once the bill actually goes out (or the booking closes);
+  // a PayPal failure must not leave a phantom delivered event on the timeline.
+  const markDelivered = () =>
+    pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "seller",
+      kind: "approval",
+      text: "Marked delivered",
+    });
 
   const now = new Date().toISOString();
   const tip = q.tip_cents ?? 0;
   const bill = finalBill(q.balance_cents, tip);
   if (bill.total_cents <= 0) {
+    await markDelivered();
     await db().from("quotes").update({ status: "paid", updated_at: now }).eq("id", id);
     await pushEvent({
       quote_id: id,
@@ -1651,6 +1655,7 @@ export async function deliver(id: string, request?: Request): Promise<QuoteDetai
     invoiceNumber,
     requestId: `invoice-${invoiceNumber}`,
   });
+  await markDelivered();
 
   const { error: pErr } = await db()
     .from("payments")
@@ -1676,9 +1681,9 @@ export async function deliver(id: string, request?: Request): Promise<QuoteDetai
       lines: bill.lines.map((l) => ({ label: l.label, amount: l.amount_cents / 100 })),
       amount: bill.total_cents / 100,
       recipient: q.client_email,
-      allow_tip: true,
+      allow_tip: inv.allowTip,
     },
-    output: { invoice_id: inv.invoiceId, status: inv.status },
+    output: { invoice_id: inv.invoiceId, status: inv.status, invoice_url: inv.href ?? null },
     text:
       tip > 0
         ? `Final bill ${money(bill.total_cents)} (balance ${money(q.balance_cents)} + tip ${money(tip)}) sent to ${q.client_email}`
