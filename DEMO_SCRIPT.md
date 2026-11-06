@@ -104,7 +104,7 @@ ServiceReady
 AI (Grok): catalog · agent chat · collections drafts
 PayPal: Orders v2 deposit · Invoicing v2 balance
 Supabase + TanStack Start · MIT
-Demo: serviceready-frontend.lovable.app
+Demo: serviceready.onrender.com
 Repo: github.com/kartiksaste123/serviceready
 ```
 
