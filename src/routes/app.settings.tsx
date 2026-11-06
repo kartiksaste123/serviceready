@@ -124,7 +124,7 @@ function SettingsPage() {
       ) : (
         <form
           data-tour="settings-form"
-          className="glass-card p-6"
+          className="glass-card p-5 sm:p-6"
           noValidate
           onSubmit={(e) => {
             e.preventDefault();

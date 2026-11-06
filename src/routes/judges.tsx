@@ -86,7 +86,7 @@ function JudgesPage() {
   const [quoteId, setQuoteId] = useState("");
   const tamper = useMutation({ mutationFn: () => api.tamperDemo(quoteId.trim() || undefined) });
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-[100dvh] bg-muted">
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
           <Link to="/" aria-label="ServiceReady home">
@@ -97,9 +97,9 @@ function JudgesPage() {
           </a>
         </div>
       </header>
-      <main className="mx-auto max-w-[1440px] space-y-5 px-4 py-6 sm:px-6 lg:px-10">
+      <main className="mx-auto max-w-[1440px] space-y-4 px-4 py-4 sm:px-6 lg:px-10">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
-          <section className="glass-card flex flex-col justify-between p-5 sm:p-7">
+          <section className="glass-card flex flex-col justify-between p-5 sm:p-6">
             <div>
               <p className="text-sm font-medium text-muted-foreground">PayPal AI Hackathon 2026</p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">

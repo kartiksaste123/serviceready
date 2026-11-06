@@ -195,7 +195,7 @@ export function Empty({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card px-6 py-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card px-6 py-10 text-center">
       <span className="icon-tile size-11">
         {icon ?? <Inbox className="size-5" aria-hidden="true" />}
       </span>
@@ -216,7 +216,7 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card px-6 py-12 text-center"
+      className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card px-6 py-10 text-center"
     >
       <span className="grid size-11 place-items-center rounded-lg bg-danger-bg text-danger">
         <AlertTriangle className="size-5" aria-hidden="true" />
@@ -245,7 +245,7 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {sub && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{sub}</p>}

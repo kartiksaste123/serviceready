@@ -122,9 +122,9 @@ function Onboard() {
   };
 
   return (
-    <div className="min-h-screen bg-muted">
-      <header className="border-b border-border bg-background">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-5">
+    <div className="flex min-h-[100dvh] flex-col bg-muted">
+      <header className="shrink-0 border-b border-border bg-background">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-5">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
@@ -143,8 +143,10 @@ function Onboard() {
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-5 sm:pt-8">
-        <ol className="mb-8 flex flex-wrap gap-2 text-[13px]" aria-label="Progress">
+      <main
+        className={`mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-4 sm:px-5 ${step === 1 ? "min-h-0" : "pb-8"}`}
+      >
+        <ol className="mb-4 flex shrink-0 flex-wrap gap-2 text-[13px]" aria-label="Progress">
           {["Paste your prices", "Check the details", "Go live"].map((l, i) => (
             <li
               key={l}
@@ -158,10 +160,10 @@ function Onboard() {
         </ol>
 
         {step === 1 && (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-            <section className="glass-card p-6 sm:p-8">
-              <h1 className="display text-2xl sm:text-4xl">Paste your price list</h1>
-              <p className="mt-3 text-muted-foreground">
+          <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:items-stretch">
+            <section className="glass-card flex min-h-0 flex-col p-5 sm:p-6">
+              <h1 className="display text-2xl sm:text-3xl">Paste your price list</h1>
+              <p className="mt-2 text-sm text-muted-foreground sm:text-base">
                 Any format works — a rate card, notes, or a WhatsApp message. We turn it into
                 bookable services. Your prices are never changed.
               </p>
@@ -172,12 +174,12 @@ function Onboard() {
                 id="raw"
                 value={raw}
                 onChange={(e) => setRaw(e.target.value)}
-                rows={14}
+                rows={8}
                 maxLength={10000}
                 placeholder={"e.g.\nlogo 450 (2 rounds), 1 week\nbrand kit 1200 half upfront, 2wks"}
-                className="field mt-6 resize-y font-mono text-[13px] leading-relaxed"
+                className="field mt-4 min-h-[140px] flex-1 resize-y font-mono text-[13px] leading-relaxed"
               />
-              <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="mt-3 flex shrink-0 flex-wrap items-center gap-3">
                 <button
                   type="button"
                   className="btn-mint"
@@ -199,11 +201,11 @@ function Onboard() {
                 </span>
               </div>
             </section>
-            <aside className="glass-card p-6 lg:sticky lg:top-6" aria-labelledby="how-h">
+            <aside className="glass-card h-fit p-5 sm:p-6 lg:sticky lg:top-4" aria-labelledby="how-h">
               <h2 id="how-h" className="font-semibold">
                 What happens next
               </h2>
-              <ol className="mt-4 space-y-4 text-sm">
+              <ol className="mt-3 space-y-3 text-sm">
                 {[
                   [
                     "AI structures it",
@@ -229,7 +231,7 @@ function Onboard() {
                   </li>
                 ))}
               </ol>
-              <div className="mt-5 rounded-lg bg-muted p-4 text-sm">
+              <div className="mt-4 rounded-lg bg-muted p-3.5 text-sm">
                 <p className="font-medium">Works with messy text</p>
                 <p className="mt-1 font-mono text-[12px] leading-relaxed text-muted-foreground">
                   logo — 450, 2 revisions, a week
@@ -461,13 +463,13 @@ function Onboard() {
         )}
 
         {step === 3 && published && (
-          <section className="glass-card grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-center">
+          <section className="glass-card grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-center">
             <div>
               <span className="icon-tile size-12">
                 <CircleCheck className="size-6" aria-hidden="true" />
               </span>
-              <h1 className="display mt-5 text-3xl">Your services are now agent-ready</h1>
-              <p className="mt-3 text-muted-foreground">
+              <h1 className="display mt-4 text-2xl sm:text-3xl">Your services are now agent-ready</h1>
+              <p className="mt-2 text-muted-foreground">
                 {published.length} service{published.length === 1 ? "" : "s"} published.
                 {USE_MOCKS
                   ? " Your demo catalog is ready to quote on the storefront. MCP configuration preview:"

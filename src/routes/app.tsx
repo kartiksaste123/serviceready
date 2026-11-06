@@ -106,7 +106,7 @@ function AppShell() {
 
   if (!USE_MOCKS && (!auth.ready || !auth.session)) {
     return (
-      <div className="grid min-h-screen place-items-center bg-muted">
+      <div className="grid min-h-[100dvh] place-items-center bg-muted">
         <Loader2
           className="size-6 animate-spin text-muted-foreground"
           aria-label="Checking sign-in"
@@ -116,14 +116,14 @@ function AppShell() {
   }
 
   return (
-    <div className="min-h-screen bg-muted lg:grid lg:grid-cols-[248px_1fr]">
+    <div className="min-h-[100dvh] bg-muted lg:grid lg:grid-cols-[248px_1fr]">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:shadow"
       >
         Skip to content
       </a>
-      <aside className="sticky top-0 z-30 border-b border-border bg-background lg:flex lg:h-screen lg:flex-col lg:border-b-0 lg:border-r">
+      <aside className="sticky top-0 z-30 border-b border-border bg-background lg:flex lg:h-[100dvh] lg:flex-col lg:border-b-0 lg:border-r">
         <div className="flex h-16 items-center justify-between px-5">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
@@ -246,7 +246,7 @@ function AppShell() {
         </div>
       </aside>
       <div className="min-w-0">
-        <main id="main" className="w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
+        <main id="main" className="w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-6 lg:px-10">
           <Outlet />
         </main>
       </div>

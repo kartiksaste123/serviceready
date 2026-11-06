@@ -128,7 +128,7 @@ function LoginPage() {
 
   if (!USE_MOCKS && auth.ready && auth.session) {
     return (
-      <div className="grid min-h-screen place-items-center bg-muted">
+      <div className="grid min-h-[100dvh] place-items-center bg-muted">
         <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
       </div>
     );

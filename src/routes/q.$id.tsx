@@ -134,7 +134,7 @@ function QuotePage() {
   const notFound = isError && error instanceof Error && /not found/i.test(error.message);
 
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-[100dvh] bg-muted">
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
           <Link to="/" aria-label="ServiceReady home">
