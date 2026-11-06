@@ -1,3 +1,4 @@
+-- Note: seller slug maya-chen is legacy/unused; only maya-rao-studio is seeded for the live demo.
 -- ServiceReady core schema for PayPal AI Hackathon (applied to Supabase project as migration 20261106071343)
 create extension if not exists "pgcrypto";
 

@@ -117,6 +117,10 @@ Browser (TanStack Start)
 Render (Node, Nitro node-server)  ·  Supabase Postgres (supabase/migrations, supabase/seed.sql)
 ```
 
+## Deploy
+
+Production is on **Render** (`https://serviceready.onrender.com`), not Lovable. See `LOVABLE_HANDOFF.md` only as a legacy pointer.
+
 ## What's new during the hackathon
 
 - Real PayPal sandbox Orders create/capture with JS SDK buttons

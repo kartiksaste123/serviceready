@@ -1,3 +1,6 @@
+-- Legacy: slug `maya-chen` ("Maya Chen") is unused and must NOT be seeded.
+-- Live demo seller is only `maya-rao-studio`. Do not reintroduce maya-chen.
+
 -- Demo seller used by the live judge path (/s/maya-rao-studio)
 insert into public.sellers (slug, name, tagline, email, default_deposit_pct, reminder_tone, max_reminders, wait_days_before_nudge)
 values ('maya-rao-studio', 'Maya Rao Studio', 'Brand identities for independent businesses — logos, kits and launch pages.', 'maya@mayarao.studio', 30, 'friendly', 3, 3)
