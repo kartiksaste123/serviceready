@@ -1,0 +1,38 @@
+# ServiceReady
+
+> Paste a rate card → agent-bookable storefront with PayPal deposits. Catalog amounts are HMAC-signed; agents cannot invent or tamper with prices. PayPal evidence beats client claims.
+
+## What it is
+ServiceReady turns a freelancer's messy rate card into a public storefront that humans and AI assistants can book. Buyers approve a real PayPal sandbox deposit (Orders v2 CAPTURE or AUTHORIZE) before work starts. Outside agents must hold a revocable spend-limited payment mandate before they can mint a deposit link. Status only changes from PayPal evidence (webhooks + Check PayPal fallback).
+
+## Key URLs
+- Home: https://serviceready.onrender.com/
+- Judge path (demo credentials live here only): https://serviceready.onrender.com/judges
+- Demo storefront: https://serviceready.onrender.com/s/maya-rao-studio
+- MCP (Streamable HTTP, JSON-RPC 2.0): https://serviceready.onrender.com/mcp/maya-rao-studio
+- Agent card: https://serviceready.onrender.com/.well-known/agent-card.json
+- Health: https://serviceready.onrender.com/api/health
+- Repo (MIT): https://github.com/kartiksaste123/serviceready
+
+## MCP tools (order of use)
+1. create_payment_mandate — spend_limit_usd + optional label → mandate_key
+2. list_services / get_service — catalog prices only
+3. get_cancellation_policy — quote verbatim from structured fields
+4. request_quote — client_name, client_email, service_id, brief (never pass amounts)
+5. create_deposit_link — quote_id + mandate_key → PayPal approval URL for the human
+6. get_quote_status — status flips only on PayPal evidence
+7. save_paypal_for_mandate / pay_deposit_with_saved_paypal — Vault v3 returning-client path (still capped)
+
+## Money rules
+- Agents cannot set price, deposit, tip, or refund amounts — overrides are rejected and audited.
+- Quote amounts are HMAC-signed; each PayPal order stores a fingerprint re-checked before capture.
+- Deposits ≥ $500 use intent=AUTHORIZE (held until Start work; void on free cancel).
+- Final bill is PayPal Invoicing v2 (balance + optional tip line).
+- Checkout buttons may offer PayPal, Venmo, and Pay Later where the sandbox buyer is eligible.
+- Seller desk can export a disputes evidence pack (order / capture / auth / invoice ids, HMAC fingerprint, audit timeline) and tip out a contractor via PayPal Payouts (sandbox) when the merchant account allows it.
+
+## Credentials
+Sandbox buyer and seller desk login are listed only on https://serviceready.onrender.com/judges — never embed secrets here.
+
+## Built with
+PayPal Orders v2, Invoicing v2, Payments v2, Vault v3, Payouts, JS SDK v6, Agent Toolkit, signed webhooks · MCP · xAI Grok · AG Grid · Supabase · TanStack Start on Render

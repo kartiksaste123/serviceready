@@ -164,6 +164,29 @@ export const api = {
   /** AUTHORIZE deposits: capture the held funds when the seller starts work. */
   startWork: (id: string) =>
     m<QuoteDetail>(() => mock.getQuote(id), "POST", `/api/quotes/${enc(id)}/start-work`),
+  disputeEvidence: (id: string) =>
+    m<{
+      generated_at: string;
+      purpose: string;
+      booking: Record<string, unknown>;
+      paypal: Record<string, unknown>;
+      payments: unknown[];
+      timeline: unknown[];
+      markdown: string;
+    }>(() => mock.disputeEvidence(id), "GET", `/api/quotes/${enc(id)}/evidence`),
+  payoutContractor: (
+    id: string,
+    b: { receiver_email: string; amount_cents?: number; note?: string },
+  ) =>
+    m<{
+      ok: boolean;
+      batch_id?: string;
+      batch_status?: string;
+      deferred?: boolean;
+      message: string;
+      amount_cents?: number;
+      receiver_email?: string;
+    }>(() => mock.payoutContractor(id, b), "POST", `/api/quotes/${enc(id)}/payout`, b),
   deliver: (id: string) =>
     m<QuoteDetail>(() => mock.deliver(id), "POST", `/api/quotes/${enc(id)}/deliver`),
   refreshInvoice: (id: string) =>

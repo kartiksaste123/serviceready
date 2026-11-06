@@ -1,0 +1,106 @@
+{
+  "card_style": "a2a-style",
+  "note": "Shaped like an A2A agent card so agents can discover ServiceReady. Not a certified A2A implementation: agents reach this seller over MCP (Streamable HTTP), not A2A JSON-RPC.",
+  "name": "Maya Rao Studio — ServiceReady booking agent",
+  "description": "Book Maya Rao Studio (freelance brand design) through any MCP client. Paste-a-rate-card storefront: catalog prices are HMAC-signed, agents cannot invent or tamper with amounts. Create a spend-limited payment mandate, request a quote from published services, then mint a PayPal deposit approval link inside that mandate. Deposits are real PayPal sandbox Orders (CAPTURE or AUTHORIZE). Returning clients can Vault PayPal to the mandate for buyer-absent rebooking, still capped and revocable.",
+  "url": "https://serviceready.onrender.com/mcp/maya-rao-studio",
+  "preferredTransport": "MCP",
+  "additionalInterfaces": [
+    {
+      "url": "https://serviceready.onrender.com/mcp/maya-rao-studio",
+      "transport": "MCP"
+    },
+    {
+      "url": "https://serviceready.onrender.com/s/maya-rao-studio",
+      "transport": "HTTPS"
+    }
+  ],
+  "provider": {
+    "organization": "ServiceReady",
+    "url": "https://serviceready.onrender.com"
+  },
+  "version": "2026-11-06",
+  "documentationUrl": "https://serviceready.onrender.com/llms.txt",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "defaultInputModes": ["application/json"],
+  "defaultOutputModes": ["application/json"],
+  "skills": [
+    {
+      "id": "list_services",
+      "name": "List catalog services",
+      "description": "Published packages with catalog price, deposit %, and lead time. Amounts come only from the seller's rate card.",
+      "tags": ["catalog", "pricing"],
+      "examples": ["What logo packages do you offer?"]
+    },
+    {
+      "id": "request_quote",
+      "name": "Request a quote",
+      "description": "Create a quote for a named client. Totals and deposit are catalog-priced and HMAC-signed; agents cannot pass a price.",
+      "tags": ["pricing", "booking"],
+      "examples": ["Quote the Full Brand Kit for Sam, sam@example.com"]
+    },
+    {
+      "id": "payment_mandate",
+      "name": "Create / revoke a spend-limited mandate",
+      "description": "Hard USD spend limit + revocable key required before minting any PayPal deposit link.",
+      "tags": ["payments", "spending-limit", "human-approval"],
+      "examples": ["Create a mandate with spend_limit_usd 800"]
+    },
+    {
+      "id": "deposit_link",
+      "name": "Mint PayPal deposit link",
+      "description": "Create (or reuse) a PayPal Orders v2 deposit order inside the mandate and return the buyer approval URL. The agent never pays on the client's behalf.",
+      "tags": ["payments", "paypal", "human-approval"],
+      "examples": ["create_deposit_link with the mandate_key"]
+    },
+    {
+      "id": "vault_rebook",
+      "name": "Vault PayPal for rebooking",
+      "description": "save_paypal_for_mandate → pay_deposit_with_saved_paypal. Still capped by the mandate and revocable.",
+      "tags": ["payments", "vault"],
+      "examples": ["Save PayPal to this mandate for next time"]
+    },
+    {
+      "id": "cancellation_policy",
+      "name": "Read cancellation policy",
+      "description": "Structured free-cancel window and keep-% rules. Quote verbatim; the server enforces with PayPal void / partial capture / refund.",
+      "tags": ["policy"],
+      "examples": ["What's your cancellation policy?"]
+    }
+  ],
+  "tools": [
+    "list_services",
+    "get_service",
+    "get_cancellation_policy",
+    "request_quote",
+    "get_quote_status",
+    "create_payment_mandate",
+    "get_payment_mandate",
+    "revoke_payment_mandate",
+    "create_deposit_link",
+    "save_paypal_for_mandate",
+    "pay_deposit_with_saved_paypal"
+  ],
+  "auth": {
+    "type": "none",
+    "notes": "Public sandbox demo MCP — no API key. Money moves only after a human approves PayPal checkout (or a Vault token the human saved). Agents need a create_payment_mandate key before create_deposit_link."
+  },
+  "payment": {
+    "handler": "PayPal",
+    "flow": "human_approved_checkout",
+    "methods": ["PayPal", "Venmo", "PayPal Pay Later", "debit or credit card"],
+    "agent_can_pay_deposit": false,
+    "agent_can_pay": "within_mandate_spend_limit_via_vault_only",
+    "intents": ["CAPTURE", "AUTHORIZE"]
+  },
+  "discovery": {
+    "llms": "https://serviceready.onrender.com/llms.txt",
+    "judges": "https://serviceready.onrender.com/judges",
+    "health": "https://serviceready.onrender.com/api/health",
+    "repo": "https://github.com/kartiksaste123/serviceready"
+  }
+}

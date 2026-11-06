@@ -56,6 +56,8 @@ import { Route as ApiQuotesIdInvoiceRouteImport } from './routes/api.quotes.$id.
 import { Route as ApiQuotesIdRepliesRouteImport } from './routes/api.quotes.$id.replies'
 import { Route as ApiQuotesIdStartWorkRouteImport } from './routes/api.quotes.$id.start-work'
 import { Route as ApiQuotesIdTipRouteImport } from './routes/api.quotes.$id.tip'
+import { Route as ApiQuotesIdEvidenceRouteImport } from './routes/api.quotes.$id.evidence'
+import { Route as ApiQuotesIdPayoutRouteImport } from './routes/api.quotes.$id.payout'
 import { Route as ApiDemoQuotesIdPayBalanceRouteImport } from './routes/api.demo.quotes.$id.pay-balance'
 import { Route as ApiQuotesIdCollectionsRunRouteImport } from './routes/api.quotes.$id.collections.run'
 import { Route as ApiQuotesIdDepositCaptureRouteImport } from './routes/api.quotes.$id.deposit.capture'
@@ -296,6 +298,16 @@ const ApiQuotesIdTipRoute = ApiQuotesIdTipRouteImport.update({
   path: '/tip',
   getParentRoute: () => ApiQuotesIdRoute,
 } as any)
+const ApiQuotesIdEvidenceRoute = ApiQuotesIdEvidenceRouteImport.update({
+  id: '/evidence',
+  path: '/evidence',
+  getParentRoute: () => ApiQuotesIdRoute,
+} as any)
+const ApiQuotesIdPayoutRoute = ApiQuotesIdPayoutRouteImport.update({
+  id: '/payout',
+  path: '/payout',
+  getParentRoute: () => ApiQuotesIdRoute,
+} as any)
 const ApiDemoQuotesIdPayBalanceRoute =
   ApiDemoQuotesIdPayBalanceRouteImport.update({
     id: '/api/demo/quotes/$id/pay-balance',
@@ -368,6 +380,8 @@ export interface FileRoutesByFullPath {
   '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
   '/api/quotes/$id/start-work': typeof ApiQuotesIdStartWorkRoute
   '/api/quotes/$id/tip': typeof ApiQuotesIdTipRoute
+  '/api/quotes/$id/evidence': typeof ApiQuotesIdEvidenceRoute
+  '/api/quotes/$id/payout': typeof ApiQuotesIdPayoutRoute
   '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
   '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
   '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
@@ -420,6 +434,8 @@ export interface FileRoutesByTo {
   '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
   '/api/quotes/$id/start-work': typeof ApiQuotesIdStartWorkRoute
   '/api/quotes/$id/tip': typeof ApiQuotesIdTipRoute
+  '/api/quotes/$id/evidence': typeof ApiQuotesIdEvidenceRoute
+  '/api/quotes/$id/payout': typeof ApiQuotesIdPayoutRoute
   '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
   '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
   '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
@@ -474,6 +490,8 @@ export interface FileRoutesById {
   '/api/quotes/$id/replies': typeof ApiQuotesIdRepliesRoute
   '/api/quotes/$id/start-work': typeof ApiQuotesIdStartWorkRoute
   '/api/quotes/$id/tip': typeof ApiQuotesIdTipRoute
+  '/api/quotes/$id/evidence': typeof ApiQuotesIdEvidenceRoute
+  '/api/quotes/$id/payout': typeof ApiQuotesIdPayoutRoute
   '/api/demo/quotes/$id/pay-balance': typeof ApiDemoQuotesIdPayBalanceRoute
   '/api/quotes/$id/collections/run': typeof ApiQuotesIdCollectionsRunRoute
   '/api/quotes/$id/deposit/capture': typeof ApiQuotesIdDepositCaptureRoute
@@ -529,6 +547,8 @@ export interface FileRouteTypes {
     | '/api/quotes/$id/replies'
     | '/api/quotes/$id/start-work'
     | '/api/quotes/$id/tip'
+    | '/api/quotes/$id/evidence'
+    | '/api/quotes/$id/payout'
     | '/api/demo/quotes/$id/pay-balance'
     | '/api/quotes/$id/collections/run'
     | '/api/quotes/$id/deposit/capture'
@@ -581,6 +601,8 @@ export interface FileRouteTypes {
     | '/api/quotes/$id/replies'
     | '/api/quotes/$id/start-work'
     | '/api/quotes/$id/tip'
+    | '/api/quotes/$id/evidence'
+    | '/api/quotes/$id/payout'
     | '/api/demo/quotes/$id/pay-balance'
     | '/api/quotes/$id/collections/run'
     | '/api/quotes/$id/deposit/capture'
@@ -634,6 +656,8 @@ export interface FileRouteTypes {
     | '/api/quotes/$id/replies'
     | '/api/quotes/$id/start-work'
     | '/api/quotes/$id/tip'
+    | '/api/quotes/$id/evidence'
+    | '/api/quotes/$id/payout'
     | '/api/demo/quotes/$id/pay-balance'
     | '/api/quotes/$id/collections/run'
     | '/api/quotes/$id/deposit/capture'
@@ -1001,6 +1025,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiQuotesIdTipRouteImport
       parentRoute: typeof ApiQuotesIdRoute
     }
+    '/api/quotes/$id/evidence': {
+      id: '/api/quotes/$id/evidence'
+      path: '/evidence'
+      fullPath: '/api/quotes/$id/evidence'
+      preLoaderRoute: typeof ApiQuotesIdEvidenceRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
+    '/api/quotes/$id/payout': {
+      id: '/api/quotes/$id/payout'
+      path: '/payout'
+      fullPath: '/api/quotes/$id/payout'
+      preLoaderRoute: typeof ApiQuotesIdPayoutRouteImport
+      parentRoute: typeof ApiQuotesIdRoute
+    }
     '/api/demo/quotes/$id/pay-balance': {
       id: '/api/demo/quotes/$id/pay-balance'
       path: '/api/demo/quotes/$id/pay-balance'
@@ -1077,6 +1115,8 @@ interface ApiQuotesIdRouteChildren {
   ApiQuotesIdRepliesRoute: typeof ApiQuotesIdRepliesRoute
   ApiQuotesIdStartWorkRoute: typeof ApiQuotesIdStartWorkRoute
   ApiQuotesIdTipRoute: typeof ApiQuotesIdTipRoute
+  ApiQuotesIdEvidenceRoute: typeof ApiQuotesIdEvidenceRoute
+  ApiQuotesIdPayoutRoute: typeof ApiQuotesIdPayoutRoute
   ApiQuotesIdCollectionsRunRoute: typeof ApiQuotesIdCollectionsRunRoute
   ApiQuotesIdDepositCaptureRoute: typeof ApiQuotesIdDepositCaptureRoute
   ApiQuotesIdDepositOrderRoute: typeof ApiQuotesIdDepositOrderRoute
@@ -1089,6 +1129,8 @@ const ApiQuotesIdRouteChildren: ApiQuotesIdRouteChildren = {
   ApiQuotesIdRepliesRoute: ApiQuotesIdRepliesRoute,
   ApiQuotesIdStartWorkRoute: ApiQuotesIdStartWorkRoute,
   ApiQuotesIdTipRoute: ApiQuotesIdTipRoute,
+  ApiQuotesIdEvidenceRoute: ApiQuotesIdEvidenceRoute,
+  ApiQuotesIdPayoutRoute: ApiQuotesIdPayoutRoute,
   ApiQuotesIdCollectionsRunRoute: ApiQuotesIdCollectionsRunRoute,
   ApiQuotesIdDepositCaptureRoute: ApiQuotesIdDepositCaptureRoute,
   ApiQuotesIdDepositOrderRoute: ApiQuotesIdDepositOrderRoute,

@@ -662,3 +662,93 @@ export async function refundCapture(opts: {
   return { id: result.id, status: result.status };
 }
 
+
+/**
+ * Payouts API (sandbox) — tip out a contractor / freelancer from the seller's
+ * PayPal balance. Uses POST /v1/payments/payouts. Some sandbox merchant countries
+ * return PAYOUT_NOT_AVAILABLE; callers should surface that clearly.
+ */
+export async function createPayout(opts: {
+  amountCents: number;
+  currency?: string;
+  receiverEmail: string;
+  note?: string;
+  emailSubject?: string;
+  senderBatchId: string;
+  senderItemId?: string;
+  requestId?: string;
+}): Promise<{
+  batchId: string;
+  batchStatus: string;
+  payoutItemId?: string;
+  raw: unknown;
+}> {
+  const value = centsToUsd(opts.amountCents);
+  const currency = opts.currency ?? "USD";
+  const body = {
+    sender_batch_header: {
+      sender_batch_id: opts.senderBatchId.slice(0, 256),
+      email_subject: (opts.emailSubject ?? "ServiceReady contractor tip-out").slice(0, 255),
+      email_message: (opts.note ?? "Sandbox tip-out from ServiceReady").slice(0, 1000),
+    },
+    items: [
+      {
+        recipient_type: "EMAIL",
+        amount: { value, currency },
+        note: (opts.note ?? "ServiceReady contractor tip-out").slice(0, 1000),
+        sender_item_id: (opts.senderItemId ?? opts.senderBatchId).slice(0, 127),
+        receiver: opts.receiverEmail,
+      },
+    ],
+  };
+  const r = await paypalFetch<{
+    batch_header?: {
+      payout_batch_id?: string;
+      batch_status?: string;
+    };
+    items?: Array<{ payout_item_id?: string }>;
+  }>("POST", "/v1/payments/payouts", body, {
+    "PayPal-Request-Id": opts.requestId ?? opts.senderBatchId,
+  });
+  return {
+    batchId: r.batch_header?.payout_batch_id ?? "",
+    batchStatus: r.batch_header?.batch_status ?? "UNKNOWN",
+    ...(r.items?.[0]?.payout_item_id ? { payoutItemId: r.items[0].payout_item_id } : {}),
+    raw: r,
+  };
+}
+
+export async function getPayoutBatch(batchId: string): Promise<{
+  batchId: string;
+  batchStatus: string;
+  items: Array<{
+    payoutItemId?: string;
+    transactionStatus?: string;
+    receiver?: string;
+    amountCents?: number;
+  }>;
+}> {
+  const r = await paypalFetch<{
+    batch_header?: { payout_batch_id?: string; batch_status?: string };
+    items?: Array<{
+      payout_item_id?: string;
+      transaction_status?: string;
+      payout_item?: {
+        receiver?: string;
+        amount?: { value?: string };
+      };
+    }>;
+  }>("GET", `/v1/payments/payouts/${encodeURIComponent(batchId)}`);
+  return {
+    batchId: r.batch_header?.payout_batch_id ?? batchId,
+    batchStatus: r.batch_header?.batch_status ?? "UNKNOWN",
+    items: (r.items ?? []).map((it) => ({
+      ...(it.payout_item_id ? { payoutItemId: it.payout_item_id } : {}),
+      ...(it.transaction_status ? { transactionStatus: it.transaction_status } : {}),
+      ...(it.payout_item?.receiver ? { receiver: it.payout_item.receiver } : {}),
+      ...(it.payout_item?.amount?.value
+        ? { amountCents: Math.round(parseFloat(it.payout_item.amount.value) * 100) }
+        : {}),
+    })),
+  };
+}

@@ -1452,3 +1452,71 @@ export async function reset() {
   save();
   return { ok: true as const };
 }
+
+export async function disputeEvidence(id: string) {
+  await wait();
+  const d = await getQuote(id);
+  const q = d.quote;
+  const order_ids = d.payments.map((p) => p.paypal_order_id).filter(Boolean) as string[];
+  const capture_ids = d.payments.map((p) => p.paypal_capture_id).filter(Boolean) as string[];
+  const authorization_ids = d.payments
+    .map((p) => p.paypal_authorization_id)
+    .filter(Boolean) as string[];
+  const invoice_ids = d.payments.map((p) => p.paypal_invoice_id).filter(Boolean) as string[];
+  const markdown = [
+    `# ServiceReady dispute evidence — booking ${q.id}`,
+    `Status: ${q.status}`,
+    `Orders: ${order_ids.join(", ") || "—"}`,
+    `Captures: ${capture_ids.join(", ") || "—"}`,
+  ].join("\n");
+  return {
+    generated_at: new Date().toISOString(),
+    purpose: "paypal_dispute_evidence",
+    booking: {
+      quote_id: q.id,
+      status: q.status,
+      service_title: q.service_title,
+      client_name: q.client_name,
+      client_email: q.client_email,
+      total_cents: q.total_cents,
+      deposit_cents: q.deposit_cents,
+      balance_cents: q.balance_cents,
+      tip_cents: q.tip_cents ?? 0,
+      created_at: q.created_at,
+    },
+    paypal: {
+      order_ids,
+      capture_ids,
+      authorization_ids,
+      invoice_ids,
+      invoice_urls: d.payments.map((p) => p.invoice_url).filter(Boolean),
+      fingerprint_shorts: d.payments.map((p) => p.fingerprint_short).filter(Boolean),
+    },
+    payments: d.payments,
+    timeline: d.events.map((e) => ({
+      at: e.created_at,
+      actor: e.actor,
+      kind: e.kind,
+      tool: e.tool,
+      text: e.text,
+    })),
+    markdown,
+  };
+}
+export async function payoutContractor(
+  id: string,
+  b: { receiver_email: string; amount_cents?: number; note?: string },
+) {
+  await wait();
+  const d = await getQuote(id);
+  if (d.quote.status !== "paid") throw new Error("Booking must be paid before tip-out");
+  const amount = b.amount_cents ?? Math.min(d.quote.deposit_cents, 500);
+  return {
+    ok: true,
+    batch_id: `MOCK-PAYOUT-${id.slice(0, 8)}`,
+    batch_status: "PENDING",
+    amount_cents: amount,
+    receiver_email: b.receiver_email,
+    message: `Mock payout ${money(amount)} → ${b.receiver_email}`,
+  };
+}

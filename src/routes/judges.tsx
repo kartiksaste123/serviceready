@@ -45,7 +45,7 @@ const STEPS: Array<{ title: string; body: string; to: string; cta: string }> = [
   },
   {
     title: "Pay or authorize the deposit",
-    body: "PayPal JS SDK v6 popup with the sandbox buyer below. ≥ $500 deposits are AUTHORIZED (held); smaller ones are captured. Amounts are HMAC-signed and the order fingerprint is re-checked against PayPal before capture.",
+    body: "PayPal JS SDK v6 popup with the sandbox buyer below (Venmo / Pay Later appear when eligible). ≥ $500 deposits are AUTHORIZED (held); smaller ones are captured. Amounts are HMAC-signed and the order fingerprint is re-checked against PayPal before capture.",
     to: `/s/${SLUG}?judge=1`,
     cta: "Storefront",
   },
@@ -106,9 +106,10 @@ function JudgesPage() {
                 Judge path · about 3 minutes
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-muted-foreground sm:text-base">
-                Deposit-before-work storefront for freelancers. AI books; PayPal holds or captures
-                the deposit; a deterministic policy decides refunds; nobody — human or agent — can
-                change an amount after it's priced.
+                Unique angle: paste a rate card → agent-bookable storefront where catalog amounts
+                are HMAC-signed and agents cannot invent or tamper with prices. AI books inside a
+                spend mandate; PayPal holds or captures the deposit; a deterministic policy decides
+                refunds.
               </p>
             </div>
             <div>
@@ -142,6 +143,17 @@ function JudgesPage() {
                 </a>
                 <a href="/api/health" target="_blank" rel="noreferrer" className="btn-glass btn-sm">
                   /api/health
+                </a>
+                <a
+                  href="/.well-known/agent-card.json"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-glass btn-sm"
+                >
+                  agent-card.json
+                </a>
+                <a href="/llms.txt" target="_blank" rel="noreferrer" className="btn-glass btn-sm">
+                  llms.txt
                 </a>
               </div>
             </div>
@@ -276,14 +288,14 @@ function JudgesPage() {
                 What to look for
               </h2>
               <ul className="mt-2 grid gap-x-6 gap-y-1.5 text-muted-foreground sm:grid-cols-2 lg:grid-cols-1">
+                <li>Paste rate card → agent storefront (amounts agents can&apos;t tamper with)</li>
                 <li>PayPal Orders v2 CAPTURE + AUTHORIZE, JS SDK v6</li>
+                <li>Venmo / Pay Later when the sandbox buyer is eligible</li>
                 <li>Invoicing v2 final bill with tip line</li>
+                <li>Dispute evidence pack + sandbox Payouts tip-out on paid bookings</li>
                 <li>Cancel policy → void / partial capture / refund</li>
-                <li>Agent Toolkit get_invoice · create_refund · reminders</li>
-                <li>Signed webhooks + “Check PayPal” fallback</li>
-                <li>MCP spend mandates, Vault rebooking</li>
-                <li>HMAC-signed quotes + order fingerprint</li>
-                <li>PayPal-Request-Id on every money write</li>
+                <li>Agent Toolkit · signed webhooks · Check PayPal</li>
+                <li>MCP mandates, Vault, /.well-known/agent-card.json + /llms.txt</li>
               </ul>
             </section>
           </div>

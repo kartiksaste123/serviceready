@@ -18,20 +18,20 @@ import { CheckoutPreview, DeskPreview } from "@/components/marketing/ProductPrev
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ServiceReady — Get booked by AI agents and paid before you start" },
+      { title: "ServiceReady — Paste a rate card → agent-bookable storefront" },
       {
         name: "description",
         content:
-          "Deposit-before-work merchant storefront: AI quotes from your catalog, PayPal takes the deposit first, and PayPal evidence beats client claims.",
+          "Paste your rate card. Get an agent-bookable storefront where catalog amounts are HMAC-signed — AI assistants cannot invent or tamper with prices. PayPal takes the deposit before work starts.",
       },
       {
         property: "og:title",
-        content: "ServiceReady — Get booked by AI agents and paid before you start",
+        content: "ServiceReady — Paste a rate card → agent-bookable storefront",
       },
       {
         property: "og:description",
         content:
-          "Agent-ready services, deposits before work, and human-approved payment follow-up.",
+          "Agent-bookable storefront with PayPal deposits. Amounts agents cannot tamper with.",
       },
       { property: "og:type", content: "website" },
       {
@@ -165,14 +165,15 @@ function Home() {
           <div className={`${container} relative pb-16 pt-14 text-center sm:pb-24 sm:pt-20`}>
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs">
               <span className="size-1.5 rounded-full bg-brand" aria-hidden="true" />
-              Bookings and payments, powered by PayPal + AI
+              Paste a rate card → agent storefront · PayPal deposits
             </span>
             <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-6xl">
-              Get booked online. Get paid before you start.
+              Paste a rate card. Get booked by AI — amounts they can&apos;t tamper with.
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
-              A booking page that clients — and their AI assistants — can use. They pay a PayPal
-              deposit up front, and you approve every reminder.
+              ServiceReady turns your prices into an agent-bookable storefront. Catalog amounts are
+              HMAC-signed, agents book only inside a spend limit, and PayPal takes the deposit
+              before work starts.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to="/onboard" className="btn-mint w-full px-6 sm:w-auto">

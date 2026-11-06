@@ -210,6 +210,33 @@ export async function dispatchApi(request: Request): Promise<Response> {
         return json(await live.setTip(decodeURIComponent(m[1]!), body ?? {}));
       }
     }
+    {
+      const m = path.match(/^\/api\/quotes\/([^/]+)\/evidence$/);
+      if (m && method === "GET") {
+        const pack = await live.disputeEvidence(decodeURIComponent(m[1]!), request);
+        if (url.searchParams.get("format") === "md") {
+          return new Response(pack.markdown, {
+            status: 200,
+            headers: {
+              "content-type": "text/markdown; charset=utf-8",
+              "content-disposition": `attachment; filename="serviceready-evidence-${m[1]!.slice(0, 8)}.md"`,
+            },
+          });
+        }
+        return json(pack);
+      }
+    }
+    {
+      const m = path.match(/^\/api\/quotes\/([^/]+)\/payout$/);
+      if (m && method === "POST") {
+        const body = await readJson<{
+          receiver_email?: unknown;
+          amount_cents?: unknown;
+          note?: unknown;
+        }>(request);
+        return json(await live.payoutContractor(decodeURIComponent(m[1]!), body ?? {}, request));
+      }
+    }
     if ((method === "GET" || method === "POST") && path === "/api/judges/tamper-demo") {
       const qid = url.searchParams.get("quote_id") ?? undefined;
       return json(await live.tamperDemo(qid || undefined));

@@ -25,7 +25,7 @@
 **On screen:** Landing page. Zoom on headline / “Try the demo storefront”. Optional lower-third: `ServiceReady · PayPal AI Hackathon 2026`.
 
 **Say:**  
-“Solo freelancers start work on trust and chase invoices for weeks. ServiceReady is an agent-ready storefront: **AI** helps buyers book, and **PayPal** takes a deposit before work starts — client claims are never trusted over PayPal evidence.”
+“Solo freelancers start work on trust and chase invoices for weeks. ServiceReady’s unique angle: **paste a rate card** and get an **agent-bookable storefront** where amounts AI assistants **cannot tamper with**. **PayPal** takes the deposit before work — client claims are never trusted over PayPal evidence.”
 
 **Cut to:** Landing CTA **Judge demo · 3 min** → storefront `/s/maya-rao-studio?judge=1` → **Send booking request**.
 
@@ -57,7 +57,7 @@
 **On screen:** Quote page `/q/...`. PayPal **JS SDK v6** button (caption shows `SDK v6`). Overlay: `PayPal Orders v2 · JS SDK v6 · sandbox`. For a Full Brand Kit ($600 deposit) the page says **Authorize** — PayPal holds the funds until work starts.
 
 **Say:**  
-“Before any work starts, I pay a deposit with **PayPal Orders v2** — real sandbox, not a mock.”
+“Before any work starts, I pay a deposit with **PayPal Orders v2** — real sandbox, not a mock. Venmo and Pay Later show up when the buyer is eligible.”
 
 **Do:** Click PayPal button → sandbox popup → log in as sandbox buyer → approve.
 
@@ -106,12 +106,12 @@
 **Say:**  
 “Cancellations follow the seller’s policy — deterministic, not AI. PayPal voids, partially captures or refunds, and the audit trail shows which rule fired.”
 
-### Optional 8s — Tamper test
+### Optional 8s — Tamper test + evidence pack
 
-**On screen:** `/judges` → **Run tamper test** → four green “Blocked” rows.
+**On screen:** `/judges` → **Run tamper test** → four green “Blocked” rows. Optional: desk → **Evidence pack** downloads Markdown with PayPal ids + HMAC fingerprint for a dispute.
 
 **Say:**  
-“Try to make it a dollar: agent price fields are rejected, the quote is HMAC-signed, and the PayPal order fingerprint is re-checked before capture.”
+“Try to make it a dollar: agent price fields are rejected, the quote is HMAC-signed, and the PayPal order fingerprint is re-checked before capture. For disputes, one click exports the evidence pack.”
 
 ### 2:20–2:35 — MCP mandate (10–15s, optional if tight)
 
@@ -130,8 +130,8 @@
 ServiceReady
 AI (xAI Grok): catalog · agent chat · collections drafts
 Agents: MCP mandate → create_deposit_link · Vault rebooking · price-override guardrail
-PayPal: Orders v2 capture/authorize · JS SDK v6 · Invoicing v2 (+tip) · Agent Toolkit · signed Webhooks
-Rules: cancel/no-show policy → void · partial capture · refund · HMAC-signed amounts
+PayPal: Orders v2 capture/authorize · JS SDK v6 (+Venmo/Pay Later) · Invoicing v2 (+tip) · Payouts · Agent Toolkit · signed Webhooks
+Rules: cancel/no-show · dispute evidence pack · HMAC-signed amounts · agent-card + llms.txt
 Supabase + TanStack Start on Render · MIT
 Demo: serviceready.onrender.com
 Repo: github.com/kartiksaste123/serviceready

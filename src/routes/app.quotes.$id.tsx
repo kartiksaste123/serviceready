@@ -14,6 +14,8 @@ import {
   ShieldCheck,
   ShieldAlert,
   XCircle,
+  FileDown,
+  HandCoins,
 } from "lucide-react";
 import {
   decideCancel,
@@ -98,6 +100,8 @@ function Detail() {
   const [confirm, setConfirm] = useState<null | "deliver" | "cancel">(null);
   const [reason, setReason] = useState<CancelReason>("client_cancel");
   const [paste, setPaste] = useState("");
+  const [payoutEmail, setPayoutEmail] = useState("");
+  const [payoutOpen, setPayoutOpen] = useState(false);
   const [run, setRun] = useState<AgentRun | null>(null);
   useEffect(() => {
     setConfirm(null);
@@ -167,6 +171,32 @@ function Detail() {
     onSuccess: (d) => {
       applyDetail(d);
       toast.success("Checked with PayPal — statuses are up to date");
+    },
+  });
+  const evidence = useMutation({
+    mutationFn: () => api.disputeEvidence(id),
+    onSuccess: (pack) => {
+      const blob = new Blob([pack.markdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `serviceready-evidence-${id.slice(0, 8)}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Dispute evidence pack downloaded (Markdown)");
+    },
+  });
+  const payout = useMutation({
+    mutationFn: () =>
+      api.payoutContractor(id, {
+        receiver_email: payoutEmail.trim(),
+        amount_cents: Math.min(data?.quote.deposit_cents ?? 500, 500),
+      }),
+    onSuccess: (r) => {
+      setPayoutOpen(false);
+      refreshAll();
+      if (r.ok) toast.success(r.message);
+      else toast.message(r.message);
     },
   });
 
@@ -271,6 +301,34 @@ function Detail() {
             )}
             Check PayPal
           </button>
+          <button
+            type="button"
+            className="btn-glass btn-sm"
+            disabled={evidence.isPending}
+            onClick={() => evidence.mutate()}
+            title="Download PayPal dispute evidence: order/capture/auth/invoice ids, HMAC fingerprint, audit timeline"
+          >
+            {evidence.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <FileDown className="size-3.5" aria-hidden="true" />
+            )}
+            Evidence pack
+          </button>
+          {q.status === "paid" && (
+            <button
+              type="button"
+              className="btn-glass btn-sm"
+              onClick={() => {
+                setPayoutEmail((e) => e || "sb-flkqr53721283@personal.example.com");
+                setPayoutOpen(true);
+              }}
+              title="PayPal Payouts sandbox — tip out a contractor"
+            >
+              <HandCoins className="size-3.5" aria-hidden="true" />
+              Tip out (Payouts)
+            </button>
+          )}
           {(q.status === "quoted" || q.status === "deposit_paid" || q.status === "delivered") && (
             <button
               type="button"
@@ -701,6 +759,44 @@ function Detail() {
                 : bill.total_cents > 0
                   ? `Send ${money(bill.total_cents)} invoice`
                   : "Close booking"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={payoutOpen} onOpenChange={setPayoutOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tip out via PayPal Payouts</AlertDialogTitle>
+            <AlertDialogDescription>
+              Sends a sandbox PayPal Payouts batch (default $5 or the deposit, whichever is smaller)
+              to a contractor email. If this sandbox merchant&apos;s country blocks Payouts, the API
+              still runs and returns a clear deferred message.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <label className="block text-sm">
+            Contractor PayPal email
+            <input
+              className="field mt-1 font-mono text-xs"
+              value={payoutEmail}
+              onChange={(e) => setPayoutEmail(e.target.value)}
+              placeholder="sandbox-contractor@example.com"
+            />
+          </label>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="btn-mint"
+              disabled={payout.isPending || !payoutEmail.trim()}
+              onClick={(e) => {
+                e.preventDefault();
+                payout.mutate();
+              }}
+            >
+              {payout.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : null}
+              Send payout
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

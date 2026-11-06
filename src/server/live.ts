@@ -994,6 +994,257 @@ export async function setTip(
   return detail(id);
 }
 
+export type DisputeEvidencePack = {
+  generated_at: string;
+  purpose: string;
+  booking: {
+    quote_id: string;
+    status: string;
+    service_title: string;
+    client_name: string;
+    client_email: string;
+    total_cents: number;
+    deposit_cents: number;
+    balance_cents: number;
+    tip_cents: number;
+    deposit_intent?: string;
+    integrity?: string;
+    created_at: string;
+    deposit_paid_at?: string | null;
+    work_started_at?: string | null;
+  };
+  paypal: {
+    order_ids: string[];
+    capture_ids: string[];
+    authorization_ids: string[];
+    invoice_ids: string[];
+    invoice_urls: string[];
+    fingerprint_shorts: string[];
+  };
+  payments: Payment[];
+  timeline: Array<{
+    at: string;
+    actor: string;
+    kind: string;
+    tool?: string;
+    text?: string;
+    input?: unknown;
+    output?: unknown;
+  }>;
+  markdown: string;
+};
+
+/** Seller/judges evidence pack for a PayPal dispute — JSON + Markdown from the booking record. */
+export async function disputeEvidence(
+  id: string,
+  request?: Request,
+): Promise<DisputeEvidencePack> {
+  if (request) await assertOwnsQuote(request, id);
+  const d = await detail(id);
+  const q = d.quote;
+  const order_ids = [...new Set(d.payments.map((p) => p.paypal_order_id).filter(Boolean))] as string[];
+  const capture_ids = [...new Set(d.payments.map((p) => p.paypal_capture_id).filter(Boolean))] as string[];
+  const authorization_ids = [
+    ...new Set(d.payments.map((p) => p.paypal_authorization_id).filter(Boolean)),
+  ] as string[];
+  const invoice_ids = [...new Set(d.payments.map((p) => p.paypal_invoice_id).filter(Boolean))] as string[];
+  const invoice_urls = [...new Set(d.payments.map((p) => p.invoice_url).filter(Boolean))] as string[];
+  const fingerprint_shorts = [
+    ...new Set(d.payments.map((p) => p.fingerprint_short).filter(Boolean)),
+  ] as string[];
+  const timeline = d.events.map((e) => ({
+    at: e.created_at,
+    actor: e.actor,
+    kind: e.kind,
+    ...(e.tool ? { tool: e.tool } : {}),
+    ...(e.text ? { text: e.text } : {}),
+    ...(e.input !== undefined ? { input: e.input } : {}),
+    ...(e.output !== undefined ? { output: e.output } : {}),
+  }));
+  const lines = [
+    `# ServiceReady dispute evidence — booking ${q.id}`,
+    ``,
+    `Generated: ${new Date().toISOString()}`,
+    `Purpose: Answer a PayPal CUSTOMER.DISPUTE with catalog-priced amounts, PayPal ids, HMAC fingerprints, and the audit timeline.`,
+    ``,
+    `## Booking`,
+    `- Service: ${q.service_title}`,
+    `- Client: ${q.client_name} <${q.client_email}>`,
+    `- Status: ${q.status}`,
+    `- Total: ${money(q.total_cents)} · Deposit: ${money(q.deposit_cents)} · Balance: ${money(q.balance_cents)} · Tip: ${money(q.tip_cents ?? 0)}`,
+    `- Deposit intent: ${q.deposit_intent ?? "CAPTURE"}`,
+    `- Integrity: ${q.integrity ?? "unsigned"}`,
+    `- Created: ${q.created_at}`,
+    `- Deposit paid at: ${q.deposit_paid_at ?? "—"}`,
+    `- Work started at: ${q.work_started_at ?? "—"}`,
+    ``,
+    `## PayPal identifiers`,
+    `- Order ids: ${order_ids.join(", ") || "—"}`,
+    `- Capture ids: ${capture_ids.join(", ") || "—"}`,
+    `- Authorization ids: ${authorization_ids.join(", ") || "—"}`,
+    `- Invoice ids: ${invoice_ids.join(", ") || "—"}`,
+    `- Invoice URLs: ${invoice_urls.join(", ") || "—"}`,
+    `- Order fingerprint prefixes (HMAC quote+amount+currency+intent): ${fingerprint_shorts.join(", ") || "—"}`,
+    ``,
+    `## Payments`,
+  ];
+  for (const p of d.payments) {
+    lines.push(
+      `- ${p.kind} · ${p.status} · ${money(p.amount_cents)}` +
+        (p.paypal_order_id ? ` · order ${p.paypal_order_id}` : "") +
+        (p.paypal_capture_id ? ` · capture ${p.paypal_capture_id}` : "") +
+        (p.paypal_authorization_id ? ` · auth ${p.paypal_authorization_id}` : "") +
+        (p.paypal_invoice_id ? ` · invoice ${p.paypal_invoice_id}` : "") +
+        (p.fingerprint_short ? ` · fp ${p.fingerprint_short}…` : ""),
+    );
+  }
+  lines.push("", "## Audit timeline");
+  for (const e of timeline) {
+    lines.push(
+      `- ${e.at} · ${e.actor}/${e.kind}${e.tool ? ` · ${e.tool}` : ""}${e.text ? ` — ${e.text}` : ""}`,
+    );
+  }
+  lines.push(
+    "",
+    "## Notes for PayPal disputes",
+    "- Amounts were priced from the published catalog and HMAC-signed; capture/authorize re-checks the order fingerprint against PayPal.",
+    "- Agents cannot set prices; money guardrails reject overrides into the audit log.",
+    "- Status changes only after PayPal evidence (webhooks or Check PayPal re-read).",
+  );
+  return {
+    generated_at: new Date().toISOString(),
+    purpose: "paypal_dispute_evidence",
+    booking: {
+      quote_id: q.id,
+      status: q.status,
+      service_title: q.service_title,
+      client_name: q.client_name,
+      client_email: q.client_email,
+      total_cents: q.total_cents,
+      deposit_cents: q.deposit_cents,
+      balance_cents: q.balance_cents,
+      tip_cents: q.tip_cents ?? 0,
+      ...(q.deposit_intent ? { deposit_intent: q.deposit_intent } : {}),
+      ...(q.integrity ? { integrity: q.integrity } : {}),
+      created_at: q.created_at,
+      deposit_paid_at: q.deposit_paid_at ?? null,
+      work_started_at: q.work_started_at ?? null,
+    },
+    paypal: {
+      order_ids,
+      capture_ids,
+      authorization_ids,
+      invoice_ids,
+      invoice_urls,
+      fingerprint_shorts,
+    },
+    payments: d.payments,
+    timeline,
+    markdown: lines.join("\n"),
+  };
+}
+
+/**
+ * Sandbox Payouts — tip out a contractor from the seller's PayPal balance after a booking is paid.
+ * Some sandbox merchant countries return PAYOUT_NOT_AVAILABLE; we surface that clearly.
+ */
+export async function payoutContractor(
+  id: string,
+  body: { receiver_email?: unknown; amount_cents?: unknown; note?: unknown },
+  request?: Request,
+): Promise<{
+  ok: boolean;
+  batch_id?: string;
+  batch_status?: string;
+  payout_item_id?: string;
+  amount_cents?: number;
+  receiver_email?: string;
+  deferred?: boolean;
+  message: string;
+}> {
+  const { quote: q, seller } = await assertOwnsQuote(request, id);
+  if (q.status !== "paid") {
+    throw new HttpError("Contractor tip-out is available after the booking is paid in full", 400);
+  }
+  const receiver = typeof body.receiver_email === "string" ? body.receiver_email.trim() : "";
+  if (!receiver || !isEmail(receiver)) {
+    throw new HttpError("receiver_email must be a valid PayPal (sandbox) email", 400);
+  }
+  const amountCents =
+    typeof body.amount_cents === "number" && Number.isFinite(body.amount_cents)
+      ? Math.round(body.amount_cents)
+      : Math.min(q.deposit_cents, 500); // default: small tip-out, max $5 demo
+  if (amountCents < 100 || amountCents > q.total_cents) {
+    throw new HttpError("amount_cents must be between $1.00 and the booking total", 400);
+  }
+  const note =
+    typeof body.note === "string" && body.note.trim()
+      ? body.note.trim().slice(0, 200)
+      : `ServiceReady tip-out for booking ${q.id.slice(0, 8)} (${q.service_title})`;
+  const senderBatchId = `sr-payout-${q.id.slice(0, 8)}-${Date.now()}`;
+  try {
+    const r = await paypal.createPayout({
+      amountCents,
+      receiverEmail: receiver,
+      note,
+      emailSubject: `Tip-out from ${seller.name}`,
+      senderBatchId,
+      senderItemId: `quote-${q.id.slice(0, 12)}`,
+      requestId: senderBatchId,
+    });
+    await pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "seller",
+      kind: "tool_call",
+      tool: "paypal.payouts.create",
+      input: { receiver_email: receiver, amount_cents: amountCents },
+      output: {
+        batch_id: r.batchId,
+        batch_status: r.batchStatus,
+        payout_item_id: r.payoutItemId ?? null,
+      },
+      text: `PayPal Payouts batch ${r.batchId || "(pending)"} · ${money(amountCents)} → ${receiver}`,
+    });
+    return {
+      ok: true,
+      batch_id: r.batchId,
+      batch_status: r.batchStatus,
+      ...(r.payoutItemId ? { payout_item_id: r.payoutItemId } : {}),
+      amount_cents: amountCents,
+      receiver_email: receiver,
+      message: `Payout submitted (${r.batchStatus}). Sandbox may take a moment to credit ${receiver}.`,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "PayPal Payouts failed";
+    const deferred = /PAYOUT_NOT_AVAILABLE|not allowed to send this payout|PERMISSION_DENIED|not.*enabled/i.test(
+      msg,
+    );
+    await pushEvent({
+      quote_id: id,
+      seller_id: q.seller_id,
+      actor: "seller",
+      kind: "tool_call",
+      tool: "paypal.payouts.create",
+      input: { receiver_email: receiver, amount_cents: amountCents },
+      output: { error: msg, deferred },
+      text: deferred
+        ? `PayPal Payouts unavailable for this sandbox merchant (${msg}) — code path is live; enable Payouts on a US sandbox business account to demo money movement.`
+        : `PayPal Payouts failed: ${msg}`,
+    }).catch(() => undefined);
+    if (deferred) {
+      return {
+        ok: false,
+        deferred: true,
+        amount_cents: amountCents,
+        receiver_email: receiver,
+        message: `Sandbox merchant cannot send Payouts (${msg}). The /v1/payments/payouts code path is wired; use a Payouts-enabled US sandbox business app to move funds.`,
+      };
+    }
+    throw e instanceof HttpError ? e : new HttpError(msg, 502);
+  }
+}
+
 /**
  * "Check PayPal" fallback: if a webhook was missed, re-read open deposit orders from PayPal and
  * finish the capture/authorization server-side. Idempotent; PayPal is the source of truth.
@@ -2596,6 +2847,10 @@ export async function health() {
       "HMAC-signed quote amounts + order fingerprint re-checked against PayPal before capture",
     idempotency: "PayPal-Request-Id on every money write",
     webhook_fallback: "Check PayPal re-reads open orders/invoices",
+    venmo_paylater: "JS SDK enable-funding=venmo,paylater (eligible buyers)",
+    dispute_evidence: "GET /api/quotes/:id/evidence → JSON + Markdown pack",
+    payouts: "POST /api/quotes/:id/payout → PayPal Payouts sandbox tip-out",
+    agent_discovery: "/.well-known/agent-card.json + /llms.txt",
   };
   return out;
 }

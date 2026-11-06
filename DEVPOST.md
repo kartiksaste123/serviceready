@@ -12,14 +12,15 @@ ServiceReady
 
 ## Tagline (≤60 characters)
 
-PayPal evidence first; AI books within spend limits
+Paste a rate card → agent storefront agents can't alter
 
-_(51 characters)_
+_(56 characters)_
 
 Alternate options if the form rejects punctuation:
 
+- Rate card in; agent-bookable PayPal storefront out _(52)_
+- PayPal evidence first; AI books within spend limits _(51)_
 - Agent storefronts with PayPal deposits before work _(51)_
-- Freelancer storefront: AI quotes, PayPal deposits _(49)_
 
 ---
 
@@ -29,11 +30,13 @@ Paste the Markdown below into the Devpost **Description** field.
 
 ### The problem
 
-Solo freelancers lose hours chasing invoices and start work on trust. Clients ghost after a vague “yes,” deposits never land, and “I already paid” emails have no source of truth. ServiceReady is a **deposit-before-work merchant storefront**: AI quotes from your catalog (never invents prices), **PayPal evidence beats client claims**, and outside agents can only mint deposit links inside a **revocable spend-limited mandate**.
+Solo freelancers lose hours chasing invoices and start work on trust. Clients ghost after a vague “yes,” deposits never land, and “I already paid” emails have no source of truth. AI booking agents make it worse if they can invent prices.
+
+**Unique angle:** paste a messy rate card → get an **agent-bookable storefront** where catalog amounts are **HMAC-signed** and **agents cannot invent or tamper with prices**. Deposits are real PayPal sandbox Orders; **PayPal evidence beats client claims**; outside agents only mint deposit links inside a **revocable spend-limited mandate**.
 
 ### What it does
 
-1. **AI catalog parse** — Paste a messy rate card. A server-side **xAI/Grok** (OpenAI-compatible) model extracts services, prices, and deposit rules with validation guardrails.
+1. **AI catalog parse** — Paste a messy rate card. A server-side **xAI/Grok** (OpenAI-compatible) model extracts services, prices, and deposit rules with validation guardrails — that becomes the only source of truth for amounts.
 2. **Public storefront + AI agent chat** — Buyers (or other agents) talk to the storefront assistant on `/s/maya-rao-studio`. It lists services, requests quotes, and returns a PayPal deposit link — with tool traces in the UI.
 3. **PayPal Orders v2 deposit (JS SDK v6)** — Before work starts, the buyer approves a deposit with the **PayPal JS SDK v6** button (v5 fallback). Small deposits are captured; deposits ≥ $500 use **intent=AUTHORIZE**: PayPal holds the funds, the seller captures on **Start work**, and cancelling before then **voids** the hold (client never charged). Status changes only from PayPal evidence.
 4. **Deliver → PayPal Invoicing v2 balance** — Seller marks delivered; ServiceReady creates and sends a real **PayPal invoice** for the remaining balance.
@@ -78,7 +81,7 @@ Keys live only in **server** env (`XAI_API_KEY` / `OPENAI_API_KEY`). Without a k
 | Flow | API | Role |
 |------|-----|------|
 | Deposit | **Orders v2** CAPTURE, or **AUTHORIZE** → Payments v2 authorization capture / void | Money before work; held funds for large jobs |
-| Checkout | **PayPal JS SDK v6** (`<paypal-button>`, one-time payment session), v5 Buttons fallback | Buyer approval |
+| Checkout | **PayPal JS SDK v6** (`<paypal-button>`, one-time payment session), v5 Buttons fallback with `enable-funding=venmo,paylater` | Buyer approval (Venmo / Pay Later when eligible) |
 | Returning client | **Vault v3** setup token → payment token → `vault_id` order (inside mandate) | No-popup rebooking |
 | Balance | **Invoicing v2** create, send, get | Post-delivery balance |
 | Collections / refund | **@paypal/agent-toolkit** (`get_invoice`, `get_order`, `send_invoice_reminder`, `create_refund`) | Official toolkit tool traces; human gate on send |
@@ -87,6 +90,9 @@ Keys live only in **server** env (`XAI_API_KEY` / `OPENAI_API_KEY`). Without a k
 | Cancellation policy | Payments v2 authorization **void** / **partial capture**, Agent Toolkit **create_refund** (full or partial) | Deterministic rule → PayPal action |
 | Final bill | **Invoicing v2** balance + tip line (`allow_tip`) | Tips on the real invoice |
 | Idempotency | `PayPal-Request-Id` on every money write | Safe retries, no double charges |
+| Disputes | Evidence pack `GET /api/quotes/:id/evidence` (JSON + Markdown) | Order / capture / auth / invoice ids, HMAC fingerprint, audit timeline |
+| Payouts | **Payouts API** `POST /api/quotes/:id/payout` (sandbox tip-out) | Contractor tip-out after paid; some sandbox merchant countries return `PAYOUT_NOT_AVAILABLE` — code path is live |
+| Agent discovery | `/.well-known/agent-card.json`, `/llms.txt` | MCP URL, tools, auth notes for agents |
 | Config | `GET /api/paypal/config` | Public sandbox `client_id` only |
 
 `PAYPAL_CLIENT_SECRET` never appears in `VITE_*` or the client. Sandbox only for the hackathon.
@@ -117,6 +123,10 @@ This project was significantly rebuilt for the hackathon:
 - **Final bill + tip** line on PayPal Invoicing v2
 - **HMAC-signed quotes + PayPal order fingerprints** re-checked before capture; `/judges` tamper test
 - **`/judges` page** and **Check PayPal** webhook fallback; `PayPal-Request-Id` on all money writes
+- **Venmo / Pay Later** funding enabled on JS SDK buttons (eligible sandbox buyers)
+- **Disputes evidence pack** (desk + API) aggregating PayPal ids, HMAC fingerprint, audit timeline
+- **PayPal Payouts** sandbox tip-out path (`POST /api/quotes/:id/payout`) — deferred clearly when the sandbox merchant country blocks Payouts
+- **Agent discovery:** `/.well-known/agent-card.json` + `/llms.txt`
 - **MCP server** (`/mcp/maya-rao-studio`, Streamable HTTP) + WebMCP on the storefront
 - Hosted on **Render** (Node web service, blueprint `render.yaml`) — tick Render on the form
 - Sandbox buyer credentials in README for Devpost test access
@@ -144,7 +154,8 @@ Tick / list these on the form (comma-separated or multi-select as the UI allows)
 - PayPal Orders v2 (CAPTURE + AUTHORIZE)
 - PayPal Invoicing v2
 - PayPal Payments v2 (refunds, authorization capture/void)
-- PayPal JavaScript SDK v6 (v5 Buttons fallback)
+- PayPal Payouts (sandbox contractor tip-out)
+- PayPal JavaScript SDK v6 (v5 Buttons fallback; Venmo / Pay Later funding)
 - PayPal Vault v3 (setup tokens / payment tokens)
 - AG Grid Community
 - PayPal REST API (sandbox OAuth2 client credentials)
