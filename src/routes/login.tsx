@@ -320,6 +320,7 @@ const DEMO_STILLS = [
 
 /**
  * Right-hand demo panel. Plays Artlist login-demo (WebM then MP4).
+ * Cache-bust ?v=artlist1 — bump when swapping PayPal-updated cut.
  * Falls back to a cross-fading still slideshow if the video can't load.
  */
 function LoginDemoPanel() {
@@ -336,7 +337,7 @@ function LoginDemoPanel() {
     <div className="relative h-full w-full overflow-hidden rounded-2xl bg-neutral-950 shadow-xl ring-1 ring-black/5">
       {!videoFailed ? (
         <video
-          poster="/videos/login-demo-poster.jpg"
+          poster="/videos/login-demo-poster.jpg?v=artlist1"
           autoPlay
           muted
           loop
@@ -345,8 +346,8 @@ function LoginDemoPanel() {
           onError={() => setVideoFailed(true)}
           className="h-full w-full object-cover"
         >
-          <source src="/videos/login-demo.webm" type="video/webm" />
-          <source src="/videos/login-demo.mp4" type="video/mp4" />
+          <source src="/videos/login-demo.webm?v=artlist1" type="video/webm" />
+          <source src="/videos/login-demo.mp4?v=artlist1" type="video/mp4" />
         </video>
       ) : (
         DEMO_STILLS.map((s, n) => (
