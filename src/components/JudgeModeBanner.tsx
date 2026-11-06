@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { Check, Copy, FlaskConical, X } from "lucide-react";
 import { USE_MOCKS } from "@/lib/api";
 
@@ -12,7 +13,9 @@ const BUYER_EMAIL =
 export function JudgeModeBanner() {
   const [hidden, setHidden] = useState(false);
   const [copied, setCopied] = useState(false);
-  if (USE_MOCKS || hidden) return null;
+  const pathname = useRouterState({ select: (st) => st.location.pathname });
+  // /login is a fixed full-viewport split layout with its own demo hint — no banner there.
+  if (USE_MOCKS || hidden || pathname === "/login") return null;
 
   async function copyEmail() {
     try {
