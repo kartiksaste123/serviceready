@@ -26,7 +26,10 @@ export function StatusTracker({ status }: { status: QuoteStatus }) {
     );
   const current = steps.findIndex((step) => step.status === status);
   return (
-    <ol aria-label="Booking progress" className="grid gap-4 sm:grid-cols-5 sm:gap-3">
+    <ol
+      aria-label="Booking progress"
+      className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-5 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0"
+    >
       {steps.map((step, index) => {
         const complete = index < current || status === "paid";
         const active = index === current && status !== "paid";
@@ -34,13 +37,13 @@ export function StatusTracker({ status }: { status: QuoteStatus }) {
           <li
             key={step.status}
             aria-current={active ? "step" : undefined}
-            className="relative flex items-center gap-3 sm:flex-col sm:items-start sm:gap-2"
+            className="relative flex min-w-[7.25rem] shrink-0 flex-col gap-2 sm:min-w-0 sm:items-start"
           >
             {index < steps.length - 1 && (
               <span
                 aria-hidden="true"
                 className={cn(
-                  "absolute -right-1 left-9 top-3.5 hidden h-0.5 rounded-full sm:block",
+                  "absolute left-[2.15rem] right-0 top-3.5 hidden h-0.5 rounded-full sm:block",
                   index < current || status === "paid" ? "bg-primary" : "bg-border",
                 )}
               />
@@ -60,7 +63,7 @@ export function StatusTracker({ status }: { status: QuoteStatus }) {
             <span className="min-w-0">
               <span
                 className={cn(
-                  "block text-sm leading-tight",
+                  "block text-[13px] leading-tight sm:text-sm",
                   complete || active ? "font-semibold text-foreground" : "text-muted-foreground",
                 )}
               >

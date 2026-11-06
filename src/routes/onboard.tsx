@@ -124,7 +124,7 @@ function Onboard() {
   return (
     <div className="min-h-screen bg-muted">
       <header className="border-b border-border bg-background">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16 sm:px-5">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
@@ -143,7 +143,7 @@ function Onboard() {
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-5 pb-16 pt-8">
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-5 sm:pt-8">
         <ol className="mb-8 flex flex-wrap gap-2 text-[13px]" aria-label="Progress">
           {["Paste what you charge", "Check services and prices", "Publish for assistants"].map(
             (l, i) => (
@@ -162,7 +162,7 @@ function Onboard() {
         {step === 1 && (
           <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
             <section className="glass-card p-6 sm:p-8">
-              <h1 className="display text-3xl sm:text-4xl">
+              <h1 className="display text-2xl sm:text-4xl">
                 Paste your rate card, price list or WhatsApp message
               </h1>
               <p className="mt-3 text-muted-foreground">
@@ -247,7 +247,7 @@ function Onboard() {
 
         {step === 2 && drafts && (
           <section>
-            <div className="sticky top-0 z-20 -mx-5 mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-border bg-muted/95 px-5 py-4 backdrop-blur">
+            <div className="sticky top-0 z-20 -mx-4 mb-5 flex flex-col gap-3 border-b border-border bg-muted/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">
                   Review {drafts.length} service{drafts.length === 1 ? "" : "s"}
@@ -261,14 +261,14 @@ function Onboard() {
                     : ""}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <button type="button" className="btn-glass btn-sm" onClick={() => setDrafts(null)}>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <button type="button" className="btn-glass btn-sm flex-1 sm:flex-none" onClick={() => setDrafts(null)}>
                   <ArrowLeft className="size-4" aria-hidden="true" />
                   Back
                 </button>
                 <button
                   type="button"
-                  className="btn-mint btn-sm"
+                  className="btn-mint btn-sm flex-1 sm:flex-none"
                   disabled={!drafts.length || blocking > 0 || publish.isPending}
                   onClick={() => {
                     if (!signedIn) {
@@ -362,10 +362,11 @@ function Onboard() {
                       <button
                         type="button"
                         aria-label={`Remove ${d.title || `service ${idx + 1}`}`}
-                        className="btn-glass btn-sm h-[38px]"
+                        className="btn-glass btn-sm h-11 w-full justify-center md:h-[38px] md:w-auto"
                         onClick={() => setDrafts(drafts.filter((x) => x.tmp_id !== d.tmp_id))}
                       >
                         <Trash2 className="size-4" aria-hidden="true" />
+                        <span className="md:hidden">Remove</span>
                       </button>
                     </div>
                     <L id={fid("desc")} label="Description" className="mt-3">

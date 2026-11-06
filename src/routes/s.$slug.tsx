@@ -116,14 +116,14 @@ function Storefront() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-border">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-5 lg:px-8">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
           <span className="text-xs text-muted-foreground">Powered by ServiceReady</span>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-5 pb-14 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 pb-14 sm:px-5 lg:px-8">
         {isLoading ? (
           <div className="space-y-4 py-10">
             <Skeleton className="h-10 w-72" />
@@ -154,7 +154,7 @@ function Storefront() {
               <div className="flex items-center gap-4">
                 <SellerAvatar name={data.seller.name} slug={slug} />
                 <div>
-                  <h1 className="display text-3xl sm:text-4xl">{data.seller.name}</h1>
+                  <h1 className="display text-2xl sm:text-4xl">{data.seller.name}</h1>
                   <p className="mt-2 max-w-lg text-muted-foreground">{data.seller.tagline}</p>
                 </div>
               </div>
@@ -181,10 +181,10 @@ function Storefront() {
                 <div
                   className={`grid content-start gap-4 ${
                     data.services.length === 3
-                      ? "sm:grid-cols-3"
+                      ? "md:grid-cols-2 xl:grid-cols-3"
                       : data.services.length === 1
                         ? "grid-cols-1"
-                        : "sm:grid-cols-2"
+                        : "md:grid-cols-2"
                   }`}
                 >
                   {data.services.map((s) => {
@@ -505,7 +505,7 @@ function AgentChat({ slug }: { slug: string }) {
   };
   return (
     <aside
-      className="glass-card relative flex h-[480px] flex-col overflow-hidden lg:sticky lg:top-6 lg:h-[520px]"
+      className="glass-card relative flex h-[min(70dvh,480px)] flex-col overflow-hidden lg:sticky lg:top-6 lg:h-[520px]"
       aria-label="AI assistant demo"
     >
       <img
@@ -552,7 +552,7 @@ function AgentChat({ slug }: { slug: string }) {
                 type="button"
                 key={s}
                 onClick={() => send(s)}
-                className="glass-row block w-full p-3 text-left text-[13px] hover:bg-background"
+                className="glass-row block min-h-11 w-full p-3 text-left text-[13px] hover:bg-background"
               >
                 {s}
               </button>
@@ -630,7 +630,7 @@ function AgentChat({ slug }: { slug: string }) {
         <button
           type="submit"
           aria-label="Send"
-          className="btn-mint size-10 shrink-0 p-0"
+          className="btn-mint size-11 shrink-0 p-0 sm:size-10"
           disabled={!text.trim() || m.isPending}
         >
           <Send className="size-4" aria-hidden="true" />

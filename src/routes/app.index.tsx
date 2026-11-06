@@ -123,7 +123,7 @@ function Bookings() {
       </section>
       <div className="glass-card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-border bg-muted p-3 lg:flex-row lg:items-center">
-          <div className="relative min-w-[200px] flex-1 lg:max-w-xs">
+          <div className="relative min-w-0 flex-1 lg:min-w-[200px] lg:max-w-xs">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
@@ -164,7 +164,7 @@ function Bookings() {
                   setSt(s);
                   setPage(0);
                 }}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm ${st === s ? "border-foreground bg-primary text-primary-foreground" : "border-input bg-background text-muted-foreground hover:text-foreground"}`}
+                className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm ${st === s ? "border-foreground bg-primary text-primary-foreground" : "border-input bg-background text-muted-foreground hover:text-foreground"}`}
               >
                 {s === "all" ? "All" : statusLabel[s]}
                 <span className={`tabular-nums text-xs ${st === s ? "opacity-80" : ""}`}>

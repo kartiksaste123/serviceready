@@ -94,7 +94,7 @@ function AppLayout() {
           </Link>
           <button
             type="button"
-            className="relative grid size-9 place-items-center rounded-lg border border-border lg:hidden"
+            className="relative grid size-11 place-items-center rounded-lg border border-border lg:hidden"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             aria-controls="app-nav"
@@ -119,7 +119,7 @@ function AppLayout() {
               key={n.to}
               to={n.to}
               activeOptions={{ exact: "exact" in n }}
-              className="flex items-center gap-3 rounded-r-lg border-l-2 border-transparent px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="flex min-h-11 items-center gap-3 rounded-r-lg border-l-2 border-transparent px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
               activeProps={{
                 className: "!border-foreground bg-muted !font-semibold !text-foreground",
               }}
@@ -140,11 +140,36 @@ function AppLayout() {
             href={`/s/${slug}`}
             target="_blank"
             rel="noreferrer"
-            className="mt-2 flex items-center gap-3 border-l-2 border-transparent px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="mt-2 flex min-h-11 items-center gap-3 border-l-2 border-transparent px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <ExternalLink className="size-4" aria-hidden="true" />
             View public storefront
           </a>
+          <div className="mt-3 border-t border-border px-3 pb-1 pt-3 text-sm lg:hidden">
+            {seller.data ? (
+              <p className="truncate font-semibold">{seller.data.name}</p>
+            ) : (
+              <Skeleton className="h-5 w-32" />
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {USE_MOCKS || auth.isDemo
+                ? "Demo workspace · PayPal sandbox"
+                : "Your workspace · PayPal sandbox"}
+            </p>
+            {!USE_MOCKS && (
+              <button
+                type="button"
+                className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                onClick={async () => {
+                  await auth.signOut();
+                  navigate({ to: "/login" });
+                }}
+              >
+                <LogOut className="size-3.5" aria-hidden="true" />
+                Sign out
+              </button>
+            )}
+          </div>
         </nav>
         <div className="hidden border-t border-border p-5 text-sm lg:block">
           {seller.data ? (
@@ -176,7 +201,7 @@ function AppLayout() {
         </div>
       </aside>
       <div className="min-w-0">
-        <main id="main" className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-7">
+        <main id="main" className="mx-auto max-w-7xl px-4 py-5 sm:px-8 sm:py-7">
           <KPIs />
           <Outlet />
         </main>

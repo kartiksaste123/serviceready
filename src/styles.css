@@ -129,13 +129,13 @@
 
 @layer components {
   .btn-mint {
-    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:pointer-events-none disabled:opacity-50 sm:min-h-10;
   }
   .btn-glass {
-    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-foreground bg-background px-5 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-foreground bg-background px-5 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-50 sm:min-h-10;
   }
   .btn-sm {
-    @apply min-h-9 px-3.5 py-1.5 text-sm;
+    @apply min-h-10 px-3.5 py-1.5 text-sm sm:min-h-9;
   }
   .glass-card {
     @apply rounded-xl border border-border bg-card shadow-sm;
@@ -150,7 +150,7 @@
     @apply grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-foreground;
   }
   .field {
-    @apply w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20;
+    @apply w-full min-h-11 rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground placeholder:text-muted-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 sm:min-h-10 sm:py-2 sm:text-sm;
   }
   .text-link {
     @apply font-medium text-link underline underline-offset-4 hover:no-underline;
@@ -167,9 +167,11 @@
   html {
     scroll-behavior: smooth;
     scroll-padding-top: 5rem;
+    overflow-x: clip;
   }
   body {
     margin: 0;
+    overflow-x: clip;
   }
   button:not(:disabled),
   [role="button"] {

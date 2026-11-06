@@ -106,7 +106,7 @@ function QuotePage() {
   return (
     <div className="min-h-screen bg-muted">
       <header className="border-b border-border bg-background">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-5 lg:px-8">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-5 lg:px-8">
           <Link to="/" aria-label="ServiceReady home">
             <Wordmark />
           </Link>
@@ -116,7 +116,7 @@ function QuotePage() {
           </span>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-5 pb-10 pt-6 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-5 sm:pt-6 lg:px-8">
         {returnCapture === "capturing" && (
           <p
             role="status"
@@ -151,7 +151,7 @@ function QuotePage() {
                       <p className="text-sm font-medium text-muted-foreground">
                         Quote from Maya Rao Studio
                       </p>
-                      <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                      <h1 className="mt-1 text-xl font-bold tracking-tight sm:text-3xl">
                         {q.service_title}
                       </h1>
                       <p className="mt-1 text-sm text-muted-foreground">
@@ -172,9 +172,9 @@ function QuotePage() {
                   </div>
                 </section>
 
-                <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
-                  {/* Left: quote details */}
-                  <article className="glass-card overflow-hidden">
+                <div className="mt-5 flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
+                  {/* Details — second on mobile so PayPal stays above the fold */}
+                  <article className="order-2 min-w-0 overflow-hidden glass-card lg:order-1">
                     <div className="grid gap-5 p-5 sm:p-6 md:grid-cols-2">
                       <div>
                         <h2 className="text-sm font-semibold">Scope</h2>
@@ -202,28 +202,48 @@ function QuotePage() {
                         ))}
                       </dl>
                       <dl className="mt-5 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-border bg-border text-sm tabular-nums">
-                        <div className="bg-card p-3 sm:p-4">
-                          <dt className="text-xs text-muted-foreground">Total</dt>
-                          <dd className="mt-1 text-lg font-semibold">{money(q.total_cents)}</dd>
+                        <div className="min-w-0 bg-card p-2.5 sm:p-4">
+                          <dt className="text-[11px] text-muted-foreground sm:text-xs">Total</dt>
+                          <dd className="mt-1 text-base font-semibold sm:text-lg">{money(q.total_cents)}</dd>
                         </div>
-                        <div className="bg-card p-3 sm:p-4">
-                          <dt className="text-xs text-muted-foreground">
-                            {dep ? "Deposit paid" : "Deposit due now"}
+                        <div className="min-w-0 bg-card p-2.5 sm:p-4">
+                          <dt className="text-[11px] text-muted-foreground sm:text-xs">
+                            {dep ? (
+                              <>
+                                <span className="sm:hidden">Deposit</span>
+                                <span className="hidden sm:inline">Deposit paid</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="sm:hidden">Deposit</span>
+                                <span className="hidden sm:inline">Deposit due now</span>
+                              </>
+                            )}
                           </dt>
-                          <dd className="mt-1 text-lg font-bold">{money(q.deposit_cents)}</dd>
+                          <dd className="mt-1 text-base font-bold sm:text-lg">{money(q.deposit_cents)}</dd>
                         </div>
-                        <div className="bg-card p-3 sm:p-4">
-                          <dt className="text-xs text-muted-foreground">
-                            {q.status === "paid" ? "Balance paid" : "Balance on delivery"}
+                        <div className="min-w-0 bg-card p-2.5 sm:p-4">
+                          <dt className="text-[11px] text-muted-foreground sm:text-xs">
+                            {q.status === "paid" ? (
+                              <>
+                                <span className="sm:hidden">Balance</span>
+                                <span className="hidden sm:inline">Balance paid</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="sm:hidden">Balance</span>
+                                <span className="hidden sm:inline">Balance on delivery</span>
+                              </>
+                            )}
                           </dt>
-                          <dd className="mt-1 text-lg font-semibold">{money(q.balance_cents)}</dd>
+                          <dd className="mt-1 text-base font-semibold sm:text-lg">{money(q.balance_cents)}</dd>
                         </div>
                       </dl>
                     </div>
                   </article>
 
-                  {/* Right: sticky payment + message */}
-                  <aside className="space-y-5 lg:sticky lg:top-5">
+                  {/* Payment — first on mobile */}
+                  <aside className="order-1 space-y-5 lg:sticky lg:top-5 lg:order-2">
                     <section className="glass-card p-5" aria-labelledby="pay-h">
                       <h2 id="pay-h" className="font-semibold">
                         {q.status === "quoted"

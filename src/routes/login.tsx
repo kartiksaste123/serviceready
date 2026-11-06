@@ -161,7 +161,7 @@ function LoginPage() {
         <main className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto py-3">
           <div className="my-auto w-full max-w-[400px]">
             <div className="mb-4 text-center max-sm:mb-3">
-              <h1 className="text-[1.5rem] font-semibold leading-[1.1] tracking-tight sm:text-[2rem] xl:text-[2.25rem]">
+              <h1 className="text-[1.35rem] font-semibold leading-[1.15] tracking-tight sm:text-[2rem] xl:text-[2.25rem]">
                 Let AI assistants book
                 <br className="hidden sm:block" /> your services
               </h1>
@@ -183,7 +183,7 @@ function LoginPage() {
                   type="button"
                   role="tab"
                   aria-selected={tab === "signin"}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${tab === "signin" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${tab === "signin" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                   onClick={() => setTab("signin")}
                 >
                   Sign in
@@ -192,7 +192,7 @@ function LoginPage() {
                   type="button"
                   role="tab"
                   aria-selected={tab === "signup"}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${tab === "signup" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${tab === "signup" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                   onClick={() => setTab("signup")}
                 >
                   Create account
@@ -257,7 +257,7 @@ function LoginPage() {
                 )}
                 <button
                   type="submit"
-                  className="btn-mint min-h-9 w-full py-2"
+                  className="btn-mint w-full"
                   disabled={busy !== null}
                 >
                   {busy === "form" ? (
@@ -277,7 +277,7 @@ function LoginPage() {
 
               <button
                 type="button"
-                className="btn-glass min-h-9 w-full py-2"
+                className="btn-glass w-full"
                 disabled={busy !== null}
                 onClick={() => void onDemo()}
               >
@@ -286,7 +286,7 @@ function LoginPage() {
                 ) : (
                   <FlaskConical className="size-4" aria-hidden="true" />
                 )}
-                <span className="truncate">Continue as demo (Maya Rao Studio)</span>
+                <span className="truncate">Continue as demo</span>
               </button>
               <p className="mt-2 text-center text-[11px] text-muted-foreground">
                 Demo login: <span className="font-mono">{DEMO_LOGIN.email}</span> — password in

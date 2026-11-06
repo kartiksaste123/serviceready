@@ -177,7 +177,7 @@ function SdkCheckout({ quoteId, onPaid }: Props) {
         if (cancelled || !ref.current) return;
         ref.current.innerHTML = "";
         const btns = paypal.Buttons({
-          style: { layout: "vertical", shape: "rect", label: "pay" },
+          style: { layout: "vertical", shape: "rect", label: "pay", color: "gold", height: "48" },
           createOrder: async () => (await api.createDepositOrder(quoteId)).order_id,
           onApprove: async ({ orderID }) => {
             const q = await api.captureDeposit(quoteId, orderID);
@@ -203,9 +203,9 @@ function SdkCheckout({ quoteId, onPaid }: Props) {
     };
   }, [quoteId, attempt]);
   return (
-    <div>
+    <div className="w-full min-w-0">
       {state === "loading" && (
-        <div className="flex min-h-10 items-center justify-center gap-2 text-sm text-muted-foreground">
+        <div className="flex min-h-11 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
           Loading PayPal…
         </div>
@@ -215,7 +215,7 @@ function SdkCheckout({ quoteId, onPaid }: Props) {
           <p className="text-sm text-danger">{error}</p>
           <button
             type="button"
-            className="btn-glass btn-sm"
+            className="btn-glass btn-sm w-full sm:w-auto"
             onClick={() => {
               sdkPromise = null;
               setAttempt((a) => a + 1);
@@ -225,7 +225,7 @@ function SdkCheckout({ quoteId, onPaid }: Props) {
           </button>
         </div>
       )}
-      <div ref={ref} />
+      <div ref={ref} className="w-full min-w-0 [&_iframe]:max-w-full" />
     </div>
   );
 }

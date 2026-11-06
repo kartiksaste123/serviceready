@@ -55,7 +55,7 @@ function Approvals() {
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium ${tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            className={`min-h-10 rounded-md px-3 py-2 text-sm font-medium ${tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
           >
             {t === "pending"
               ? `Waiting${pending.data ? ` · ${pending.data.length}` : ""}`

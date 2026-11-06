@@ -149,7 +149,7 @@ function SettingsPage() {
                       aria-checked={d.reminder_tone === t}
                       key={t}
                       onClick={() => set({ reminder_tone: t })}
-                      className={`rounded-lg border px-3 py-2 text-left text-sm ${d.reminder_tone === t ? "border-foreground bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
+                      className={`min-h-11 rounded-lg border px-3 py-2.5 text-left text-sm ${d.reminder_tone === t ? "border-foreground bg-primary text-primary-foreground" : "border-input text-muted-foreground hover:bg-muted"}`}
                     >
                       <span className="block font-semibold">{l}</span>
                       <span className="block text-xs opacity-80">{desc}</span>

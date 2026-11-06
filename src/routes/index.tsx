@@ -115,27 +115,27 @@ function Home() {
       </header>
       <main id="main">
         <section className="border-b border-border">
-          <div className="mx-auto grid max-w-7xl items-start gap-10 px-5 py-10 sm:px-8 lg:grid-cols-[1.03fr_.97fr] lg:gap-12 lg:py-14">
+          <div className="mx-auto grid max-w-7xl items-start gap-8 px-4 py-8 sm:gap-10 sm:px-8 sm:py-10 lg:grid-cols-[1.03fr_.97fr] lg:gap-12 lg:py-14">
             <div>
               <p className="eyebrow">The agent-ready service desk for freelancers</p>
-              <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-[1.02] sm:text-5xl lg:text-6xl">
+              <h1 className="mt-3 max-w-3xl text-[1.85rem] font-semibold leading-[1.08] sm:text-5xl lg:text-6xl">
                 Get booked by AI agents. Get paid before you start.
               </h1>
-              <p className="mt-4 max-w-xl text-lg leading-7 text-muted-foreground">
+              <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
                 Publish services assistants can understand, collect a PayPal deposit before work
                 begins, and keep every client follow-up under your control.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link to="/onboard" className="btn-mint">
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <Link to="/onboard" className="btn-mint w-full sm:w-auto">
                   Import your rate card <ArrowRight className="size-4" />
                 </Link>
-                <Link to="/s/$slug" params={{ slug: "maya-rao-studio" }} className="btn-glass">
+                <Link to="/s/$slug" params={{ slug: "maya-rao-studio" }} className="btn-glass w-full sm:w-auto">
                   See Maya's storefront
                 </Link>
                 <Link
                   to="/login"
                   search={{ demo: "1", next: "/app" }}
-                  className="btn-glass"
+                  className="btn-glass w-full sm:w-auto"
                 >
                   Open demo workspace
                 </Link>
@@ -176,7 +176,7 @@ function Home() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
             <div className="min-w-0 flex-1">
               <p className="eyebrow">How it works</p>
-              <h2 className="mt-3 text-3xl font-semibold sm:text-5xl">
+              <h2 className="mt-3 text-2xl font-semibold sm:text-5xl">
                 From loose notes to a paid booking.
               </h2>
             </div>
@@ -203,7 +203,7 @@ function Home() {
           <div className="mx-auto grid max-w-7xl gap-8 px-5 py-14 sm:px-8 sm:py-16 lg:grid-cols-[.8fr_1.2fr]">
             <div>
               <p className="eyebrow">Why now</p>
-              <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">Less chasing. More trust.</h2>
+              <h2 className="mt-3 text-2xl font-semibold sm:text-4xl">Less chasing. More trust.</h2>
               <p className="mt-4 leading-7 text-muted-foreground">
                 Late-payment follow-up takes time and strains client relationships. At the same
                 time, clients increasingly ask AI to find who to hire.
@@ -246,7 +246,7 @@ function Home() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
             <div className="min-w-0 flex-1">
               <p className="eyebrow">Human-in-the-loop by design</p>
-              <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">
+              <h2 className="mt-3 text-2xl font-semibold sm:text-4xl">
                 Automation without giving up control.
               </h2>
             </div>
@@ -296,7 +296,7 @@ function Home() {
         <section className="border-y border-border bg-muted">
           <div className="mx-auto max-w-3xl px-5 py-14 text-center sm:px-8 sm:py-16">
             <MessageSquareText className="mx-auto size-7" />
-            <h2 className="mt-5 text-4xl font-semibold">
+            <h2 className="mt-5 text-2xl font-semibold sm:text-4xl">
               Make your services ready for the next client.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
