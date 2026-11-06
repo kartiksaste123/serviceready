@@ -32,7 +32,15 @@ export const Route = createFileRoute("/")({
           "Agent-ready services, deposits before work, and human-approved payment follow-up.",
       },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
+      {
+        property: "og:image",
+        content: "https://serviceready.onrender.com/images/hero.webp",
+      },
+      { name: "twitter:card", content: "summary_large_image" },
+      {
+        name: "twitter:image",
+        content: "https://serviceready.onrender.com/images/hero.webp",
+      },
     ],
   }),
   component: Home,
@@ -44,7 +52,8 @@ const tools = [
   "PayPal Agent Toolkit",
   "MCP",
   "WebMCP",
-  "Cloudflare Workers AI",
+  "xAI Grok",
+  "Render",
 ];
 const steps = [
   {
@@ -132,7 +141,17 @@ function Home() {
                 No account needed for this interactive demo.
               </p>
             </div>
-            <BookingProof />
+            <div className="space-y-5">
+              <img
+                src="/images/hero.webp"
+                alt="ServiceReady — AI agents booking freelancers with PayPal deposits"
+                className="aspect-[16/10] w-full rounded-2xl object-cover"
+                width={960}
+                height={600}
+                loading="eager"
+              />
+              <BookingProof />
+            </div>
           </div>
         </section>
         <section className="border-b border-border bg-muted">
@@ -194,6 +213,24 @@ function Home() {
                   <p className="mt-4 text-xs text-muted-foreground">{s}</p>
                 </article>
               ))}
+            </div>
+          </div>
+          <div className="mx-auto max-w-7xl px-5 pb-20 sm:px-8">
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">
+              <img
+                src="/images/paypal-success.webp"
+                alt="PayPal deposit paid confirmation for a ServiceReady booking"
+                className="aspect-[21/9] w-full object-cover"
+                width={1200}
+                height={514}
+                loading="lazy"
+              />
+              <div className="border-t border-border px-5 py-4 sm:px-6">
+                <p className="text-sm font-semibold">Deposit collected before work starts</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Clients pay through PayPal. The booking only confirms after the deposit lands.
+                </p>
+              </div>
             </div>
           </div>
         </section>

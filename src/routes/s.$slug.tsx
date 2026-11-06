@@ -43,7 +43,15 @@ export const Route = createFileRoute("/s/$slug")({
         content: "Quote and book brand design services directly or through an AI agent.",
       },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
+      {
+        property: "og:image",
+        content: "https://serviceready.onrender.com/images/maya-portrait.webp",
+      },
+      { name: "twitter:card", content: "summary_large_image" },
+      {
+        name: "twitter:image",
+        content: "https://serviceready.onrender.com/images/maya-portrait.webp",
+      },
     ],
   }),
   component: Storefront,
@@ -56,6 +64,40 @@ const initials = (name: string) =>
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase())
     .join("");
+
+function serviceCover(title: string): string | null {
+  const t = title.toLowerCase();
+  if (t.includes("brand")) return "/images/service-brand.webp";
+  if (t.includes("landing")) return "/images/service-landing.webp";
+  if (t.includes("pitch")) return "/images/service-pitch.webp";
+  return null;
+}
+
+function SellerAvatar({ name, slug }: { name: string; slug: string }) {
+  const [broken, setBroken] = useState(false);
+  const usePortrait = slug === "maya-rao-studio" && !broken;
+  if (usePortrait) {
+    return (
+      <img
+        src="/images/maya-portrait.webp"
+        alt=""
+        aria-hidden="true"
+        className="size-16 shrink-0 rounded-2xl object-cover"
+        width={64}
+        height={64}
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary text-xl font-bold text-primary-foreground"
+    >
+      {initials(name)}
+    </span>
+  );
+}
 
 function Storefront() {
   const { slug } = Route.useParams();
@@ -108,12 +150,7 @@ function Storefront() {
           <>
             <section className="flex flex-wrap items-end justify-between gap-6 py-10">
               <div className="flex items-center gap-4">
-                <span
-                  aria-hidden="true"
-                  className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary text-xl font-bold text-primary-foreground"
-                >
-                  {initials(data.seller.name)}
-                </span>
+                <SellerAvatar name={data.seller.name} slug={slug} />
                 <div>
                   <h1 className="display text-3xl sm:text-4xl">{data.seller.name}</h1>
                   <p className="mt-2 max-w-lg text-muted-foreground">{data.seller.tagline}</p>
@@ -140,8 +177,22 @@ function Storefront() {
                 <Empty title="No services published yet">Check back soon.</Empty>
               ) : (
                 <div className="grid content-start gap-4 sm:grid-cols-2">
-                  {data.services.map((s) => (
-                    <article key={s.id} className="glass-card flex flex-col p-5">
+                  {data.services.map((s) => {
+                    const cover = serviceCover(s.title);
+                    return (
+                    <article key={s.id} className="glass-card flex flex-col overflow-hidden p-0">
+                      {cover ? (
+                        <img
+                          src={cover}
+                          alt=""
+                          aria-hidden="true"
+                          className="aspect-[16/9] w-full object-cover"
+                          width={640}
+                          height={360}
+                          loading="lazy"
+                        />
+                      ) : null}
+                      <div className="flex flex-1 flex-col p-5">
                       <div className="flex items-start justify-between gap-3">
                         <h2 className="font-semibold">{s.title}</h2>
                         <span className="text-xl font-bold tabular-nums">
@@ -176,8 +227,10 @@ function Storefront() {
                       >
                         Request quote <ArrowRight className="size-3.5" aria-hidden="true" />
                       </button>
+                      </div>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <AgentChat key={slug} slug={slug} />
