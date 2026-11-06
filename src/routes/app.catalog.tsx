@@ -87,6 +87,7 @@ function Catalog() {
                   imageUrl={s.image_url ?? null}
                   serviceId={s.id}
                   signedIn
+                  layout="row"
                   onChange={() => {
                     void qc.invalidateQueries({ queryKey: ["services"] });
                     void qc.invalidateQueries({ queryKey: ["public"] });

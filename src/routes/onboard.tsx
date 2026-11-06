@@ -301,6 +301,8 @@ function Onboard() {
                 const fid = (f: string) => `${d.tmp_id}-${f}`;
                 return (
                   <div key={d.tmp_id} className="glass-card p-4">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_200px] lg:items-start">
+                      <div className="min-w-0">
                     <div className="grid gap-3 md:grid-cols-[2fr_1fr_0.8fr_0.8fr_auto] md:items-end">
                       <L id={fid("title")} label="Service name">
                         <input
@@ -380,18 +382,6 @@ function Onboard() {
                         onChange={(e) => upd(d.tmp_id, { description: e.target.value })}
                       />
                     </L>
-                    <div className="mt-3">
-                      <p className="mb-1.5 text-sm font-medium">Cover image</p>
-                      <ServiceImageField
-                        title={d.title}
-                        description={d.description}
-                        deliverables={d.deliverables}
-                        imageUrl={d.image_url ?? null}
-                        requireAuth
-                        signedIn={signedIn}
-                        onChange={(url) => upd(d.tmp_id, { image_url: url })}
-                      />
-                    </div>
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
                       {d.deliverables.map((x) => (
                         <span
@@ -451,6 +441,21 @@ function Onboard() {
                         </span>
                       </p>
                     ))}
+                      </div>
+                      <div className="lg:sticky lg:top-4">
+                        <p className="mb-1.5 text-sm font-medium">Cover image</p>
+                        <ServiceImageField
+                          title={d.title}
+                          description={d.description}
+                          deliverables={d.deliverables}
+                          imageUrl={d.image_url ?? null}
+                          requireAuth
+                          signedIn={signedIn}
+                          layout="stack"
+                          onChange={(url) => upd(d.tmp_id, { image_url: url })}
+                        />
+                      </div>
+                    </div>
                   </div>
                 );
               })}
