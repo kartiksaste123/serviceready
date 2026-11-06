@@ -145,7 +145,7 @@ function LoginPage() {
   const inputCls = "field mt-1 h-9 py-1.5";
 
   return (
-    <div className="grid h-[100dvh] min-h-[100dvh] grid-cols-1 overflow-hidden bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+    <div className="grid h-[100dvh] min-h-[100dvh] grid-cols-1 overflow-hidden bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       {/* LEFT — brand + auth card */}
       <section className="flex h-full min-h-0 flex-col px-5 py-4 sm:px-8 lg:px-12 lg:py-5">
         <header className="flex shrink-0 items-center justify-between">
@@ -300,9 +300,9 @@ function LoginPage() {
         </p>
       </section>
 
-      {/* RIGHT — looping workflow demo */}
+      {/* RIGHT — calm cream stage + contained demo card */}
       <aside
-        className="hidden h-full min-h-0 p-4 pl-0 lg:block"
+        className="relative hidden h-full min-h-0 lg:flex lg:flex-col lg:items-center lg:justify-center lg:bg-[#f4f1ea] lg:px-10 lg:py-10"
         aria-label="ServiceReady workflow demo"
       >
         <LoginDemoPanel />
@@ -319,8 +319,8 @@ const DEMO_STILLS = [
 ];
 
 /**
- * Right-hand demo panel. Plays Artlist login-demo (WebM then MP4).
- * Cache-bust ?v=artlist1 — bump when swapping PayPal-updated cut.
+ * Right-hand demo: contained framed card (not edge-to-edge).
+ * Plays Artlist login-demo (WebM then MP4). Cache-bust ?v=artlist2 for layout refresh.
  * Falls back to a cross-fading still slideshow if the video can't load.
  */
 function LoginDemoPanel() {
@@ -334,37 +334,42 @@ function LoginDemoPanel() {
   }, [videoFailed]);
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-2xl bg-neutral-950 shadow-xl ring-1 ring-black/5">
-      {!videoFailed ? (
-        <video
-          poster="/videos/login-demo-poster.jpg?v=artlist1"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          onError={() => setVideoFailed(true)}
-          className="h-full w-full object-cover"
-        >
-          <source src="/videos/login-demo.webm?v=artlist1" type="video/webm" />
-          <source src="/videos/login-demo.mp4?v=artlist1" type="video/mp4" />
-        </video>
-      ) : (
-        DEMO_STILLS.map((s, n) => (
-          <img
-            key={s.src}
-            src={s.src}
-            alt=""
-            aria-hidden={n !== i}
-            className={`absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-[1800ms] ease-out ${n === i ? "scale-105 opacity-100" : "scale-100 opacity-0"}`}
-          />
-        ))
-      )}
-      {videoFailed && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-6">
-          <p className="text-lg font-semibold text-white">{DEMO_STILLS[i]?.caption}</p>
-        </div>
-      )}
+    <div className="flex w-full flex-col items-center gap-3">
+      <div className="relative aspect-[4/5] h-[min(78dvh,680px)] w-auto max-w-[min(100%,440px)] overflow-hidden rounded-2xl bg-neutral-950 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)] ring-1 ring-black/10">
+        {!videoFailed ? (
+          <video
+            poster="/videos/login-demo-poster.jpg?v=artlist2"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            onError={() => setVideoFailed(true)}
+            className="h-full w-full object-cover"
+          >
+            <source src="/videos/login-demo.webm?v=artlist2" type="video/webm" />
+            <source src="/videos/login-demo.mp4?v=artlist2" type="video/mp4" />
+          </video>
+        ) : (
+          DEMO_STILLS.map((s, n) => (
+            <img
+              key={s.src}
+              src={s.src}
+              alt=""
+              aria-hidden={n !== i}
+              className={`absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-[1800ms] ease-out ${n === i ? "scale-105 opacity-100" : "scale-100 opacity-0"}`}
+            />
+          ))
+        )}
+        {videoFailed && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-5">
+            <p className="text-base font-semibold text-white">{DEMO_STILLS[i]?.caption}</p>
+          </div>
+        )}
+      </div>
+      <p className="text-center text-xs font-medium tracking-wide text-neutral-500">
+        Full workflow demo
+      </p>
     </div>
   );
 }
