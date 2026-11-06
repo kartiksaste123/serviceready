@@ -176,7 +176,15 @@ function Storefront() {
               {data.services.length === 0 ? (
                 <Empty title="No services published yet">Check back soon.</Empty>
               ) : (
-                <div className="grid content-start gap-4 sm:grid-cols-2">
+                <div
+                  className={`grid content-start gap-4 ${
+                    data.services.length === 3
+                      ? "sm:grid-cols-3"
+                      : data.services.length === 1
+                        ? "grid-cols-1"
+                        : "sm:grid-cols-2"
+                  }`}
+                >
                   {data.services.map((s) => {
                     const cover = serviceCover(s.title);
                     return (
@@ -486,7 +494,7 @@ function AgentChat({ slug }: { slug: string }) {
   };
   return (
     <aside
-      className="glass-card relative flex h-[560px] flex-col overflow-hidden lg:sticky lg:top-6 lg:h-[640px]"
+      className="glass-card relative flex h-[480px] flex-col overflow-hidden lg:sticky lg:top-6 lg:h-[520px]"
       aria-label="AI assistant demo"
     >
       <img
@@ -516,9 +524,13 @@ function AgentChat({ slug }: { slug: string }) {
           </button>
         )}
       </div>
-      <div ref={scroller} className="flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">
+      <div
+        ref={scroller}
+        className="flex flex-1 flex-col space-y-3 overflow-y-auto p-4"
+        aria-live="polite"
+      >
         {!items.length && (
-          <div className="space-y-2 pt-4">
+          <div className="mt-auto space-y-2">
             <p className="text-center text-sm text-muted-foreground">Ask like a client would:</p>
             {[
               "What services do you offer?",

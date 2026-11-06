@@ -169,12 +169,14 @@ function Home() {
           </div>
         </section>
         <section id="how" className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-16">
-          <div className="max-w-2xl">
-            <p className="eyebrow">How it works</p>
-            <h2 className="mt-3 text-3xl font-semibold sm:text-5xl">
-              From loose notes to a paid booking.
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+            <div className="min-w-0 flex-1">
+              <p className="eyebrow">How it works</p>
+              <h2 className="mt-3 text-3xl font-semibold sm:text-5xl">
+                From loose notes to a paid booking.
+              </h2>
+            </div>
+            <p className="max-w-md text-lg text-muted-foreground sm:pb-1 sm:text-right">
               The assistant handles the repetitive steps. You keep the decisions.
             </p>
           </div>
@@ -236,21 +238,20 @@ function Home() {
             </div>
           </div>
         </section>
-        <section
-          id="control"
-          className="mx-auto grid max-w-7xl gap-8 px-5 py-14 sm:px-8 sm:py-16 lg:grid-cols-2"
-        >
-          <div>
-            <p className="eyebrow">Human-in-the-loop by design</p>
-            <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">
-              Automation without giving up control.
-            </h2>
-            <p className="mt-4 max-w-xl leading-7 text-muted-foreground">
+        <section id="control" className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-16">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+            <div className="min-w-0 flex-1">
+              <p className="eyebrow">Human-in-the-loop by design</p>
+              <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">
+                Automation without giving up control.
+              </h2>
+            </div>
+            <p className="max-w-md leading-7 text-muted-foreground sm:pb-1 sm:text-right">
               ServiceReady prepares the work and shows its evidence. The important decisions stay
               with you.
             </p>
           </div>
-          <ul className="divide-y divide-border border-y border-border">
+          <ul className="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
             {[
               [
                 LockKeyhole,
@@ -275,7 +276,7 @@ function Home() {
             ].map(([Icon, title, text]) => {
               const I = Icon as typeof LockKeyhole;
               return (
-                <li key={String(title)} className="flex gap-4 py-4">
+                <li key={String(title)} className="flex gap-4 bg-card p-5">
                   <span className="icon-tile">
                     <I className="size-4" />
                   </span>
