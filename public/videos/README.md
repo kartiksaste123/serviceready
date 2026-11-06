@@ -1,7 +1,13 @@
 # Login demo video
 
-`/login` right panel plays `login-demo.mp4` (autoplay, muted, loop, `object-cover`).
-Poster: `login-demo-poster.jpg`. Panel is roughly portrait (~0.7 aspect); 1080x1440 or 1080x1350 works best.
+Artlist & OpenArt cut (31s, 4:5, loopable). Right panel on `/login`.
 
-To swap in a new cut: overwrite both files with the same names, commit, push. No code changes needed.
-If the mp4 fails to load, the page falls back to a crossfading still slideshow from /public/images.
+- `login-demo.webm` — preferred (VP9)
+- `login-demo.mp4` — H.264 fallback (1080×1350, faststart)
+- `login-demo-poster.jpg` — first-frame poster
+- `login-demo-9x16.mp4` — optional vertical export (not used by the page)
+
+`<video>` prefers WebM then MP4; autoplay, muted, loop, `object-cover`.
+If both fail to load, the page falls back to a crossfading still slideshow from `/public/images`.
+
+To swap in a new cut: overwrite the same filenames, commit, push.

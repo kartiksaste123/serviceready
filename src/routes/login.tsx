@@ -319,7 +319,7 @@ const DEMO_STILLS = [
 ];
 
 /**
- * Right-hand demo panel. Plays /videos/login-demo.mp4 (swap that file to update the cut).
+ * Right-hand demo panel. Plays Artlist login-demo (WebM then MP4).
  * Falls back to a cross-fading still slideshow if the video can't load.
  */
 function LoginDemoPanel() {
@@ -336,7 +336,6 @@ function LoginDemoPanel() {
     <div className="relative h-full w-full overflow-hidden rounded-2xl bg-neutral-950 shadow-xl ring-1 ring-black/5">
       {!videoFailed ? (
         <video
-          src="/videos/login-demo.mp4"
           poster="/videos/login-demo-poster.jpg"
           autoPlay
           muted
@@ -345,7 +344,10 @@ function LoginDemoPanel() {
           preload="auto"
           onError={() => setVideoFailed(true)}
           className="h-full w-full object-cover"
-        />
+        >
+          <source src="/videos/login-demo.webm" type="video/webm" />
+          <source src="/videos/login-demo.mp4" type="video/mp4" />
+        </video>
       ) : (
         DEMO_STILLS.map((s, n) => (
           <img
