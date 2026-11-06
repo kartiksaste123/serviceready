@@ -16,5 +16,31 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
-  ...(nitroPreset ? { nitro: { preset: nitroPreset } } : {}),
+  // Mirror nitro.config.ts routeRules so the Lovable/vite nitro merge keeps video headers.
+  nitro: {
+    ...(nitroPreset ? { preset: nitroPreset } : {}),
+    routeRules: {
+      "/login": {
+        headers: {
+          "Cache-Control": "no-cache, must-revalidate",
+        },
+      },
+      "/videos/**": {
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+      "/videos/login-demo.mp4": {
+        redirect: { to: "/videos/login-demo.c8211490fc.mp4", status: 302 },
+      },
+      "/videos/login-demo.webm": {
+        redirect: { to: "/videos/login-demo.52f703be51.webm", status: 302 },
+      },
+      "/videos/login-demo-poster.jpg": {
+        redirect: { to: "/videos/login-demo-poster.5b7e660ed6.jpg", status: 302 },
+      },
+    },
+  },
 });

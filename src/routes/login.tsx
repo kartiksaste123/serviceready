@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { api, USE_MOCKS } from "@/lib/api";
 import { DEMO_LOGIN } from "@/lib/supabase";
 import { Wordmark } from "@/components/kit";
+import { LOGIN_DEMO } from "@/lib/login-demo-assets";
 
 type Tab = "signin" | "signup";
 
@@ -311,34 +312,23 @@ function LoginPage() {
   );
 }
 
-const DEMO_STILLS = [
-  { src: "/images/hero.webp", caption: "Paste your prices — AI structures your catalog" },
-  { src: "/images/service-landing.webp", caption: "A storefront AI assistants can read and book" },
-  { src: "/images/agent-chat-bg.webp", caption: "Buyers' agents request quotes over MCP" },
-  { src: "/images/paypal-success.webp", caption: "Deposits and invoices paid through PayPal" },
-];
-
 /**
  * Right-hand demo: contained framed card (not edge-to-edge).
- * Plays Artlist login-demo (WebM then MP4). Cache-bust ?v=artlist2 for layout refresh.
- * Falls back to a cross-fading still slideshow if the video can't load.
+ * Plays Artlist login-demo via content-hashed URLs (LOGIN_DEMO) so browsers
+ * cannot reuse a sticky /videos/login-demo.* disk cache after a cut update.
+ * MP4 is listed first for universal decode; WebM is progressive enhancement.
+ * On media error, show poster only — never a product-UI chat mock slideshow.
  */
 function LoginDemoPanel() {
   const [videoFailed, setVideoFailed] = useState(false);
-  const [i, setI] = useState(0);
-
-  useEffect(() => {
-    if (!videoFailed) return;
-    const t = window.setInterval(() => setI((n) => (n + 1) % DEMO_STILLS.length), 4000);
-    return () => window.clearInterval(t);
-  }, [videoFailed]);
 
   return (
-    <div className="flex w-full flex-col items-center gap-3">
+    <div className="flex w-full flex-col items-center">
       <div className="relative aspect-[4/5] h-[min(78dvh,680px)] w-auto max-w-[min(100%,440px)] overflow-hidden rounded-2xl bg-neutral-950 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)] ring-1 ring-black/10">
         {!videoFailed ? (
           <video
-            poster="/videos/login-demo-poster.jpg?v=artlist2"
+            key={LOGIN_DEMO.contentId}
+            poster={LOGIN_DEMO.poster}
             autoPlay
             muted
             loop
@@ -346,30 +336,19 @@ function LoginDemoPanel() {
             preload="auto"
             onError={() => setVideoFailed(true)}
             className="h-full w-full object-cover"
+            aria-label="ServiceReady workflow demo video"
           >
-            <source src="/videos/login-demo.webm?v=artlist2" type="video/webm" />
-            <source src="/videos/login-demo.mp4?v=artlist2" type="video/mp4" />
+            <source src={LOGIN_DEMO.mp4} type="video/mp4" />
+            <source src={LOGIN_DEMO.webm} type="video/webm" />
           </video>
         ) : (
-          DEMO_STILLS.map((s, n) => (
-            <img
-              key={s.src}
-              src={s.src}
-              alt=""
-              aria-hidden={n !== i}
-              className={`absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-[1800ms] ease-out ${n === i ? "scale-105 opacity-100" : "scale-100 opacity-0"}`}
-            />
-          ))
-        )}
-        {videoFailed && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-5">
-            <p className="text-base font-semibold text-white">{DEMO_STILLS[i]?.caption}</p>
-          </div>
+          <img
+            src={LOGIN_DEMO.poster}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
         )}
       </div>
-      <p className="text-center text-xs font-medium tracking-wide text-neutral-500">
-        Full workflow demo
-      </p>
     </div>
   );
 }

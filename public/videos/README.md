@@ -2,12 +2,19 @@
 
 Artlist & OpenArt cut (31s, 4:5, loopable). Right panel on `/login`.
 
-- `login-demo.webm` — preferred (VP9)
-- `login-demo.mp4` — H.264 fallback (1080×1350, faststart)
-- `login-demo-poster.jpg` — first-frame poster
-- `login-demo-9x16.mp4` — optional vertical export (not used by the page)
+Filenames are **content-hashed** (first 10 hex of MD5). The login page imports
+paths from `src/lib/login-demo-assets.ts` — never hardcode unhashed names in UI.
 
-`<video>` prefers WebM then MP4; autoplay, muted, loop, `object-cover`.
-If both fail to load, the page falls back to a crossfading still slideshow from `/public/images`.
+Current assets:
+- `login-demo.<md5>.mp4` — H.264 (listed first in `<video>`)
+- `login-demo.<md5>.webm` — VP9
+- `login-demo-poster.<md5>.jpg` — first-frame poster
 
-To swap in a new cut: overwrite the same filenames, commit, push.
+Nitro sets `Cache-Control: no-cache, no-store, must-revalidate` on `/videos/**`.
+Old unhashed URLs 302 to the current hashed files.
+
+To swap in a new cut:
+1. Copy new files into this folder
+2. `md5sum` each; rename to `login-demo.<10hex>.{mp4,webm}` / `login-demo-poster.<10hex>.jpg`
+3. Update `src/lib/login-demo-assets.ts` + redirects in `nitro.config.ts`
+4. Delete previous hashed files, commit, push
