@@ -101,15 +101,16 @@
 
 ```
 ServiceReady
-AI (Grok): catalog · agent chat · collections drafts
-PayPal: Orders v2 deposit · Invoicing v2 balance
-Supabase + TanStack Start · MIT
+AI (xAI Grok): catalog · agent chat · collections drafts
+Agents: MCP server /mcp/maya-rao-studio → create_deposit_link
+PayPal: Orders v2 deposit · Invoicing v2 balance · signed Webhooks
+Supabase + TanStack Start on Render · MIT
 Demo: serviceready.onrender.com
 Repo: github.com/kartiksaste123/serviceready
 ```
 
 **Say:**  
-“**AI** books and drafts. **PayPal** settles deposits and invoices. Judges: open the live demo, use the sandbox buyer in the README, and try `/s/maya-rao-studio`. Thanks!”
+“**AI** books and drafts — any MCP agent can book too. **PayPal** settles deposits and invoices, and signed webhooks reconcile them. Judges: open the live demo, use the sandbox buyer in the README, and try `/s/maya-rao-studio`. Thanks!”
 
 **End card hold ~3s.** Stop by **2:55** max (hard cap 3:00).
 

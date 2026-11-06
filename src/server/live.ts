@@ -655,13 +655,22 @@ export async function handlePaypalWebhook(request: Request): Promise<{
   const webhookId = paypalWebhookId();
   let verification: "signature" | "api_reverify" = "api_reverify";
   if (webhookId) {
-    const status = await paypal.verifyWebhookSignature({
-      webhookId,
-      headers: request.headers,
-      event,
-    });
-    if (status !== "SUCCESS")
+    const required = [
+      "paypal-transmission-id",
+      "paypal-transmission-sig",
+      "paypal-transmission-time",
+      "paypal-cert-url",
+      "paypal-auth-algo",
+    ];
+    if (required.some((h) => !request.headers.get(h))) {
+      throw new HttpError("Missing PayPal webhook signature headers", 401);
+    }
+    const status = await paypal
+      .verifyWebhookSignature({ webhookId, headers: request.headers, event })
+      .catch(() => "FAILURE");
+    if (status !== "SUCCESS") {
       throw new HttpError("PayPal webhook signature verification failed", 401);
+    }
     verification = "signature";
   }
 
