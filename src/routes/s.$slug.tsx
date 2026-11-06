@@ -180,55 +180,56 @@ function Storefront() {
                   {data.services.map((s) => {
                     const cover = serviceCover(s.title);
                     return (
-                    <article key={s.id} className="glass-card flex flex-col overflow-hidden p-0">
-                      {cover ? (
-                        <img
-                          src={cover}
-                          alt=""
-                          aria-hidden="true"
-                          className="aspect-[16/9] w-full object-cover"
-                          width={640}
-                          height={360}
-                          loading="lazy"
-                        />
-                      ) : null}
-                      <div className="flex flex-1 flex-col p-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <h2 className="font-semibold">{s.title}</h2>
-                        <span className="text-xl font-bold tabular-nums">
-                          {money0(s.price_cents)}
-                        </span>
-                      </div>
-                      <p className="mt-1.5 text-sm text-muted-foreground">{s.description}</p>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-md bg-success-bg px-2 py-0.5 font-semibold text-success tabular-nums">
-                          {s.deposit_pct}% deposit ·{" "}
-                          {money0(depositOf(s.price_cents, s.deposit_pct))}
-                        </span>
-                        <span className="flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-muted-foreground">
-                          <Clock className="size-3" aria-hidden="true" />~{s.lead_time_days} days
-                        </span>
-                      </div>
-                      {s.deliverables.length > 0 && (
-                        <ul className="mt-3 flex-1 space-y-1 text-[13px] text-muted-foreground">
-                          {s.deliverables.map((d) => (
-                            <li key={d} className="flex items-start gap-1.5">
-                              <Check className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                              {d}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <button
-                        type="button"
-                        className="btn-mint btn-sm mt-4 self-start"
-                        onClick={() => setPicked(s)}
-                        aria-label={`Request a quote for ${s.title}`}
-                      >
-                        Request quote <ArrowRight className="size-3.5" aria-hidden="true" />
-                      </button>
-                      </div>
-                    </article>
+                      <article key={s.id} className="glass-card flex flex-col overflow-hidden p-0">
+                        {cover ? (
+                          <img
+                            src={cover}
+                            alt=""
+                            aria-hidden="true"
+                            className="aspect-[16/9] w-full object-cover"
+                            width={640}
+                            height={360}
+                            loading="lazy"
+                          />
+                        ) : null}
+                        <div className="flex flex-1 flex-col p-5">
+                          <div className="flex items-start justify-between gap-3">
+                            <h2 className="font-semibold">{s.title}</h2>
+                            <span className="text-xl font-bold tabular-nums">
+                              {money0(s.price_cents)}
+                            </span>
+                          </div>
+                          <p className="mt-1.5 text-sm text-muted-foreground">{s.description}</p>
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                            <span className="rounded-md bg-success-bg px-2 py-0.5 font-semibold text-success tabular-nums">
+                              {s.deposit_pct}% deposit ·{" "}
+                              {money0(depositOf(s.price_cents, s.deposit_pct))}
+                            </span>
+                            <span className="flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-muted-foreground">
+                              <Clock className="size-3" aria-hidden="true" />~{s.lead_time_days}{" "}
+                              days
+                            </span>
+                          </div>
+                          {s.deliverables.length > 0 && (
+                            <ul className="mt-3 flex-1 space-y-1 text-[13px] text-muted-foreground">
+                              {s.deliverables.map((d) => (
+                                <li key={d} className="flex items-start gap-1.5">
+                                  <Check className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                                  {d}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-mint btn-sm mt-4 self-start"
+                            onClick={() => setPicked(s)}
+                            aria-label={`Request a quote for ${s.title}`}
+                          >
+                            Request quote <ArrowRight className="size-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </article>
                     );
                   })}
                 </div>
@@ -243,9 +244,46 @@ function Storefront() {
   );
 }
 
+/** Register storefront tools with WebMCP browsers; each tool proxies to our MCP server. */
+function useWebMcp(mcpUrl: string, tools: string[]) {
+  useEffect(() => {
+    const mc = (
+      navigator as unknown as { modelContext?: { provideContext?: (c: unknown) => void } }
+    ).modelContext;
+    if (!mc?.provideContext || !mcpUrl) return;
+    const call = async (name: string, args: unknown) => {
+      const res = await fetch(new URL(mcpUrl).pathname, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name, arguments: args ?? {} },
+        }),
+      });
+      const j = (await res.json()) as { result?: unknown };
+      return j.result;
+    };
+    try {
+      mc.provideContext({
+        tools: [...tools, "create_deposit_link"].map((name) => ({
+          name,
+          description: `ServiceReady storefront tool: ${name.replace(/_/g, " ")}`,
+          inputSchema: { type: "object", additionalProperties: true },
+          execute: (args: unknown) => call(name, args),
+        })),
+      });
+    } catch {
+      /* experimental API — ignore */
+    }
+  }, [mcpUrl, tools]);
+}
+
 function AgentBadge({ mcp, tools }: { mcp: string; tools: string[] }) {
   const [webmcp, setWebmcp] = useState<boolean | null>(null);
   useEffect(() => setWebmcp("modelContext" in navigator), []);
+  useWebMcp(mcp, tools);
   return (
     <Popover>
       <PopoverTrigger className="flex items-center gap-2 rounded-full bg-success-bg px-3.5 py-1.5 text-sm font-semibold text-success ringline hover:bg-muted">
@@ -255,10 +293,13 @@ function AgentBadge({ mcp, tools }: { mcp: string; tools: string[] }) {
       <PopoverContent align="end" className="w-80 border-border bg-background text-foreground">
         <p className="text-xs font-medium text-muted-foreground">MCP endpoint</p>
         <p className="mt-1 break-all font-mono text-xs text-link">{mcp}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Live MCP server (Streamable HTTP). Tools: list_services, get_service, request_quote,
+          get_quote_status, create_deposit_link (real PayPal sandbox order).
+        </p>
         {USE_MOCKS && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Try the AI assistant below (server-side LLM when configured). Live MCP requires the external
-            service.
+            Mock mode: the MCP endpoint is served by the live deploy.
           </p>
         )}
         <p className="mt-4 text-xs font-medium text-muted-foreground">WebMCP tools</p>
@@ -277,7 +318,7 @@ function AgentBadge({ mcp, tools }: { mcp: string; tools: string[] }) {
           {webmcp === null
             ? "Checking…"
             : webmcp
-              ? "Browser supports WebMCP (external integration required)"
+              ? "Browser supports WebMCP"
               : "WebMCP: not supported in this browser"}
         </p>
       </PopoverContent>
@@ -402,12 +443,20 @@ function AgentChat({ slug }: { slug: string }) {
   const [items, setItems] = useState<Item[]>([]);
   const [text, setText] = useState("");
   const scroller = useRef<HTMLDivElement>(null);
+  const [engine, setEngine] = useState<string | null>(null);
   const msgs = items
     .filter((i): i is Extract<Item, { kind: "msg" }> => i.kind === "msg")
     .map((i) => i.msg);
   const m = useMutation({
     mutationFn: (all: ChatMsg[]) => api.agentChat(slug, all),
     onSuccess: (r, sent) => {
+      if (r.engine) {
+        setEngine(
+          r.engine.kind === "llm"
+            ? `Live AI · ${r.engine.provider} ${r.engine.model}`.trim()
+            : "Offline fallback (no model reachable)",
+        );
+      }
       const fresh = r.messages.slice(sent.length).map((msg): Item => ({ kind: "msg", msg }));
       setItems((it) => [
         ...it,
@@ -453,7 +502,7 @@ function AgentChat({ slug }: { slug: string }) {
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">Try booking with an AI assistant</h2>
           <p className="text-xs text-muted-foreground">
-            See how an assistant finds a service and prepares a quote
+            {engine ?? "Real tool calls · PayPal sandbox deposit link at the end"}
           </p>
         </div>
         {items.length > 0 && (

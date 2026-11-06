@@ -35,10 +35,10 @@ import {
 } from "../lib/validation";
 import { money, money0 } from "../lib/format";
 import { db } from "./db";
-import { publicOrigin } from "./env";
+import { paypalWebhookId, publicOrigin } from "./env";
 import { HttpError } from "./http";
 import * as paypal from "./paypal";
-import { chatJson, hasLlm, LlmError } from "./llm";
+import { chatCompletion, chatJson, hasLlm, llmDisclosure, LlmError } from "./llm";
 import { z } from "zod";
 
 const DEMO_SLUG = "maya-rao-studio";
@@ -163,9 +163,7 @@ function mapService(r: ServiceRow): Service {
   };
 }
 function mapQuote(r: QuoteRow): Quote {
-  const line_items = Array.isArray(r.line_items)
-    ? (r.line_items as Quote["line_items"])
-    : [];
+  const line_items = Array.isArray(r.line_items) ? (r.line_items as Quote["line_items"]) : [];
   return {
     id: r.id,
     service_id: r.service_id,
@@ -245,18 +243,16 @@ async function demoSeller(): Promise<SellerRow> {
   return requireSeller(DEMO_SLUG);
 }
 
-async function pushEvent(
-  partial: {
-    quote_id: string | null;
-    seller_id?: string | null;
-    actor: AgentEvent["actor"];
-    kind: AgentEvent["kind"];
-    tool?: string | null;
-    input?: unknown;
-    output?: unknown;
-    text?: string | null;
-  },
-): Promise<AgentEvent> {
+async function pushEvent(partial: {
+  quote_id: string | null;
+  seller_id?: string | null;
+  actor: AgentEvent["actor"];
+  kind: AgentEvent["kind"];
+  tool?: string | null;
+  input?: unknown;
+  output?: unknown;
+  text?: string | null;
+}): Promise<AgentEvent> {
   const { data, error } = await db()
     .from("agent_events")
     .insert({
@@ -296,7 +292,11 @@ async function detail(id: string): Promise<QuoteDetail> {
   const q = await getQuoteRow(id);
   const [payments, eventsRes, repliesRes, proposalsRes] = await Promise.all([
     paymentsFor(id),
-    db().from("agent_events").select("*").eq("quote_id", id).order("created_at", { ascending: true }),
+    db()
+      .from("agent_events")
+      .select("*")
+      .eq("quote_id", id)
+      .order("created_at", { ascending: true }),
     db().from("replies").select("*").eq("quote_id", id).order("created_at", { ascending: true }),
     db().from("proposals").select("*").eq("quote_id", id).order("created_at", { ascending: true }),
   ]);
@@ -464,21 +464,45 @@ export async function paypalConfig() {
   return paypal.getPublicClientId();
 }
 
-export async function createDepositOrder(id: string): Promise<{ order_id: string }> {
+export async function createDepositOrder(
+  id: string,
+  request?: Request,
+): Promise<{ order_id: string; approve_url?: string; quote_url: string }> {
   const q = await getQuoteRow(id);
   if (q.status === "cancelled") throw new HttpError("This quote was cancelled", 400);
   if (q.status !== "quoted") throw new HttpError("The deposit for this quote is already paid", 400);
   if (q.deposit_cents <= 0) throw new HttpError("This quote has no deposit to pay", 400);
+  const origin = publicOrigin(request);
+  const quote_url = `${origin}/q/${q.id}`;
 
   const pays = await paymentsFor(id);
-  const open = pays.find((p) => p.kind === "deposit" && p.status === "CREATED" && p.paypal_order_id);
-  if (open?.paypal_order_id) return { order_id: open.paypal_order_id };
+  const open = pays.find(
+    (p) => p.kind === "deposit" && p.status === "CREATED" && p.paypal_order_id,
+  );
+  if (open?.paypal_order_id) {
+    let approve_url: string | undefined;
+    try {
+      const o = await paypal.getOrder(open.paypal_order_id);
+      approve_url = o.approveUrl;
+    } catch {
+      /* the JS SDK button still works with just the order id */
+    }
+    return { order_id: open.paypal_order_id, quote_url, ...(approve_url ? { approve_url } : {}) };
+  }
 
+  const { data: sellerRow } = await db()
+    .from("sellers")
+    .select("name")
+    .eq("id", q.seller_id)
+    .maybeSingle();
   const order = await paypal.createOrder({
     amountCents: q.deposit_cents,
     customId: q.id,
     description: `Deposit — ${q.service_title}`,
     requestId: `deposit-${q.id}`,
+    returnUrl: `${quote_url}?paypal=return`,
+    cancelUrl: `${quote_url}?paypal=cancel`,
+    ...(sellerRow?.name ? { brandName: String(sellerRow.name) } : {}),
   });
 
   const { error } = await db().from("payments").insert({
@@ -500,7 +524,56 @@ export async function createDepositOrder(id: string): Promise<{ order_id: string
     output: { id: order.id, status: order.status },
   });
 
-  return { order_id: order.id };
+  return {
+    order_id: order.id,
+    quote_url,
+    ...(order.approveUrl ? { approve_url: order.approveUrl } : {}),
+  };
+}
+
+/** Flip a deposit to paid once PayPal has confirmed the capture. Idempotent. */
+async function markDepositPaid(
+  q: QuoteRow,
+  paymentId: string,
+  order_id: string,
+  captureId: string | undefined,
+  via: "capture_api" | "webhook",
+): Promise<Quote> {
+  const now = new Date().toISOString();
+  const { error: pErr } = await db()
+    .from("payments")
+    .update({
+      status: "COMPLETED",
+      paypal_capture_id: captureId ?? null,
+      updated_at: now,
+    })
+    .eq("id", paymentId);
+  if (pErr) throw new HttpError(pErr.message, 500);
+
+  const { data: updated, error: qErr } = await db()
+    .from("quotes")
+    .update({ status: "deposit_paid", updated_at: now })
+    .eq("id", q.id)
+    .select("*")
+    .single();
+  if (qErr) throw new HttpError(qErr.message, 500);
+
+  await pushEvent({
+    quote_id: q.id,
+    seller_id: q.seller_id,
+    actor: "paypal",
+    kind: "webhook",
+    tool: "PAYMENT.CAPTURE.COMPLETED",
+    output: {
+      order_id,
+      capture_id: captureId,
+      amount: q.deposit_cents / 100,
+      verified_via: via,
+    },
+    text: "Deposit captured — work can start",
+  });
+
+  return mapQuote(updated as QuoteRow);
 }
 
 export async function captureDeposit(id: string, order_id: string): Promise<Quote> {
@@ -516,54 +589,167 @@ export async function captureDeposit(id: string, order_id: string): Promise<Quot
     );
   }
 
-  const captured = await paypal.captureOrder(order_id);
+  let captured: Awaited<ReturnType<typeof paypal.captureOrder>>;
+  try {
+    captured = await paypal.captureOrder(order_id);
+  } catch (e) {
+    // A webhook (or another tab) may have captured it first — re-read PayPal before failing.
+    const o = await paypal.getOrder(order_id).catch(() => null);
+    if (o?.status === "COMPLETED") {
+      const fresh = await getQuoteRow(id);
+      if (fresh.status !== "quoted") return mapQuote(fresh);
+      return markDepositPaid(q, p.id, order_id, undefined, "capture_api");
+    }
+    throw e;
+  }
   if (captured.status !== "COMPLETED") {
     throw new HttpError(`PayPal capture status is ${captured.status}`, 502);
   }
   if (captured.customId && captured.customId !== id) {
     throw new HttpError("PayPal order does not match this quote", 400);
   }
-  if (
-    captured.amountCents !== undefined &&
-    captured.amountCents !== q.deposit_cents
-  ) {
+  if (captured.amountCents !== undefined && captured.amountCents !== q.deposit_cents) {
     throw new HttpError("Captured amount does not match deposit", 400);
   }
 
-  const now = new Date().toISOString();
-  const { error: pErr } = await db()
-    .from("payments")
-    .update({
-      status: "COMPLETED",
-      paypal_capture_id: captured.captureId ?? null,
-      updated_at: now,
-    })
-    .eq("id", p.id);
-  if (pErr) throw new HttpError(pErr.message, 500);
+  return markDepositPaid(q, p.id, order_id, captured.captureId, "capture_api");
+}
 
-  const { data: updated, error: qErr } = await db()
-    .from("quotes")
-    .update({ status: "deposit_paid", updated_at: now })
-    .eq("id", id)
-    .select("*")
-    .single();
-  if (qErr) throw new HttpError(qErr.message, 500);
+type WebhookEvent = {
+  id?: string;
+  event_type?: string;
+  resource_type?: string;
+  summary?: string;
+  resource?: Record<string, unknown> & {
+    id?: string;
+    status?: string;
+    custom_id?: string;
+    invoice?: { id?: string };
+    supplementary_data?: { related_ids?: { order_id?: string } };
+  };
+};
 
-  await pushEvent({
-    quote_id: id,
-    seller_id: q.seller_id,
-    actor: "paypal",
-    kind: "webhook",
-    tool: "PAYMENT.CAPTURE.COMPLETED",
-    output: {
-      order_id,
-      capture_id: captured.captureId,
-      amount: q.deposit_cents / 100,
-    },
-    text: "Deposit captured — work can start",
-  });
+/**
+ * POST /api/paypal/webhook — PayPal is the source of truth.
+ * 1. Verify the signature with PayPal when PAYPAL_WEBHOOK_ID is set (rejects forgeries).
+ * 2. Either way, never trust the payload: re-read the order / invoice from the PayPal API before changing state.
+ * 3. Idempotent on PayPal-Transmission-Id via webhook_events.
+ */
+export async function handlePaypalWebhook(request: Request): Promise<{
+  ok: true;
+  event_type: string;
+  verification: "signature" | "api_reverify";
+  handled: string;
+  duplicate?: boolean;
+}> {
+  const raw = await request.text();
+  let event: WebhookEvent;
+  try {
+    event = JSON.parse(raw) as WebhookEvent;
+  } catch {
+    throw new HttpError("Invalid webhook JSON", 400);
+  }
+  const event_type = String(event.event_type ?? "");
+  if (!event_type) throw new HttpError("Missing event_type", 400);
 
-  return mapQuote(updated as QuoteRow);
+  const webhookId = paypalWebhookId();
+  let verification: "signature" | "api_reverify" = "api_reverify";
+  if (webhookId) {
+    const status = await paypal.verifyWebhookSignature({
+      webhookId,
+      headers: request.headers,
+      event,
+    });
+    if (status !== "SUCCESS")
+      throw new HttpError("PayPal webhook signature verification failed", 401);
+    verification = "signature";
+  }
+
+  const transmissionId =
+    request.headers.get("paypal-transmission-id") ?? (event.id ? `event:${event.id}` : null);
+  if (transmissionId) {
+    const { error } = await db()
+      .from("webhook_events")
+      .insert({
+        paypal_transmission_id: transmissionId,
+        event_type,
+        payload: event as unknown as Record<string, unknown>,
+      });
+    if (error && /duplicate|unique/i.test(error.message)) {
+      return { ok: true, event_type, verification, handled: "duplicate", duplicate: true };
+    }
+  }
+
+  let handled = "ignored";
+  const r = event.resource ?? {};
+  try {
+    if (event_type === "CHECKOUT.ORDER.APPROVED" || event_type === "PAYMENT.CAPTURE.COMPLETED") {
+      const orderId =
+        event_type === "CHECKOUT.ORDER.APPROVED"
+          ? r.id
+          : r.supplementary_data?.related_ids?.order_id;
+      if (orderId) {
+        const { data: pay } = await db()
+          .from("payments")
+          .select("*")
+          .eq("paypal_order_id", orderId)
+          .maybeSingle();
+        if (pay && (pay as PaymentRow).status !== "COMPLETED") {
+          const payment = pay as PaymentRow;
+          const q = await getQuoteRow(payment.quote_id);
+          if (q.status === "quoted") {
+            const order = await paypal.getOrder(orderId);
+            if (order.customId && order.customId !== q.id) {
+              handled = "order_mismatch";
+            } else if (order.status === "APPROVED") {
+              await captureDeposit(q.id, orderId);
+              handled = "captured_from_webhook";
+            } else if (order.status === "COMPLETED") {
+              await markDepositPaid(
+                q,
+                payment.id,
+                orderId,
+                event_type === "PAYMENT.CAPTURE.COMPLETED" ? r.id : undefined,
+                "webhook",
+              );
+              handled = "deposit_marked_paid";
+            } else {
+              handled = `order_status_${order.status}`;
+            }
+          } else {
+            handled = "already_handled";
+          }
+        } else {
+          handled = pay ? "already_completed" : "unknown_order";
+        }
+      }
+    } else if (event_type.startsWith("INVOICING.INVOICE.")) {
+      const invoiceId = r.invoice?.id ?? r.id;
+      if (invoiceId) {
+        const { data: pay } = await db()
+          .from("payments")
+          .select("*")
+          .eq("paypal_invoice_id", invoiceId)
+          .maybeSingle();
+        if (pay) {
+          // refreshInvoiceStatus re-reads the invoice from PayPal — the payload alone never marks paid.
+          await refreshInvoiceStatus((pay as PaymentRow).quote_id);
+          handled = "invoice_refreshed";
+        } else {
+          handled = "unknown_invoice";
+        }
+      }
+    }
+  } finally {
+    if (transmissionId) {
+      await db()
+        .from("webhook_events")
+        .update({ processed_at: new Date().toISOString() })
+        .eq("paypal_transmission_id", transmissionId);
+    }
+  }
+
+  return { ok: true, event_type, verification, handled };
 }
 
 export async function deliver(id: string): Promise<QuoteDetail> {
@@ -602,7 +788,13 @@ export async function deliver(id: string): Promise<QuoteDetail> {
     return detail(id);
   }
 
+  const { data: sellerRow } = await db()
+    .from("sellers")
+    .select("name")
+    .eq("id", q.seller_id)
+    .maybeSingle();
   const inv = await paypal.createAndSendInvoice({
+    ...(sellerRow?.name ? { businessName: String(sellerRow.name) } : {}),
     amountCents: q.balance_cents,
     recipientEmail: q.client_email,
     recipientName: q.client_name,
@@ -611,20 +803,19 @@ export async function deliver(id: string): Promise<QuoteDetail> {
     invoiceNumber: `SR-${q.id.replace(/-/g, "").slice(0, 12).toUpperCase()}`,
   });
 
-  const { error: pErr } = await db().from("payments").insert({
-    quote_id: id,
-    kind: "balance",
-    amount_cents: q.balance_cents,
-    status: "UNPAID",
-    paypal_invoice_id: inv.invoiceId,
-    invoice_url: inv.href ?? null,
-  });
+  const { error: pErr } = await db()
+    .from("payments")
+    .insert({
+      quote_id: id,
+      kind: "balance",
+      amount_cents: q.balance_cents,
+      status: "UNPAID",
+      paypal_invoice_id: inv.invoiceId,
+      invoice_url: inv.href ?? null,
+    });
   if (pErr) throw new HttpError(pErr.message, 500);
 
-  await db()
-    .from("quotes")
-    .update({ status: "balance_invoiced", updated_at: now })
-    .eq("id", id);
+  await db().from("quotes").update({ status: "balance_invoiced", updated_at: now }).eq("id", id);
 
   await pushEvent({
     quote_id: id,
@@ -689,15 +880,17 @@ export async function refreshInvoiceStatus(id: string): Promise<QuoteDetail> {
       text: "Balance paid in full",
     });
     // Propose thank-you
-    await db().from("proposals").insert({
-      quote_id: id,
-      client_name: q.client_name,
-      action: "thank_and_close",
-      reason: "PayPal reports the invoice as paid",
-      evidence: `Invoice ${bal.paypal_invoice_id} status ${inv.status}`,
-      draft_message: `Hi ${q.client_name.split(" ")[0] ?? q.client_name}, thanks so much for settling the balance on ${q.service_title}! It was a pleasure working with you.\n\n— Maya`,
-      status: "pending",
-    });
+    await db()
+      .from("proposals")
+      .insert({
+        quote_id: id,
+        client_name: q.client_name,
+        action: "thank_and_close",
+        reason: "PayPal reports the invoice as paid",
+        evidence: `Invoice ${bal.paypal_invoice_id} status ${inv.status}`,
+        draft_message: `Hi ${q.client_name.split(" ")[0] ?? q.client_name}, thanks so much for settling the balance on ${q.service_title}! It was a pleasure working with you.\n\n— Maya`,
+        status: "pending",
+      });
   } else if (inv.href && inv.href !== bal.invoice_url) {
     await db().from("payments").update({ invoice_url: inv.href }).eq("id", bal.id);
   }
@@ -888,6 +1081,16 @@ Include the invoice URL verbatim. Keep under 1200 characters. No subject line.`,
           draft = `${draft.trim()}\n\nInvoice: ${bal.invoice_url}`;
         }
         summary = llmDraft.summary.trim();
+        const disc = llmDisclosure();
+        await log({
+          quote_id: id,
+          seller_id: q.seller_id,
+          actor: "collections_agent",
+          kind: "tool_call",
+          tool: "llm.draft_reminder",
+          input: { tone, claims_paid_but_paypal_open: claimsPaid },
+          output: { provider: disc?.provider, model: disc?.model, chars: draft.length },
+        });
       } catch {
         // keep heuristic draft
       }
@@ -947,11 +1150,7 @@ export async function listProposals(status?: string): Promise<Proposal[]> {
 }
 
 export async function approveProposal(id: string, draft_message: string): Promise<Proposal> {
-  const { data: prop, error } = await db()
-    .from("proposals")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const { data: prop, error } = await db().from("proposals").select("*").eq("id", id).maybeSingle();
   if (error) throw new HttpError(error.message, 500);
   if (!prop) throw new HttpError("Proposal not found", 404);
   const p = prop as ProposalRow;
@@ -964,7 +1163,11 @@ export async function approveProposal(id: string, draft_message: string): Promis
   // If reminder + invoice id, call PayPal remind
   if (p.action === "send_reminder" && bal?.paypal_invoice_id) {
     try {
-      await paypal.remindInvoice(bal.paypal_invoice_id, "Reminder from ServiceReady", draft_message);
+      await paypal.remindInvoice(
+        bal.paypal_invoice_id,
+        "Reminder from ServiceReady",
+        draft_message,
+      );
       await pushEvent({
         quote_id: p.quote_id,
         seller_id: q.seller_id,
@@ -1056,6 +1259,36 @@ export async function listEvents(actor?: string): Promise<AgentEvent[]> {
   return merged.slice(0, 200);
 }
 
+/** GET /api/health — what the live deploy is actually wired to (never returns secrets). */
+export async function health() {
+  const out: Record<string, unknown> = { ok: true, time: new Date().toISOString() };
+  try {
+    const cfg = await paypal.getPublicClientId();
+    out["paypal"] = {
+      configured: true,
+      env: cfg.env,
+      webhook_signature_verification: Boolean(paypalWebhookId()),
+    };
+  } catch {
+    out["paypal"] = { configured: false };
+    out["ok"] = false;
+  }
+  const disc = llmDisclosure();
+  out["ai"] = disc
+    ? { configured: true, ...disc }
+    : { configured: false, mode: "heuristic fallback" };
+  try {
+    const { error } = await db().from("sellers").select("id").eq("slug", DEMO_SLUG).maybeSingle();
+    out["supabase"] = { configured: true, reachable: !error };
+    if (error) out["ok"] = false;
+  } catch {
+    out["supabase"] = { configured: false };
+    out["ok"] = false;
+  }
+  out["mcp"] = { endpoint: `/mcp/${DEMO_SLUG}`, transport: "streamable-http (JSON-RPC 2.0)" };
+  return out;
+}
+
 export async function getStats(): Promise<Stats> {
   const quotes = await listQuotes();
   const by_status = {
@@ -1070,6 +1303,7 @@ export async function getStats(): Promise<Stats> {
   let outstanding_cents = 0;
   let paid_cents = 0;
   const owed_by_client: Stats["owed_by_client"] = [];
+  const daysToPay: number[] = [];
 
   for (const q of quotes) {
     by_status[q.status] = (by_status[q.status] ?? 0) + 1;
@@ -1077,8 +1311,11 @@ export async function getStats(): Promise<Stats> {
     const dep = pays.find((p) => p.kind === "deposit" && p.status === "COMPLETED");
     if (dep) deposits_collected_cents += dep.amount_cents;
     const bal = pays.find((p) => p.kind === "balance");
-    if (bal?.status === "PAID") paid_cents += bal.amount_cents + (dep?.amount_cents ?? 0);
-    else if (q.status === "paid") paid_cents += q.total_cents;
+    if (bal?.status === "PAID") {
+      paid_cents += bal.amount_cents + (dep?.amount_cents ?? 0);
+      const d = (new Date(bal.updated_at).getTime() - new Date(q.created_at).getTime()) / 864e5;
+      if (Number.isFinite(d) && d >= 0) daysToPay.push(d);
+    } else if (q.status === "paid") paid_cents += q.total_cents;
     if (bal && bal.status !== "PAID" && q.status === "balance_invoiced") {
       outstanding_cents += bal.amount_cents;
       const days = Math.max(
@@ -1098,7 +1335,9 @@ export async function getStats(): Promise<Stats> {
     deposits_collected_cents,
     outstanding_cents,
     paid_cents,
-    avg_days_to_pay: null,
+    avg_days_to_pay: daysToPay.length
+      ? Math.round((daysToPay.reduce((a, b) => a + b, 0) / daysToPay.length) * 10) / 10
+      : null,
     by_status,
     owed_by_client: owed_by_client.sort((a, b) => b.days_since_invoice - a.days_since_invoice),
   };
@@ -1231,14 +1470,15 @@ Return JSON only.`,
             ? s.deposit_pct
             : seller.default_deposit_pct;
         const lead =
-          typeof s.lead_time_days === "number" && s.lead_time_days > 0
-            ? s.lead_time_days
-            : 7;
+          typeof s.lead_time_days === "number" && s.lead_time_days > 0 ? s.lead_time_days : 7;
         services.push({
           tmp_id,
           title: (s.title || `Service ${i}`).trim().slice(0, 80),
           description: (s.description ?? "").trim().slice(0, 280),
-          deliverables: (s.deliverables ?? []).map((d) => d.trim()).filter(Boolean).slice(0, 12),
+          deliverables: (s.deliverables ?? [])
+            .map((d) => d.trim())
+            .filter(Boolean)
+            .slice(0, 12),
           price_cents,
           deposit_pct,
           lead_time_days: lead,
@@ -1326,10 +1566,20 @@ const AgentPlanSchema = z.object({
 });
 
 /** Deterministic storefront agent — used when no LLM key is set. */
+export type AgentEngine =
+  { kind: "llm"; provider: string; model: string } | { kind: "heuristic"; reason: string };
+type AgentChatResult = {
+  messages: ChatMsg[];
+  tool_calls: ToolTrace[];
+  quote: Quote | null;
+  engine: AgentEngine;
+};
+
 async function agentChatHeuristic(
   slug: string,
   messages: ChatMsg[],
-): Promise<{ messages: ChatMsg[]; tool_calls: ToolTrace[]; quote: Quote | null }> {
+  reason = "no model key configured",
+): Promise<AgentChatResult> {
   const store = await getPublic(slug);
   const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const tool_calls: ToolTrace[] = [];
@@ -1404,13 +1654,15 @@ async function agentChatHeuristic(
     messages: [...messages, { role: "assistant", content: reply }],
     tool_calls,
     quote,
+    engine: { kind: "heuristic", reason },
   };
 }
 
 export async function agentChat(
   slug: string,
   messages: ChatMsg[],
-): Promise<{ messages: ChatMsg[]; tool_calls: ToolTrace[]; quote: Quote | null }> {
+  request?: Request,
+): Promise<AgentChatResult> {
   if (!hasLlm()) return agentChatHeuristic(slug, messages);
 
   try {
@@ -1442,7 +1694,9 @@ Available tools (put intended calls in "actions"; the server executes them):
 - get_quote_status (needs quote_id)
 Always include list_services as the first action.
 Return JSON: {"reply":"markdown for the client","actions":[{"tool":"...","service_id?","quote_id?","client_name?","client_email?","brief?"}]}
-Be concise. Never invent prices — use the catalog. Never claim payment succeeded.`,
+Be concise. Never invent prices — use the catalog. Never claim payment succeeded.
+As soon as the client has given a name, a valid email and a need that matches a service, call request_quote right away (use their message as the brief) — do not ask for more detail first.
+The client never sees raw tool output, so when you only list or describe services, name them with prices and deposits in the reply itself.`,
         },
         {
           role: "user",
@@ -1463,18 +1717,16 @@ Be concise. Never invent prices — use the catalog. Never claim payment succeed
       output: catalog.map((s) => ({ id: s.id, title: s.title, price_cents: s.price_cents })),
     });
 
-    const actions = plan.actions.length
-      ? plan.actions
-      : [{ tool: "list_services" as const }];
+    const actions = plan.actions.length ? plan.actions : [{ tool: "list_services" as const }];
 
     for (const action of actions) {
       if (action.tool === "list_services") continue; // already logged
       if (action.tool === "get_service") {
-        const svc = store.services.find((s) => s.id === action.service_id) ??
+        const svc =
+          store.services.find((s) => s.id === action.service_id) ??
           store.services.find(
             (s) =>
-              action.service_id &&
-              s.title.toLowerCase().includes(action.service_id.toLowerCase()),
+              action.service_id && s.title.toLowerCase().includes(action.service_id.toLowerCase()),
           );
         tool_calls.push({
           tool: "get_service",
@@ -1487,17 +1739,28 @@ Be concise. Never invent prices — use the catalog. Never claim payment succeed
         const email = (action.client_email ?? "").trim();
         const name = (action.client_name ?? "").trim() || email.split("@")[0] || "Client";
         if (svc && isEmail(email)) {
-          const created = await postPublicQuote(slug, {
-            service_id: svc.id,
-            client_name: name.slice(0, 100),
-            client_email: email,
-            brief: (action.brief ?? messages.at(-1)?.content ?? "").slice(0, 500),
-            source: "agent_sim",
-          });
+          const created = await postPublicQuote(
+            slug,
+            {
+              service_id: svc.id,
+              client_name: name.slice(0, 100),
+              client_email: email,
+              brief: (action.brief ?? messages.at(-1)?.content ?? "").slice(0, 500),
+              source: "agent_sim",
+            },
+            request,
+          );
           tool_calls.push({
             tool: "request_quote",
             input: { service_id: svc.id, client_email: email, client_name: name },
-            output: { quote_id: created.id, deposit_cents: created.deposit_cents },
+            output: {
+              quote_id: created.id,
+              service: svc.title,
+              total: money(created.total_cents),
+              deposit_due_now: money(created.deposit_cents),
+              balance_on_delivery: money(created.balance_cents),
+              turnaround_days: svc.lead_time_days,
+            },
           });
           quote = created;
         } else {
@@ -1531,20 +1794,48 @@ Be concise. Never invent prices — use the catalog. Never claim payment succeed
     }
 
     let reply = plan.reply?.trim() || "How can I help you pick a service?";
+    // Second pass: let the model write the final answer from real tool results (no invented ids/prices).
+    const ranTools = tool_calls.some((t) => t.tool !== "list_services");
+    if (ranTools) {
+      try {
+        const final = await chatCompletion(
+          [
+            {
+              role: "system",
+              content: `You are the storefront assistant for ${store.seller.name}. Write the final reply to the client in concise markdown (bold with ** only, bullet lists with "- ").
+Use ONLY facts from TOOL_RESULTS and copy amounts exactly as written there. If a quote was created, state total, deposit due now, balance on delivery, turnaround, and tell them to pay the deposit with PayPal using the button below. Never claim payment succeeded.`,
+            },
+            {
+              role: "user",
+              content: `CONVERSATION:\n${history}\n\nTOOL_RESULTS:\n${JSON.stringify(
+                tool_calls.filter((t) => t.tool !== "list_services"),
+              ).slice(0, 6000)}`,
+            },
+          ],
+          { temperature: 0.3, timeoutMs: 15_000 },
+        );
+        if (final.trim()) reply = final.trim();
+      } catch {
+        /* keep the first-pass reply */
+      }
+    }
     if (quote) {
       // Ensure the reply points at the real quote id / deposit if the model omitted them.
       if (!reply.includes(quote.id)) {
-        reply += `\n\nQuote reference: **${quote.id}**. Deposit due now: ${money(quote.deposit_cents)}. Pay with PayPal on the quote page to confirm.`;
+        reply += `\n\nQuote reference: **${quote.id}**`;
       }
     }
 
+    const disc = llmDisclosure();
     return {
       messages: [...messages, { role: "assistant", content: reply }],
       tool_calls,
       quote,
+      engine: { kind: "llm", provider: disc?.provider ?? "LLM", model: disc?.model ?? "" },
     };
-  } catch {
-    return agentChatHeuristic(slug, messages);
+  } catch (e) {
+    console.error("[agent] LLM path failed, using heuristics:", e instanceof Error ? e.message : e);
+    return agentChatHeuristic(slug, messages, "model call failed — deterministic fallback");
   }
 }
 

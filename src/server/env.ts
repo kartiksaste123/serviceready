@@ -3,8 +3,7 @@
 function read(name: string): string | undefined {
   try {
     const v = (typeof process !== "undefined" ? process.env?.[name] : undefined) as
-      | string
-      | undefined;
+      string | undefined;
     const t = v?.trim();
     return t || undefined;
   } catch {
@@ -47,7 +46,15 @@ export function publicOrigin(request?: Request): string {
   if (fromEnv) return fromEnv.replace(/\/$/, "");
   if (request) {
     const u = new URL(request.url);
-    return `${u.protocol}//${u.host}`;
+    // Behind Render's proxy the inner URL can be http://; trust forwarded headers.
+    const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    const host = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ?? u.host;
+    return `${proto || u.protocol.replace(":", "")}://${host}`;
   }
-  return "https://serviceready-frontend.lovable.app";
+  return "https://serviceready.onrender.com";
+}
+
+/** PayPal webhook id (Developer Dashboard → app → Webhooks). Optional: without it we re-verify via the PayPal API. */
+export function paypalWebhookId(): string | undefined {
+  return read("PAYPAL_WEBHOOK_ID");
 }

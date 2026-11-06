@@ -24,7 +24,11 @@ services:
       - key: OPENAI_BASE_URL
         value: https://api.x.ai/v1
       - key: OPENAI_MODEL
-        value: grok-3
+        value: grok-4.20-0309-non-reasoning
+      - key: PUBLIC_ORIGIN
+        value: https://serviceready.onrender.com
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_ANON_KEY

@@ -95,7 +95,7 @@ function Onboard() {
   }, [drafts, aiFlags]);
   const blocking = flags.filter((f) => f.severity === "error").length;
   const warnings = flags.length - blocking;
-  const mcpUrl = `https://serviceready.app/mcp/${slug}`;
+  const mcpUrl = `${typeof window !== "undefined" ? window.location.origin : "https://serviceready.onrender.com"}/mcp/${slug}`;
 
   const addBlank = () => {
     const tmp_id = `tmp_new_${Date.now().toString(36)}`;

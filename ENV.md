@@ -1,54 +1,38 @@
-# Lovable / production environment variables
+# Environment variables (Render live demo)
 
-Set these on the Lovable project (and any Cloudflare / Nitro host) so the **published** demo runs live PayPal sandbox + Supabase instead of mocks.
+The live demo runs on **Render** (`srv-dbmonf61egvs73d783g0`, blueprint in `render.yaml`) at https://serviceready.onrender.com. Set secrets in the Render dashboard; never commit them and never put secrets in `VITE_*`.
 
-## Required for Stage One (live sandbox)
+| Name | Where | Value / notes |
+|------|-------|---------------|
+| `VITE_USE_MOCKS` | build | **`false`** (live sandbox + Supabase) |
+| `NITRO_PRESET` | build | `node-server` |
+| `PUBLIC_ORIGIN` | server | `https://serviceready.onrender.com` (quote, MCP and PayPal return links) |
+| `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | **server only** | Sandbox REST app |
+| `PAYPAL_ENV` | server | `sandbox` |
+| `PAYPAL_WEBHOOK_ID` | server | Webhook registered for `https://serviceready.onrender.com/api/paypal/webhook` (signature verification) |
+| `SUPABASE_URL` / `SUPABASE_ANON_KEY` | server | Project `zowgpalngptmtipqcgme` |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | build | Same project (anon key only) |
+| `XAI_API_KEY` | **server only** | xAI Grok key |
+| `OPENAI_BASE_URL` | server | `https://api.x.ai/v1` |
+| `OPENAI_MODEL` | server | `grok-4.20-0309-non-reasoning` (fast, ~2–4 s per agent turn) |
+| `VITE_PAYPAL_SANDBOX_BUYER_EMAIL` | build | Sandbox buyer email for the Judge banner (password only in README) |
 
-| Name | Where | Notes |
-|------|--------|-------|
-| `VITE_USE_MOCKS` | Frontend | **`false`** |
-| `VITE_SUPABASE_URL` | Frontend | `https://zowgpalngptmtipqcgme.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Frontend | Supabase anon (legacy) or publishable key |
-| `VITE_PAYPAL_SANDBOX_BUYER_EMAIL` | Frontend | Sandbox personal buyer email (password only in README) |
-| `PAYPAL_CLIENT_ID` | **Server only** | Sandbox REST app client id |
-| `PAYPAL_CLIENT_SECRET` | **Server only** | Sandbox REST app secret — never `VITE_*` |
-| `PAYPAL_ENV` | Server | `sandbox` |
-| `SUPABASE_URL` | Server | Same project URL |
-| `SUPABASE_ANON_KEY` | Server | Same anon key (demo RLS is open) |
+`OPENAI_API_KEY` takes precedence over `XAI_API_KEY` if both are set.
 
-Optional:
+## Check what the deploy is wired to
 
-| Name | Notes |
-|------|--------|
-| `VITE_API_BASE_URL` | Leave empty for same-origin `/api/*`. Set if API is hosted elsewhere (e.g. Render). |
-| `VITE_PUBLIC_ORIGIN` / `PUBLIC_ORIGIN` | Absolute origin for quote + MCP links |
-| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | Server-only LLM (see AI section) |
+`GET /api/health` returns `{ paypal: { env, webhook_signature_verification }, ai: { provider, model }, supabase: { reachable }, mcp }` — never secrets.
+
+## Database
+
+Schema: `supabase/migrations/20261106071343_serviceready_core_schema.sql`. Demo seller + services: `supabase/seed.sql`.
 
 ## Local
 
-1. Copy `.env.example` → `.env.local` and fill secrets (already gitignored).
-2. `bun install`
-3. `bun run dev`
-4. Open `/s/maya-rao-studio`, request a quote, pay deposit with PayPal sandbox buyer.
-5. Smoke PayPal only: `bun run smoke:paypal` (prints `{ order_id, status }` only).
-
-
-## AI / LLM (Stage One — meaningful AI)
-
-| Name | Where | Notes |
-|------|--------|-------|
-| `OPENAI_API_KEY` | **Server only** | OpenAI-compatible key. Never `VITE_*`. |
-| `OPENAI_BASE_URL` | Server | Optional. Default `https://api.openai.com/v1`. For xAI use `https://api.x.ai/v1`. |
-| `OPENAI_MODEL` | Server | Optional. Default `gpt-4o-mini` (or `grok-2-latest` when using `XAI_API_KEY`). |
-| `XAI_API_KEY` | Server | Optional alternate to `OPENAI_API_KEY` for xAI/Grok. |
-
-Used by:
-- `POST /api/catalog/parse` — structured rate-card → services JSON (validated by `src/lib/validation.ts`)
-- `POST /api/agent/chat` (alias: `/api/agent-sim/chat`) — storefront assistant with tool traces
-- `POST /api/quotes/:id/collections/run` — reminder / thank-you draft text
-
-If no key is set, those endpoints keep the deterministic heuristics so local tests pass.
-
-## Do not commit
-
-`.env.local`, `.paypal-sandbox-*`, `.supabase-*-key*`, `.supabase-anon-key.txt`
+```bash
+cp .env.example .env.local   # fill secrets (gitignored)
+bun install
+bun run dev                  # live sandbox + Supabase
+bun run dev:mock             # localStorage mocks, no keys
+bun run smoke:paypal         # creates a $1 sandbox order, prints id + status only
+```

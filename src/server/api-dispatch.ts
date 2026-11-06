@@ -19,6 +19,27 @@ export async function dispatchApi(request: Request): Promise<Response> {
       return json(await live.paypalConfig());
     }
 
+    if (method === "GET" && path === "/api/health") {
+      return json(await live.health());
+    }
+
+    // PayPal webhooks (signature-verified when PAYPAL_WEBHOOK_ID is set; always re-read from PayPal)
+    if (path === "/api/paypal/webhook") {
+      if (method === "POST") return json(await live.handlePaypalWebhook(request));
+      if (method === "GET") {
+        return json({
+          ok: true,
+          accepts: "POST",
+          events: [
+            "CHECKOUT.ORDER.APPROVED",
+            "PAYMENT.CAPTURE.COMPLETED",
+            "INVOICING.INVOICE.PAID",
+            "INVOICING.INVOICE.UPDATED",
+          ],
+        });
+      }
+    }
+
     if (method === "GET" && path === "/api/seller") {
       return json(await live.getSeller());
     }
@@ -32,7 +53,9 @@ export async function dispatchApi(request: Request): Promise<Response> {
       return json(await live.parseCatalog(body.raw_text ?? ""));
     }
     if (method === "POST" && path === "/api/catalog/publish") {
-      const body = await readJson<{ services?: Parameters<typeof live.publishCatalog>[0] }>(request);
+      const body = await readJson<{ services?: Parameters<typeof live.publishCatalog>[0] }>(
+        request,
+      );
       return json(await live.publishCatalog(body.services ?? []));
     }
 
@@ -74,7 +97,7 @@ export async function dispatchApi(request: Request): Promise<Response> {
     {
       const m = path.match(/^\/api\/quotes\/([^/]+)\/deposit\/order$/);
       if (m && method === "POST") {
-        return json(await live.createDepositOrder(decodeURIComponent(m[1]!)));
+        return json(await live.createDepositOrder(decodeURIComponent(m[1]!), request));
       }
     }
     {
@@ -150,14 +173,14 @@ export async function dispatchApi(request: Request): Promise<Response> {
       return json(await live.getStats());
     }
 
-    if (
-      method === "POST" &&
-      (path === "/api/agent/chat" || path === "/api/agent-sim/chat")
-    ) {
-      const body = await readJson<{ slug?: string; messages?: Parameters<typeof live.agentChat>[1] }>(
-        request,
+    if (method === "POST" && (path === "/api/agent/chat" || path === "/api/agent-sim/chat")) {
+      const body = await readJson<{
+        slug?: string;
+        messages?: Parameters<typeof live.agentChat>[1];
+      }>(request);
+      return json(
+        await live.agentChat(body.slug ?? "maya-rao-studio", body.messages ?? [], request),
       );
-      return json(await live.agentChat(body.slug ?? "maya-rao-studio", body.messages ?? []));
     }
 
     if (method === "POST" && path === "/api/demo/reset") {

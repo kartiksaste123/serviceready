@@ -92,9 +92,17 @@ export async function createOrder(opts: {
   customId: string;
   description?: string;
   requestId: string;
-}): Promise<{ id: string; status: string }> {
+  /** Where PayPal sends the buyer after approving outside the JS SDK popup (MCP / agent links). */
+  returnUrl?: string;
+  cancelUrl?: string;
+  brandName?: string;
+}): Promise<{ id: string; status: string; approveUrl?: string }> {
   const value = centsToUsd(opts.amountCents);
-  const order = await paypalFetch<{ id: string; status: string }>(
+  const order = await paypalFetch<{
+    id: string;
+    status: string;
+    links?: Array<{ rel: string; href: string }>;
+  }>(
     "POST",
     "/v2/checkout/orders",
     {
@@ -109,11 +117,66 @@ export async function createOrder(opts: {
       application_context: {
         shipping_preference: "NO_SHIPPING",
         user_action: "PAY_NOW",
+        ...(opts.brandName ? { brand_name: opts.brandName.slice(0, 127) } : {}),
+        ...(opts.returnUrl ? { return_url: opts.returnUrl } : {}),
+        ...(opts.cancelUrl ? { cancel_url: opts.cancelUrl } : {}),
       },
     },
     { "PayPal-Request-Id": opts.requestId },
   );
-  return { id: order.id, status: order.status };
+  const approveUrl = order.links?.find(
+    (l) => l.rel === "approve" || l.rel === "payer-action",
+  )?.href;
+  return { id: order.id, status: order.status, ...(approveUrl ? { approveUrl } : {}) };
+}
+
+/** Orders v2 GET — used by webhooks and agent tools to read PayPal's source of truth. */
+export async function getOrder(orderId: string): Promise<{
+  id: string;
+  status: string;
+  customId?: string;
+  approveUrl?: string;
+}> {
+  const o = await paypalFetch<{
+    id: string;
+    status: string;
+    purchase_units?: Array<{ custom_id?: string }>;
+    links?: Array<{ rel: string; href: string }>;
+  }>("GET", `/v2/checkout/orders/${encodeURIComponent(orderId)}`);
+  const approveUrl = o.links?.find((l) => l.rel === "approve" || l.rel === "payer-action")?.href;
+  const customId = o.purchase_units?.[0]?.custom_id;
+  return {
+    id: o.id,
+    status: o.status,
+    ...(customId ? { customId } : {}),
+    ...(approveUrl ? { approveUrl } : {}),
+  };
+}
+
+/**
+ * Verify a webhook delivery with PayPal (POST /v1/notifications/verify-webhook-signature).
+ * Returns "SUCCESS" | "FAILURE".
+ */
+export async function verifyWebhookSignature(opts: {
+  webhookId: string;
+  headers: Headers;
+  event: unknown;
+}): Promise<string> {
+  const h = (k: string) => opts.headers.get(k) ?? "";
+  const res = await paypalFetch<{ verification_status?: string }>(
+    "POST",
+    "/v1/notifications/verify-webhook-signature",
+    {
+      auth_algo: h("paypal-auth-algo"),
+      cert_url: h("paypal-cert-url"),
+      transmission_id: h("paypal-transmission-id"),
+      transmission_sig: h("paypal-transmission-sig"),
+      transmission_time: h("paypal-transmission-time"),
+      webhook_id: opts.webhookId,
+      webhook_event: opts.event,
+    },
+  );
+  return res.verification_status ?? "FAILURE";
 }
 
 export async function captureOrder(orderId: string): Promise<{
@@ -167,6 +230,7 @@ export async function createAndSendInvoice(opts: {
   itemName: string;
   note?: string;
   invoiceNumber?: string;
+  businessName?: string;
 }): Promise<{ invoiceId: string; status: string; href?: string }> {
   const value = centsToUsd(opts.amountCents);
   const currency = opts.currency ?? "USD";
@@ -182,7 +246,7 @@ export async function createAndSendInvoice(opts: {
       },
       invoicer: {
         // Sandbox merchant identity comes from the app credentials; keep minimal.
-        business_name: "ServiceReady Demo",
+        business_name: (opts.businessName ?? "ServiceReady").slice(0, 300),
       },
       primary_recipients: [
         {

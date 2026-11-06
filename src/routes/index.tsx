@@ -49,8 +49,8 @@ export const Route = createFileRoute("/")({
 const tools = [
   "PayPal Orders v2",
   "PayPal Invoicing",
-  "PayPal Agent Toolkit",
-  "MCP",
+  "PayPal Webhooks",
+  "MCP server",
   "WebMCP",
   "xAI Grok",
   "Render",

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as OnboardRouteImport } from './routes/onboard'
 import { Route as ApiEventsRouteImport } from './routes/api.events'
+import { Route as ApiHealthRouteImport } from './routes/api.health'
 import { Route as ApiProposalsRouteImport } from './routes/api.proposals'
 import { Route as ApiQuotesRouteImport } from './routes/api.quotes'
 import { Route as ApiSellerRouteImport } from './routes/api.seller'
@@ -25,6 +26,7 @@ import { Route as AppCollectionsRouteImport } from './routes/app.collections'
 import { Route as AppConnectRouteImport } from './routes/app.connect'
 import { Route as AppLogRouteImport } from './routes/app.log'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
+import { Route as McpSlugRouteImport } from './routes/mcp.$slug'
 import { Route as QIdRouteImport } from './routes/q.$id'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as ApiAgentSimChatRouteImport } from './routes/api.agent-sim.chat'
@@ -33,6 +35,7 @@ import { Route as ApiCatalogParseRouteImport } from './routes/api.catalog.parse'
 import { Route as ApiCatalogPublishRouteImport } from './routes/api.catalog.publish'
 import { Route as ApiDemoResetRouteImport } from './routes/api.demo.reset'
 import { Route as ApiPaypalConfigRouteImport } from './routes/api.paypal.config'
+import { Route as ApiPaypalWebhookRouteImport } from './routes/api.paypal.webhook'
 import { Route as ApiPublicSlugRouteImport } from './routes/api.public.$slug'
 import { Route as ApiQuotesIdRouteImport } from './routes/api.quotes.$id'
 import { Route as ApiSellerRulesRouteImport } from './routes/api.seller.rules'
@@ -67,6 +70,11 @@ const OnboardRoute = OnboardRouteImport.update({
 const ApiEventsRoute = ApiEventsRouteImport.update({
   id: '/api/events',
   path: '/api/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiProposalsRoute = ApiProposalsRouteImport.update({
@@ -129,6 +137,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const McpSlugRoute = McpSlugRouteImport.update({
+  id: '/mcp/$slug',
+  path: '/mcp/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QIdRoute = QIdRouteImport.update({
   id: '/q/$id',
   path: '/q/$id',
@@ -167,6 +180,11 @@ const ApiDemoResetRoute = ApiDemoResetRouteImport.update({
 const ApiPaypalConfigRoute = ApiPaypalConfigRouteImport.update({
   id: '/api/paypal/config',
   path: '/api/paypal/config',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPaypalWebhookRoute = ApiPaypalWebhookRouteImport.update({
+  id: '/api/paypal/webhook',
+  path: '/api/paypal/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicSlugRoute = ApiPublicSlugRouteImport.update({
@@ -253,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteWithChildren
   '/onboard': typeof OnboardRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/proposals': typeof ApiProposalsRouteWithChildren
   '/api/quotes': typeof ApiQuotesRouteWithChildren
   '/api/seller': typeof ApiSellerRouteWithChildren
@@ -264,6 +283,7 @@ export interface FileRoutesByFullPath {
   '/app/connect': typeof AppConnectRoute
   '/app/log': typeof AppLogRoute
   '/app/settings': typeof AppSettingsRoute
+  '/mcp/$slug': typeof McpSlugRoute
   '/q/$id': typeof QIdRoute
   '/s/$slug': typeof SSlugRoute
   '/app/': typeof AppIndexRoute
@@ -273,6 +293,7 @@ export interface FileRoutesByFullPath {
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
   '/api/paypal/config': typeof ApiPaypalConfigRoute
+  '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
   '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
   '/api/quotes/$id': typeof ApiQuotesIdRouteWithChildren
   '/api/seller/rules': typeof ApiSellerRulesRoute
@@ -293,6 +314,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/onboard': typeof OnboardRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/proposals': typeof ApiProposalsRouteWithChildren
   '/api/quotes': typeof ApiQuotesRouteWithChildren
   '/api/seller': typeof ApiSellerRouteWithChildren
@@ -304,6 +326,7 @@ export interface FileRoutesByTo {
   '/app/connect': typeof AppConnectRoute
   '/app/log': typeof AppLogRoute
   '/app/settings': typeof AppSettingsRoute
+  '/mcp/$slug': typeof McpSlugRoute
   '/q/$id': typeof QIdRoute
   '/s/$slug': typeof SSlugRoute
   '/app': typeof AppIndexRoute
@@ -313,6 +336,7 @@ export interface FileRoutesByTo {
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
   '/api/paypal/config': typeof ApiPaypalConfigRoute
+  '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
   '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
   '/api/quotes/$id': typeof ApiQuotesIdRouteWithChildren
   '/api/seller/rules': typeof ApiSellerRulesRoute
@@ -335,6 +359,7 @@ export interface FileRoutesById {
   '/app': typeof AppRouteWithChildren
   '/onboard': typeof OnboardRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/proposals': typeof ApiProposalsRouteWithChildren
   '/api/quotes': typeof ApiQuotesRouteWithChildren
   '/api/seller': typeof ApiSellerRouteWithChildren
@@ -346,6 +371,7 @@ export interface FileRoutesById {
   '/app/connect': typeof AppConnectRoute
   '/app/log': typeof AppLogRoute
   '/app/settings': typeof AppSettingsRoute
+  '/mcp/$slug': typeof McpSlugRoute
   '/q/$id': typeof QIdRoute
   '/s/$slug': typeof SSlugRoute
   '/app/': typeof AppIndexRoute
@@ -355,6 +381,7 @@ export interface FileRoutesById {
   '/api/catalog/publish': typeof ApiCatalogPublishRoute
   '/api/demo/reset': typeof ApiDemoResetRoute
   '/api/paypal/config': typeof ApiPaypalConfigRoute
+  '/api/paypal/webhook': typeof ApiPaypalWebhookRoute
   '/api/public/$slug': typeof ApiPublicSlugRouteWithChildren
   '/api/quotes/$id': typeof ApiQuotesIdRouteWithChildren
   '/api/seller/rules': typeof ApiSellerRulesRoute
@@ -378,6 +405,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/onboard'
     | '/api/events'
+    | '/api/health'
     | '/api/proposals'
     | '/api/quotes'
     | '/api/seller'
@@ -389,6 +417,7 @@ export interface FileRouteTypes {
     | '/app/connect'
     | '/app/log'
     | '/app/settings'
+    | '/mcp/$slug'
     | '/q/$id'
     | '/s/$slug'
     | '/app/'
@@ -398,6 +427,7 @@ export interface FileRouteTypes {
     | '/api/catalog/publish'
     | '/api/demo/reset'
     | '/api/paypal/config'
+    | '/api/paypal/webhook'
     | '/api/public/$slug'
     | '/api/quotes/$id'
     | '/api/seller/rules'
@@ -418,6 +448,7 @@ export interface FileRouteTypes {
     | '/'
     | '/onboard'
     | '/api/events'
+    | '/api/health'
     | '/api/proposals'
     | '/api/quotes'
     | '/api/seller'
@@ -429,6 +460,7 @@ export interface FileRouteTypes {
     | '/app/connect'
     | '/app/log'
     | '/app/settings'
+    | '/mcp/$slug'
     | '/q/$id'
     | '/s/$slug'
     | '/app'
@@ -438,6 +470,7 @@ export interface FileRouteTypes {
     | '/api/catalog/publish'
     | '/api/demo/reset'
     | '/api/paypal/config'
+    | '/api/paypal/webhook'
     | '/api/public/$slug'
     | '/api/quotes/$id'
     | '/api/seller/rules'
@@ -459,6 +492,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/onboard'
     | '/api/events'
+    | '/api/health'
     | '/api/proposals'
     | '/api/quotes'
     | '/api/seller'
@@ -470,6 +504,7 @@ export interface FileRouteTypes {
     | '/app/connect'
     | '/app/log'
     | '/app/settings'
+    | '/mcp/$slug'
     | '/q/$id'
     | '/s/$slug'
     | '/app/'
@@ -479,6 +514,7 @@ export interface FileRouteTypes {
     | '/api/catalog/publish'
     | '/api/demo/reset'
     | '/api/paypal/config'
+    | '/api/paypal/webhook'
     | '/api/public/$slug'
     | '/api/quotes/$id'
     | '/api/seller/rules'
@@ -501,11 +537,13 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   OnboardRoute: typeof OnboardRoute
   ApiEventsRoute: typeof ApiEventsRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiProposalsRoute: typeof ApiProposalsRouteWithChildren
   ApiQuotesRoute: typeof ApiQuotesRouteWithChildren
   ApiSellerRoute: typeof ApiSellerRouteWithChildren
   ApiServicesRoute: typeof ApiServicesRoute
   ApiStatsRoute: typeof ApiStatsRoute
+  McpSlugRoute: typeof McpSlugRoute
   QIdRoute: typeof QIdRoute
   SSlugRoute: typeof SSlugRoute
   ApiAgentSimChatRoute: typeof ApiAgentSimChatRoute
@@ -514,6 +552,7 @@ export interface RootRouteChildren {
   ApiCatalogPublishRoute: typeof ApiCatalogPublishRoute
   ApiDemoResetRoute: typeof ApiDemoResetRoute
   ApiPaypalConfigRoute: typeof ApiPaypalConfigRoute
+  ApiPaypalWebhookRoute: typeof ApiPaypalWebhookRoute
   ApiPublicSlugRoute: typeof ApiPublicSlugRouteWithChildren
   ApiDemoQuotesIdPayBalanceRoute: typeof ApiDemoQuotesIdPayBalanceRoute
 }
@@ -546,6 +585,13 @@ declare module '@tanstack/react-router' {
       path: '/api/events'
       fullPath: '/api/events'
       preLoaderRoute: typeof ApiEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/proposals': {
@@ -632,6 +678,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/mcp/$slug': {
+      id: '/mcp/$slug'
+      path: '/mcp/$slug'
+      fullPath: '/mcp/$slug'
+      preLoaderRoute: typeof McpSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/q/$id': {
       id: '/q/$id'
       path: '/q/$id'
@@ -686,6 +739,13 @@ declare module '@tanstack/react-router' {
       path: '/api/paypal/config'
       fullPath: '/api/paypal/config'
       preLoaderRoute: typeof ApiPaypalConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/paypal/webhook': {
+      id: '/api/paypal/webhook'
+      path: '/api/paypal/webhook'
+      fullPath: '/api/paypal/webhook'
+      preLoaderRoute: typeof ApiPaypalWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/$slug': {
@@ -899,11 +959,13 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   OnboardRoute: OnboardRoute,
   ApiEventsRoute: ApiEventsRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiProposalsRoute: ApiProposalsRouteWithChildren,
   ApiQuotesRoute: ApiQuotesRouteWithChildren,
   ApiSellerRoute: ApiSellerRouteWithChildren,
   ApiServicesRoute: ApiServicesRoute,
   ApiStatsRoute: ApiStatsRoute,
+  McpSlugRoute: McpSlugRoute,
   QIdRoute: QIdRoute,
   SSlugRoute: SSlugRoute,
   ApiAgentSimChatRoute: ApiAgentSimChatRoute,
@@ -912,6 +974,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCatalogPublishRoute: ApiCatalogPublishRoute,
   ApiDemoResetRoute: ApiDemoResetRoute,
   ApiPaypalConfigRoute: ApiPaypalConfigRoute,
+  ApiPaypalWebhookRoute: ApiPaypalWebhookRoute,
   ApiPublicSlugRoute: ApiPublicSlugRouteWithChildren,
   ApiDemoQuotesIdPayBalanceRoute: ApiDemoQuotesIdPayBalanceRoute,
 }

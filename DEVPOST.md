@@ -61,6 +61,7 @@ Solo freelancers lose hours chasing invoices and start work on trust. Clients gh
 | Catalog parse | xAI/Grok (or OpenAI-compatible) via `POST /api/catalog/parse` | Extracts structured services from messy rate-card text |
 | Storefront agent | Same LLM via `POST /api/agent/chat` | Conversational booking with tool traces (`list_services`, `get_service`, `request_quote`, `get_quote_status`) |
 | Collections drafts | Same LLM via `POST /api/quotes/:id/collections/run` | Drafts reminder/follow-up copy for **human approval** before send |
+| Outside agents | Any MCP client via `/mcp/maya-rao-studio` | `list_services`, `request_quote`, `create_deposit_link` (real PayPal sandbox order + approve link) |
 
 Keys live only in **server** env (`XAI_API_KEY` / `OPENAI_API_KEY`). Without a key, endpoints fall back to heuristics so tests stay green — the live demo is wired for real LLM when the key is set.
 
@@ -70,6 +71,7 @@ Keys live only in **server** env (`XAI_API_KEY` / `OPENAI_API_KEY`). Without a k
 |------|-----|------|
 | Deposit | **Orders v2** create + capture + **JS SDK Buttons** | Money before work |
 | Balance | **Invoicing v2** create, send, get (+ remind on approval) | Post-delivery balance |
+| Reconciliation | **Webhooks** + `verify-webhook-signature` | `PAYMENT.CAPTURE.COMPLETED`, `INVOICING.INVOICE.PAID` flip status only after re-reading PayPal |
 | Config | `GET /api/paypal/config` | Public sandbox `client_id` only |
 
 `PAYPAL_CLIENT_SECRET` never appears in `VITE_*` or the client. Sandbox only for the hackathon.
@@ -86,6 +88,9 @@ This project was significantly rebuilt for the hackathon:
 - Real **PayPal Invoicing v2** for the balance after delivery (replaced “simulate balance payment” as the happy path)
 - **Supabase Postgres** persistence so judges share one seeded demo seller across browsers
 - **Server-side LLM** (xAI/Grok / OpenAI-compatible) for catalog parse, storefront agent chat, and collections drafts
+- **PayPal Webhooks** with `verify-webhook-signature`, idempotent on transmission id; every event is re-read from the PayPal API before state changes
+- **MCP server** (`/mcp/maya-rao-studio`, Streamable HTTP) so Claude/ChatGPT/Cursor can list services, request a quote and get a real PayPal deposit link (`create_deposit_link`); WebMCP registration on the storefront
+- Hosted on **Render** (Node web service, blueprint `render.yaml`)
 - Judge-mode banner + sandbox buyer credentials for Devpost test access
 - Public **GitHub** repo with **MIT** license and a judge-ready README
 
@@ -93,10 +98,13 @@ This project was significantly rebuilt for the hackathon:
 
 ```
 Browser (TanStack Start)
-  └─ /api/*  →  live.ts (Supabase state machine) + paypal.ts (sandbox REST) + llm.ts
+  ├─ /api/*            →  live.ts (Supabase state machine) + paypal.ts (sandbox REST) + llm.ts (xAI Grok)
+  ├─ /api/paypal/webhook →  signature-verified PayPal events → re-read order/invoice → reconcile
+  └─ /mcp/:slug         →  mcp.ts (MCP tools for outside AI agents → PayPal Orders v2 deposit link)
+Hosted on Render · Supabase Postgres
 ```
 
-Code pointers: `src/server/paypal.ts`, `src/components/PayPalDepositButton.tsx`, `src/server/llm.ts`, `src/server/live.ts`.
+Code pointers: `src/server/mcp.ts`, `src/server/paypal.ts`, `src/components/PayPalDepositButton.tsx`, `src/server/llm.ts`, `src/server/live.ts`.
 
 ---
 
@@ -108,14 +116,16 @@ Tick / list these on the form (comma-separated or multi-select as the UI allows)
 - PayPal Invoicing v2
 - PayPal JavaScript SDK (Smart Buttons)
 - PayPal REST API (sandbox OAuth2 client credentials)
-- PayPal Agent Toolkit _(planned / SHOULD — not required for Stage One; name only if demo shows it)_
+- PayPal Webhooks (signature verification)
+- Model Context Protocol (MCP server, Streamable HTTP) + WebMCP
 - xAI Grok API (OpenAI-compatible chat completions)
 - OpenAI API (compatible fallback path)
 - Supabase (Postgres)
 - TanStack Start
 - TanStack Router
 - Nitro
-- Lovable
+- Render
+- Lovable (initial UI scaffold)
 - Vite
 - TypeScript
 - Bun
@@ -123,9 +133,9 @@ Tick / list these on the form (comma-separated or multi-select as the UI allows)
 
 **Recommended “Built With” short string for the text box:**
 
-`PayPal Orders v2, PayPal Invoicing v2, PayPal JS SDK, xAI/Grok, Supabase, TanStack Start, Lovable, TypeScript, Bun`
+`PayPal Orders v2, PayPal Invoicing v2, PayPal Webhooks, PayPal JS SDK, xAI Grok, MCP, Supabase, Render, TanStack Start, TypeScript, Bun`
 
-Sponsor tools (tick only if you actually used them for a prize): none required for the core submission. Optional later: Render (hosting), Postman (API collection).
+Sponsor tools: tick **Render** (the live demo is a Render web service — eligible for Best Use of Render).
 
 ---
 
@@ -157,7 +167,8 @@ Keep the demo free and working through judging (**15 Dec 2026**).
 
 ## Tools disclosure (AI)
 
-- **Primary model/service:** xAI Grok via OpenAI-compatible Chat Completions (`XAI_API_KEY`, optional `OPENAI_BASE_URL` / `OPENAI_MODEL`).
+- **Primary model/service:** xAI Grok (`grok-4.20-0309-non-reasoning`) via OpenAI-compatible Chat Completions (`XAI_API_KEY`, `OPENAI_BASE_URL=https://api.x.ai/v1`, `OPENAI_MODEL`).
+- **Images:** marketing/storefront visuals generated with OpenArt (and Artlist where noted).
 - **Fallback:** OpenAI Chat Completions if `OPENAI_API_KEY` is set instead.
 - **Where used:** catalog parse, storefront agent chat (with tool traces), collections reminder drafts (human-in-the-loop).
 - **Guardrails:** JSON-shaped outputs validated in `src/lib/validation.ts`; PayPal money movement never delegated to the model.

@@ -56,15 +56,16 @@ Sources: paypalaihackathon.devpost.com (home, /rules, /details/faqs, /updates), 
 | Backend | ✅ TanStack Start `/api/*` server routes + Nitro catch-all | `src/routes/api.*`, `src/server/live.ts` |
 | PayPal Orders | ✅ Real sandbox create + capture + JS SDK Buttons | `src/server/paypal.ts`, `PayPalDepositButton.tsx`, `smoke:paypal` |
 | PayPal Invoicing | ✅ Create / send / get / remind on approval | `live.ts` deliver / refreshInvoiceStatus / approveProposal |
-| PayPal webhooks | ❌ Not verified end-to-end yet | SHOULD-FIX |
+| PayPal webhooks | ✅ `POST /api/paypal/webhook`, signature verified (`PAYPAL_WEBHOOK_ID` 8UF100005H053200P → Render URL), idempotent, re-reads PayPal | `handlePaypalWebhook` |
 | AI rate-card parsing | ✅ LLM when `XAI_API_KEY` / `OPENAI_API_KEY` set; heuristics fallback | `src/server/llm.ts`, `api.catalog.parse` |
 | AI storefront agent | ✅ LLM chat + tool traces; heuristics fallback | `api.agent.chat` |
 | AI collections | ✅ LLM drafts + human approve | `api.quotes.$id.collections.run` |
-| MCP / Agent Toolkit | ❌ UI may advertise; server MCP / `@paypal/agent-toolkit` not shipped | SHOULD-FIX |
+| MCP | ✅ `/mcp/:slug` Streamable HTTP with 5 tools incl. `create_deposit_link`; WebMCP registration | `src/server/mcp.ts` |
+| Agent Toolkit | ❌ `@paypal/agent-toolkit` not used (not claimed in UI/docs) | P2 |
 | Auth / persistence | ✅ Supabase Postgres (demo RLS open for seeded seller) | `sellers`, `quotes`, `payments`, … |
 | Repo | ✅ Public GitHub + MIT `LICENSE` + judge README | https://github.com/kartiksaste123/serviceready |
 | Devpost materials | ✅ `DEVPOST.md` + `DEMO_SCRIPT.md` (this refresh) | repo root |
-| Live Lovable publish | ⚠️ Code on GitHub; confirm live URL runs `VITE_USE_MOCKS=false` + secrets | https://serviceready-frontend.lovable.app |
+| Live deploy | ✅ Render web service, mocks off, Grok + PayPal + Supabase wired (`/api/health`) | https://serviceready.onrender.com |
 | Demo video | ❌ Not recorded / uploaded yet | `DEMO_SCRIPT.md` |
 | Quality | ✅ Unit tests + typecheck; PayPal smoke script | `bun run test`, `smoke:paypal` |
 
@@ -76,7 +77,7 @@ Sources: paypalaihackathon.devpost.com (home, /rules, /details/faqs, /updates), 
 ### MUST-FIX (eligibility / Stage One)
 
 - [x] **1. Real PayPal sandbox backend (Orders v2)** — `GET /api/paypal/config`, deposit order + capture routes, OAuth token cache, secrets server-only. Keep mocks for tests.
-- [ ] **1b. Published site on live sandbox** — confirm Lovable/prod has `VITE_USE_MOCKS=false` + PayPal + Supabase + LLM secrets (ops; not just GitHub).
+- [x] **1b. Published site on live sandbox** — Render deploy has `VITE_USE_MOCKS=false` + PayPal + Supabase + LLM secrets (ops; not just GitHub).
 - [x] **2. Real PayPal Invoicing v2 for the balance** — create/send/get; remind after human approval. Prefer real invoice link over simulate for the judge path.
 - [x] **3. Real AI calls (LLM)** — `src/server/llm.ts` for catalog parse, agent chat, collections drafts; heuristics fallback without key. **Still need key present on the published host.**
 - [x] **4. Shared persistence** — Supabase Postgres + seeded demo seller (`maya-rao-studio`).

@@ -8,8 +8,7 @@ import { z } from "zod";
 function read(name: string): string | undefined {
   try {
     const v = (typeof process !== "undefined" ? process.env?.[name] : undefined) as
-      | string
-      | undefined;
+      string | undefined;
     const t = v?.trim();
     return t || undefined;
   } catch {
@@ -42,7 +41,7 @@ export function llmConfig(): LlmConfig | null {
     return {
       apiKey: xai,
       baseUrl: (read("OPENAI_BASE_URL") ?? "https://api.x.ai/v1").replace(/\/$/, ""),
-      model: read("OPENAI_MODEL") ?? "grok-2-latest",
+      model: read("OPENAI_MODEL") ?? "grok-4.20-0309-non-reasoning",
     };
   }
   return null;

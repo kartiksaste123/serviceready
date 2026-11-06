@@ -19,7 +19,7 @@ import type {
 } from "./types";
 
 export const USE_MOCKS = import.meta.env["VITE_USE_MOCKS"] !== "false";
-// Optional absolute origin for the external backend (e.g. https://api.serviceready.app). Defaults to same-origin.
+// Optional absolute origin for an external backend. Defaults to same-origin (Render serves UI + /api).
 const API_BASE = String(import.meta.env["VITE_API_BASE_URL"] ?? "").replace(/\/$/, "");
 
 export class ApiError extends Error {
@@ -40,7 +40,7 @@ async function http<T>(method: string, path: string, body?: unknown): Promise<T>
       headers: body !== undefined ? { "Content-Type": "application/json" } : {},
       body: body !== undefined ? JSON.stringify(body) : null,
       credentials: "include",
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(45_000),
     });
   } catch {
     throw new ApiError("Network error — check your connection and try again", 0);
@@ -126,11 +126,7 @@ export const api = {
   deliver: (id: string) =>
     m<QuoteDetail>(() => mock.deliver(id), "POST", `/api/quotes/${enc(id)}/deliver`),
   refreshInvoice: (id: string) =>
-    m<QuoteDetail>(
-      () => mock.getQuote(id, true),
-      "GET",
-      `/api/quotes/${enc(id)}/invoice`,
-    ),
+    m<QuoteDetail>(() => mock.getQuote(id, true), "GET", `/api/quotes/${enc(id)}/invoice`),
   postReply: (id: string, text: string, from: "client" | "seller") =>
     m<{ reply: Reply; agent_run: AgentRun | null }>(
       () => mock.postReply(id, { text, from }),
@@ -163,12 +159,13 @@ export const api = {
     ),
   getStats: () => m<Stats>(() => mock.getStats(), "GET", "/api/stats"),
   agentChat: (slug: string, messages: ChatMsg[]) =>
-    m<{ messages: ChatMsg[]; tool_calls: ToolTrace[]; quote: Quote | null }>(
-      () => mock.agentChat(slug, messages),
-      "POST",
-      "/api/agent/chat",
-      { slug, messages },
-    ),
+    m<{
+      messages: ChatMsg[];
+      tool_calls: ToolTrace[];
+      quote: Quote | null;
+      engine?:
+        { kind: "llm"; provider: string; model: string } | { kind: "heuristic"; reason: string };
+    }>(() => mock.agentChat(slug, messages), "POST", "/api/agent/chat", { slug, messages }),
   paypalConfig: () =>
     m<{ client_id: string; env: "sandbox" }>(
       () => mock.paypalConfig(),

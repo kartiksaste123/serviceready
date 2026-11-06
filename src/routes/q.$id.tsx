@@ -76,6 +76,31 @@ function QuotePage() {
       toast.success("Balance paid — thank you!");
     },
   });
+  // Buyers who approved via a PayPal link from an AI agent (MCP create_deposit_link) land here
+  // with ?paypal=return&token=<orderId>; capture server-side so the booking confirms.
+  const [returnCapture, setReturnCapture] = useState<"idle" | "capturing" | "done" | "error">(
+    "idle",
+  );
+  useEffect(() => {
+    if (USE_MOCKS || typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const token = sp.get("token");
+    if (sp.get("paypal") !== "return" || !token) return;
+    setReturnCapture("capturing");
+    api
+      .captureDeposit(id, token)
+      .then(() => {
+        setReturnCapture("done");
+        toast.success("Deposit paid with PayPal — your booking is confirmed");
+        invalidate();
+      })
+      .catch((e: unknown) => {
+        setReturnCapture("error");
+        toast.error(e instanceof Error ? e.message : "Could not confirm the PayPal payment");
+      })
+      .finally(() => window.history.replaceState(null, "", window.location.pathname));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
   const notFound = isError && error instanceof Error && /not found/i.test(error.message);
 
   return (
@@ -92,6 +117,15 @@ function QuotePage() {
         </div>
       </header>
       <main className="mx-auto max-w-2xl px-5 pb-20 pt-8">
+        {returnCapture === "capturing" && (
+          <p
+            role="status"
+            className="mb-4 flex items-center gap-2 rounded-lg bg-background px-4 py-3 text-sm"
+          >
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Confirming your PayPal payment…
+          </p>
+        )}
         {isLoading ? (
           <Skeleton className="h-[560px] rounded-2xl" />
         ) : notFound ? (

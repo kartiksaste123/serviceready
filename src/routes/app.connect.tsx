@@ -30,6 +30,10 @@ const TOOLS: [string, string][] = [
     "Create a quote for a client. Returns an approval link — the client pays the deposit themselves.",
   ],
   ["get_quote_status", "Check where a quote is: awaiting deposit, deposit paid, invoiced or paid."],
+  [
+    "create_deposit_link",
+    "Create the real PayPal sandbox deposit order and return its approval link. The client still pays.",
+  ],
 ];
 
 function Connect() {
@@ -68,10 +72,8 @@ function Connect() {
         <div className="space-y-5">
           {USE_MOCKS && (
             <p className="rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">Integration preview.</span> These
-              configuration examples show how your external MCP server connects to assistants. The
-              server URL is illustrative in this local demo; use the storefront assistant to try the
-              complete booking flow.
+              <span className="font-semibold text-foreground">Mock mode.</span> The MCP server runs
+              on the live deploy; this local preview shows the same configuration.
             </p>
           )}
           <section className="glass-card p-5" aria-labelledby="c1">
@@ -145,8 +147,8 @@ function Connect() {
               <div>
                 <h2 className="font-semibold">Browser assistants work automatically</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  The external WebMCP integration is designed to expose these storefront tools to
-                  supported browser assistants: {data.agent.webmcp_tools.join(", ")}.
+                  Your storefront registers these tools with WebMCP-capable browsers
+                  (navigator.modelContext): {data.agent.webmcp_tools.join(", ")}.
                 </p>
               </div>
             </section>
