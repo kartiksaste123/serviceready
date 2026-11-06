@@ -17,7 +17,7 @@ import { statusLabel } from "@/lib/labels";
 export function LogoMark({ className }: { className?: string }) {
   return (
     <img
-      src="/images/logo-mark.png"
+      src="/images/logo-mark.png?v=sr3"
       alt=""
       width={32}
       height={32}
